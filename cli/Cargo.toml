@@ -1,0 +1,11 @@
+[package]
+name = "ultrawm"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ultrawm"
+path = "src/main.rs"
+
+[dependencies]
+ultrawm_core = { path = "../lib/ultrawm" }
