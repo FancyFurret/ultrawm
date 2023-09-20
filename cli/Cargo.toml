@@ -8,4 +8,4 @@ name = "ultrawm"
 path = "src/main.rs"
 
 [dependencies]
-ultrawm_core = { path = "../lib/ultrawm" }
+ultrawm-core = { path = "../lib/ultrawm-core" }

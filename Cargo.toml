@@ -1,3 +1,7 @@
 [workspace]
 resolver = "2"
-members = ["cli", "lib/ultrawm", "lib/application-services"]
+members = [
+    "cli",
+    "lib/ultrawm-core",
+    "lib/macos/application-services",
+]

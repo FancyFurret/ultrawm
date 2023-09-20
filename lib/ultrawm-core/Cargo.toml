@@ -1,0 +1,15 @@
+[package]
+name = "ultrawm-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sysinfo = "0.29.10"
+cfg-if = "1.0.0"
+tokio = { version = "1.32.0", features = ["rt-multi-thread", "macros", "full"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.9.3"
+core-graphics = "0.23.1"
+application-services = { path = "../macos/application-services" }
+icrate = { version = "0.0.4", features = ["Foundation_all", "AppKit_all", "dispatch"] }

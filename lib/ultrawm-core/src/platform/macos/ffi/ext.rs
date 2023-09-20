@@ -1,9 +1,11 @@
 #![allow(dead_code)]
 
+use crate::platform::macos::ffi::accessibility_attribute;
 use application_services::accessibility_ui::AXUIElement;
 use application_services::accessibility_value::AXValue;
 use application_services::{
-    kAXValueTypeCGPoint, kAXValueTypeCGSize, AXUIElementRef, AXValueRef, AXValueType,
+    kAXErrorFailure, kAXValueTypeCGPoint, kAXValueTypeCGSize, pid_t, AXError, AXUIElementRef,
+    AXValueRef, AXValueType,
 };
 use core_foundation::array::CFArrayRef;
 use core_foundation::base::{FromVoid, ItemRef, TCFTypeRef, ToVoid};
@@ -20,30 +22,6 @@ use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::mem;
 use std::ops::Deref;
-
-macro_rules! cf_str {
-    ($name:ident, $value:expr) => {
-        pub fn $name() -> CFString {
-            CFString::from_static_string($value)
-        }
-    };
-}
-
-pub mod accessibility_attribute {
-    use core_foundation::string::CFString;
-
-    cf_str!(title, "AXTitle");
-    cf_str!(position, "AXPosition");
-    cf_str!(size, "AXSize");
-    cf_str!(windows, "AXWindows");
-    cf_str!(enabled, "AXEnabled");
-}
-
-pub mod window_info {
-    use core_foundation::string::CFString;
-
-    cf_str!(owner_pid, "kCGWindowOwnerPID");
-}
 
 pub trait TCFTypeOrExt {
     type CFType: TCFType<Ref = Self::CFTypeRef>;
@@ -63,7 +41,7 @@ impl TCFTypeOrExt for AXValueExt {
     type CFType = AXValue;
     type CFTypeRef = AXValueRef;
     fn from(value: Self::CFType) -> Self {
-        Self::new(value)
+        Self::from(value)
     }
 }
 
@@ -71,7 +49,7 @@ impl<T: TCFTypeOrExt> TCFTypeOrExt for CFArrayExt<T> {
     type CFType = CFArray;
     type CFTypeRef = CFArrayRef;
     fn from(value: Self::CFType) -> Self {
-        Self::new(value)
+        Self::from(value)
     }
 }
 
@@ -79,7 +57,7 @@ impl TCFTypeOrExt for AXUIElementExt {
     type CFType = AXUIElement;
     type CFTypeRef = AXUIElementRef;
     fn from(value: Self::CFType) -> Self {
-        Self::new(value)
+        Self::from(value)
     }
 }
 
@@ -87,7 +65,7 @@ impl TCFTypeOrExt for CFDictionaryExt {
     type CFType = CFDictionary;
     type CFTypeRef = CFDictionaryRef;
     fn from(value: Self::CFType) -> Self {
-        Self::new(value)
+        Self::from(value)
     }
 }
 
@@ -104,16 +82,9 @@ impl<T> CFArrayExt<T>
 where
     T: TCFTypeOrExt,
 {
-    pub fn new(array: CFArray) -> Self {
+    pub fn from(array: CFArray) -> Self {
         Self {
             array,
-            _marker: PhantomData,
-        }
-    }
-
-    pub fn from_copy(array: CFArrayRef) -> Self {
-        Self {
-            array: unsafe { CFArray::wrap_under_create_rule(array) },
             _marker: PhantomData,
         }
     }
@@ -172,7 +143,7 @@ pub struct CFDictionaryExt {
 }
 
 impl CFDictionaryExt {
-    pub fn new(dictionary: CFDictionary) -> Self {
+    pub fn from(dictionary: CFDictionary) -> Self {
         Self { dictionary }
     }
 
@@ -218,29 +189,82 @@ pub struct AXUIElementExt {
     pub element: AXUIElement,
 }
 
+unsafe impl Send for AXUIElementExt {}
+
+pub type AXResult<T> = Result<T, AXError>;
+
 impl AXUIElementExt {
-    pub fn new(element: AXUIElement) -> Self {
+    pub fn from(element: AXUIElement) -> Self {
         Self { element }
     }
 
-    pub fn copy_attribute_value<T: TCFTypeOrExt>(&self, attribute: CFString) -> Option<T> {
+    fn copy_attribute_value<T: TCFTypeOrExt>(&self, attribute: CFString) -> AXResult<T> {
         let value = self
             .element
-            .copy_attribute_value(attribute.as_concrete_TypeRef())
-            .ok()?;
+            .copy_attribute_value(attribute.as_concrete_TypeRef())?;
 
         unsafe {
             let value_ref = T::CFTypeRef::from_void_ptr(value);
-            Some(T::from(T::CFType::wrap_under_create_rule(value_ref)))
+            Ok(T::from(T::CFType::wrap_under_create_rule(value_ref)))
         }
     }
 
-    pub fn set_attribute_value(&self, attribute: CFString, value: AXValueExt) -> bool {
-        let result = self
-            .element
-            .set_attribute_value(attribute.as_concrete_TypeRef(), value.value.as_CFTypeRef());
+    fn set_attribute_value(&self, attribute: CFString, value: AXValueExt) -> AXResult<()> {
+        self.element
+            .set_attribute_value(attribute.as_concrete_TypeRef(), value.value.as_CFTypeRef())
+    }
 
-        result.is_ok()
+    pub fn windows(&self) -> AXResult<CFArrayExt<AXUIElementExt>> {
+        self.copy_attribute_value::<CFArrayExt<AXUIElementExt>>(accessibility_attribute::windows())
+    }
+
+    pub fn focused_window(&self) -> AXResult<AXUIElementExt> {
+        self.copy_attribute_value::<AXUIElementExt>(accessibility_attribute::focused_window())
+    }
+
+    pub fn title(&self) -> AXResult<String> {
+        self.copy_attribute_value::<CFString>(accessibility_attribute::title())
+            .map(|s| s.to_string())
+    }
+
+    pub fn role(&self) -> AXResult<String> {
+        self.copy_attribute_value::<CFString>(accessibility_attribute::role())
+            .map(|s| s.to_string())
+    }
+
+    pub fn subrole(&self) -> AXResult<String> {
+        self.copy_attribute_value::<CFString>(accessibility_attribute::subrole())
+            .map(|s| s.to_string())
+    }
+
+    pub fn position(&self) -> AXResult<CGPoint> {
+        self.copy_attribute_value::<AXValueExt>(accessibility_attribute::position())
+            .map(|v| v.into_point().ok_or(kAXErrorFailure).unwrap())
+    }
+
+    pub fn size(&self) -> AXResult<CGSize> {
+        self.copy_attribute_value::<AXValueExt>(accessibility_attribute::size())
+            .map(|v| v.into_size().ok_or(kAXErrorFailure).unwrap())
+    }
+
+    pub fn minimized(&self) -> AXResult<bool> {
+        self.copy_attribute_value::<CFBoolean>(accessibility_attribute::minimized())
+            .map(|b| bool::from(b))
+    }
+
+    pub fn pid(&self) -> AXResult<pid_t> {
+        self.element.get_pid()
+    }
+
+    pub fn set_position(&self, position: CGPoint) -> AXResult<()> {
+        self.set_attribute_value(
+            accessibility_attribute::position(),
+            AXValueExt::from_point(position),
+        )
+    }
+
+    pub fn set_size(&self, size: CGSize) -> AXResult<()> {
+        self.set_attribute_value(accessibility_attribute::size(), AXValueExt::from_size(size))
     }
 }
 
@@ -249,7 +273,7 @@ pub struct AXValueExt {
 }
 
 impl AXValueExt {
-    pub fn new(value: AXValue) -> Self {
+    pub fn from(value: AXValue) -> Self {
         Self { value }
     }
 
