@@ -2,8 +2,8 @@ use crate::platform::macos::event_listener_ax::ObserveError::NotManageable;
 use crate::platform::macos::ffi::{get_window_id, notification, run_loop_mode, AXUIElementExt};
 use crate::platform::macos::{MacOSPlatform, MacOSPlatformWindow};
 use crate::platform::{
-    EventDispatcher, PlatformError, PlatformErrorType, PlatformEvent, PlatformResult, ProcessId,
-    WindowId,
+    EventDispatcher, PlatformError, PlatformErrorType, PlatformEvent, PlatformResult,
+    PlatformWindowImpl, ProcessId, WindowId,
 };
 use application_services::accessibility_ui::{AXNotification, AXObserver, AXUIElement};
 use application_services::{pid_t, AXError};
@@ -198,7 +198,7 @@ impl EventListenerAX {
         } else if notification == notification::window_resized() {
             PlatformEvent::WindowResized(window)
         } else if notification == notification::element_destroyed() {
-            PlatformEvent::WindowDestroyed(window.id)
+            PlatformEvent::WindowDestroyed(window.id())
         } else {
             println!("Unknown notification: {:?}", notification);
             return Ok(());

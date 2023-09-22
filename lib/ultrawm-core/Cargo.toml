@@ -12,4 +12,5 @@ tokio = { version = "1.32.0", features = ["rt-multi-thread", "macros", "full"] }
 core-foundation = "0.9.3"
 core-graphics = "0.23.1"
 application-services = { path = "../macos/application-services" }
-icrate = { version = "0.0.4", features = ["Foundation_all", "AppKit_all", "dispatch"] }
+icrate = { version = "0.0.4", features = ["Foundation_all", "AppKit_all", "CoreAnimation_all"] }
+objc2 = { version = "0.4.1", features = ["relax-void-encoding"]}

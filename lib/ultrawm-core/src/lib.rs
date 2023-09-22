@@ -1,7 +1,9 @@
 use crate::platform::{
-    EventBridge, Platform, PlatformError, PlatformInterface, PlatformWindowInterface,
+    EventBridge, Platform, PlatformError, PlatformImpl, PlatformInit, PlatformInitImpl,
+    PlatformTilePreview, PlatformTilePreviewImpl, PlatformWindowImpl,
 };
 use std::{process, thread};
+use tokio::task;
 
 mod platform;
 
@@ -31,6 +33,10 @@ impl From<String> for UltraWMFatalError {
 }
 
 pub fn start() -> UltraWMResult<()> {
+    unsafe {
+        PlatformInit::initialize()?;
+    }
+
     let windows =
         Platform::list_all_windows().map_err(|e| format!("Could not list windows: {:?}", e))?;
 
@@ -51,12 +57,44 @@ pub fn start() -> UltraWMResult<()> {
         })
     });
 
-    Platform::run_event_loop(dispatcher)?;
+    unsafe {
+        PlatformInit::run_event_loop(dispatcher)?;
+    }
+
     Ok(())
 }
 
 async fn start_async(mut bridge: EventBridge) -> UltraWMResult<()> {
     println!("Handling events...");
+
+    let mut tile_preview = PlatformTilePreview::new()?;
+    tile_preview.show()?;
+
+    let test_preview_frames = vec![
+        (200, 500, 1000, 1000),
+        (500, 200, 750, 500),
+        (500, 500, 750, 750),
+        (500, 750, 750, 1000),
+        (750, 500, 1000, 750),
+        (750, 750, 1000, 1000),
+    ];
+
+    task::spawn(async move {
+        let mut i = 0;
+        loop {
+            let (x, y, width, height) = test_preview_frames[i % test_preview_frames.len()];
+            tile_preview.move_to(x, y, width, height).unwrap();
+            i += 1;
+
+            if i % 5 == 0 {
+                tile_preview.hide().unwrap();
+            } else if i % 5 == 1 {
+                tile_preview.show().unwrap();
+            }
+
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+    });
 
     loop {
         let event = bridge

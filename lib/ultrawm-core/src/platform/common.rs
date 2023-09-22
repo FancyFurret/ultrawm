@@ -1,33 +1,6 @@
-use crate::platform::{EventDispatcher, PlatformWindow};
+use crate::platform::PlatformWindow;
 use std::backtrace::Backtrace;
 use std::fmt::Debug;
-
-pub trait PlatformInterface
-where
-    Self: Sized,
-{
-    /// Returns a list of all windows on the system. Should only return application windows, system
-    /// windows that cannot managed should not be returned.
-    fn list_all_windows() -> PlatformResult<Vec<PlatformWindow>>;
-
-    /// This function should block. Events should be sent via the provided dispatcher.
-    /// Only one event loop will be requested at a time. Window events should only be sent for
-    /// windows that can be managed.
-    fn run_event_loop(dispatcher: EventDispatcher) -> PlatformResult<()>;
-}
-
-/// Should be lightweight, and freely copyable
-pub trait PlatformWindowInterface: Clone {
-    fn id(&self) -> WindowId;
-    fn pid(&self) -> ProcessId;
-    fn title(&self) -> PlatformResult<String>;
-    fn position(&self) -> PlatformResult<Position>;
-    fn size(&self) -> PlatformResult<Size>;
-    fn visible(&self) -> PlatformResult<bool>;
-
-    fn move_to(&self, x: u32, y: u32) -> PlatformResult<()>;
-    fn resize(&self, width: u32, height: u32) -> PlatformResult<()>;
-}
 
 #[derive(Debug)]
 pub struct PlatformError {
