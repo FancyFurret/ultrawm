@@ -2,6 +2,7 @@ pub use tile_preview::*;
 pub use window::*;
 
 use crate::platform::macos::event_listener_ax::EventListenerAX;
+use crate::platform::macos::event_listener_cg::EventListenerCG;
 use crate::platform::macos::event_listener_ns::EventListenerNS;
 use crate::platform::macos::ffi::{window_info, AXUIElementExt, CFArrayExt, CFDictionaryExt};
 use crate::platform::traits::{PlatformImpl, PlatformInitImpl};
@@ -19,6 +20,7 @@ use std::mem::ManuallyDrop;
 use std::sync::{Arc, Mutex};
 
 mod event_listener_ax;
+mod event_listener_cg;
 mod event_listener_ns;
 mod ffi;
 mod tile_preview;
@@ -39,6 +41,7 @@ unsafe impl PlatformInitImpl for MacOSPlatformInit {
 
                 let listener_ax = EventListenerAX::run(dispatcher.clone())?;
                 let _listener_ns = EventListenerNS::run(listener_ax.clone())?;
+                let _listener_cg = EventListenerCG::run(dispatcher.clone())?;
 
                 NSApplication::sharedApplication().run();
             }

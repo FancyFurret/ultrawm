@@ -52,6 +52,16 @@ pub enum PlatformEvent {
     WindowResized(PlatformWindow),
     WindowShown(PlatformWindow),
     WindowHidden(PlatformWindow),
+    MouseDown(Position, MouseButton),
+    MouseUp(Position, MouseButton),
+    MouseMoved(Position),
+}
+
+#[derive(Debug)]
+pub enum MouseButton {
+    Left,
+    Right,
+    Middle,
 }
 
 impl PlatformEvent {

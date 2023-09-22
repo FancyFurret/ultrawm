@@ -41,9 +41,13 @@ pub mod notification {
 }
 
 pub mod run_loop_mode {
-    use core_foundation::runloop::{kCFRunLoopDefaultMode, CFRunLoopMode};
+    use core_foundation::runloop::{kCFRunLoopCommonModes, kCFRunLoopDefaultMode, CFRunLoopMode};
 
     pub fn default() -> CFRunLoopMode {
         unsafe { kCFRunLoopDefaultMode }
+    }
+
+    pub fn common_modes() -> CFRunLoopMode {
+        unsafe { kCFRunLoopCommonModes }
     }
 }
