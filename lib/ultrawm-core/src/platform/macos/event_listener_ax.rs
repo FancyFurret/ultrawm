@@ -1,6 +1,8 @@
-use crate::platform::macos::event_listener_ax::ObserveError::NotManageable;
 use crate::platform::macos::ffi::{get_window_id, notification, run_loop_mode, AXUIElementExt};
-use crate::platform::macos::{MacOSPlatform, MacOSPlatformWindow};
+use crate::platform::macos::{
+    app_is_manageable, window_is_manageable, MacOSPlatform, MacOSPlatformWindow, ObserveError,
+    ObserveResult, ObserveResultExt,
+};
 use crate::platform::{
     EventDispatcher, PlatformError, PlatformErrorType, PlatformEvent, PlatformResult,
     PlatformWindowImpl, ProcessId, WindowId,
@@ -12,14 +14,6 @@ use core_foundation::string::CFString;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
-
-#[derive(Debug)]
-enum ObserveError {
-    NotManageable(String),
-    PlatformError(PlatformError),
-}
-
-type ObserveResult = Result<(), ObserveError>;
 
 type EventNotification = AXNotification<'static>;
 
@@ -67,14 +61,14 @@ impl EventListenerAX {
         let app = AXUIElementExt::from(AXUIElement::create_application(pid as pid_t)?);
         let run_loop = CFRunLoop::get_current();
 
-        Self::app_is_manageable(&app)?;
+        app_is_manageable(&app)?;
 
         println!("Observing app: {:?}", app.title()?);
 
         let observer = AXObserver::new(pid as pid_t)?;
-        let notifications = self
-            .get_app_notifications(&observer, &app)
-            .map_err(|_| NotManageable("Could not get app notifications".to_string()))?;
+        let notifications = self.get_app_notifications(&observer, &app).map_err(|_| {
+            ObserveError::NotManageable("Could not get app notifications".to_string())
+        })?;
 
         // Add the observer to the run loop
         run_loop.add_source(&observer.get_run_loop_source(), run_loop_mode::default());
@@ -105,7 +99,7 @@ impl EventListenerAX {
     }
 
     fn observe_window(&mut self, window: &AXUIElementExt) -> ObserveResult {
-        Self::window_is_manageable(window)?;
+        window_is_manageable(window)?;
 
         println!("Observing window: {:?}", window.title()?);
 
@@ -119,7 +113,9 @@ impl EventListenerAX {
 
         let notifications = self
             .get_window_notifications(&listener_app.observer, &window)
-            .map_err(|_| NotManageable("Could not get window notifications".to_string()))?;
+            .map_err(|_| {
+                ObserveError::NotManageable("Could not get window notifications".to_string())
+            })?;
 
         let listener_app = self.apps.get_mut(&pid).ok_or("Could not find app")?;
         listener_app.window_notifications.insert(id, notifications);
@@ -276,84 +272,10 @@ impl EventListenerAX {
         self.unobserve_app(pid)?;
         Ok(())
     }
-
-    fn app_is_manageable(app: &AXUIElementExt) -> ObserveResult {
-        app.pid().map_err(|_| "App has no pid")?;
-        app.title().map_err(|_| "App has no title")?;
-
-        Ok(())
-    }
-
-    fn window_is_manageable(window: &AXUIElementExt) -> ObserveResult {
-        get_window_id(&window.element).ok_or("Window has no id")?;
-        window.title().map_err(|_| "Window has no title")?;
-
-        let role = window.role().map_err(|_| "Window has no role")?;
-        if role == "AXPopover" {
-            Err("Window role is AXPopover")?
-        }
-
-        let subrole = window.subrole().map_err(|_| "Window has no subrole")?;
-        if subrole == "AXUnknown" {
-            Err("Window subrole is AXUnknown")?
-        }
-
-        Ok(())
-    }
 }
 
 impl From<AXError> for PlatformError {
     fn from(error: AXError) -> Self {
         PlatformErrorType::Error(format!("AXError: {:?}", error)).into()
-    }
-}
-
-impl From<PlatformError> for ObserveError {
-    fn from(error: PlatformError) -> Self {
-        ObserveError::PlatformError(error)
-    }
-}
-
-impl From<&str> for ObserveError {
-    fn from(error: &str) -> Self {
-        NotManageable(error.to_string())
-    }
-}
-
-impl From<()> for ObserveError {
-    fn from(_: ()) -> Self {
-        ObserveError::PlatformError(PlatformErrorType::Unknown.into())
-    }
-}
-
-impl From<AXError> for ObserveError {
-    fn from(error: AXError) -> Self {
-        ObserveError::PlatformError(error.into())
-    }
-}
-
-impl Into<PlatformError> for ObserveError {
-    fn into(self) -> PlatformError {
-        match self {
-            NotManageable(e) => PlatformErrorType::Error(e).into(),
-            ObserveError::PlatformError(e) => e,
-        }
-    }
-}
-
-trait ObserveResultExt {
-    fn report(self, name: &str) -> PlatformResult<()>;
-}
-
-impl ObserveResultExt for ObserveResult {
-    fn report(self, name: &str) -> PlatformResult<()> {
-        match self {
-            Ok(_) => Ok(()),
-            Err(NotManageable(e)) => {
-                println!("{} is not manageable, ignoring: {}", name, e);
-                Ok(())
-            }
-            Err(ObserveError::PlatformError(e)) => Err(e.into()),
-        }
     }
 }

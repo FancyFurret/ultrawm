@@ -44,8 +44,8 @@ impl EventListenerCG {
     fn handle_event(dispatcher: &EventDispatcher, event_type: CGEventType, event: &CGEvent) {
         let location = event.location();
         let position = Position {
-            x: location.x as u32,
-            y: location.y as u32,
+            x: location.x as i32,
+            y: location.y as i32,
         };
 
         let e = match event_type {

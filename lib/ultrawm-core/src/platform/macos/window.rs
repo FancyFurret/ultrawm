@@ -1,6 +1,6 @@
 use crate::platform::macos::ffi::{get_window_id, AXUIElementExt};
 use crate::platform::traits::PlatformWindowImpl;
-use crate::platform::{PlatformResult, Position, ProcessId, Size, WindowId};
+use crate::platform::{Bounds, PlatformResult, Position, ProcessId, Size, WindowId};
 use core_graphics::geometry::{CGPoint, CGSize};
 
 #[derive(Debug, Clone)]
@@ -38,43 +38,45 @@ impl PlatformWindowImpl for MacOSPlatformWindow {
         self.pid
     }
 
-    fn title(&self) -> PlatformResult<String> {
-        Ok(self
-            .element
+    fn title(&self) -> String {
+        self.element
             .title()
             .unwrap_or("Unknown".to_string())
-            .to_string())
+            .to_string()
     }
 
-    fn position(&self) -> PlatformResult<Position> {
-        let position = self.element.position()?;
-        Ok(Position {
-            x: position.x as u32,
-            y: position.y as u32,
-        })
+    fn position(&self) -> Position {
+        let position = self
+            .element
+            .position()
+            .expect("Could not get window position");
+        Position {
+            x: position.x as i32,
+            y: position.y as i32,
+        }
     }
 
-    fn size(&self) -> PlatformResult<Size> {
-        let size = self.element.size()?;
-        Ok(Size {
+    fn size(&self) -> Size {
+        let size = self.element.size().expect("Could not get window size");
+        Size {
             width: size.width as u32,
             height: size.height as u32,
-        })
+        }
     }
 
-    fn visible(&self) -> PlatformResult<bool> {
-        Ok(self.element.minimized()?)
+    fn visible(&self) -> bool {
+        self.element.minimized().unwrap_or(false)
     }
 
-    fn move_to(&self, x: u32, y: u32) -> PlatformResult<()> {
-        Ok(self
-            .element
-            .set_position(CGPoint::new(x as f64, y as f64))?)
-    }
-
-    fn resize(&self, width: u32, height: u32) -> PlatformResult<()> {
-        Ok(self
-            .element
-            .set_size(CGSize::new(width as f64, height as f64))?)
+    fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()> {
+        self.element.set_position(CGPoint::new(
+            bounds.position.x as f64,
+            bounds.position.y as f64,
+        ))?;
+        self.element.set_size(CGSize::new(
+            bounds.size.width as f64,
+            bounds.size.height as f64,
+        ))?;
+        Ok(())
     }
 }

@@ -1,4 +1,6 @@
-use crate::platform::{EventDispatcher, PlatformResult, Position, ProcessId, Size, WindowId};
+use crate::platform::{
+    Bounds, Display, EventDispatcher, PlatformResult, Position, ProcessId, Size, WindowId,
+};
 
 /// # Safety
 /// These functions should only be called from the main thread. They are not thread safe.
@@ -19,10 +21,6 @@ pub trait PlatformImpl
 where
     Self: Sized + Send + Sync,
 {
-    /// Returns a list of all windows on the system. Should only return application windows, system
-    /// windows that cannot managed should not be returned.
-    fn list_all_windows() -> PlatformResult<Vec<crate::platform::PlatformWindow>>;
-
     fn is_main_thread() -> bool;
 
     /// Runs the provided function on the main thread. Should only be called once the platform's event
@@ -31,6 +29,13 @@ where
     where
         F: FnOnce() -> R + Send,
         R: Send + 'static;
+
+    /// Returns a list of all windows on the system. Should only return application windows, system
+    /// windows that cannot managed should not be returned.
+    fn list_all_windows() -> PlatformResult<Vec<crate::platform::PlatformWindow>>;
+
+    /// Returns a list of all monitors connected to the system.
+    fn list_all_displays() -> PlatformResult<Vec<Display>>;
 }
 
 pub trait PlatformTilePreviewImpl
@@ -51,11 +56,10 @@ where
 {
     fn id(&self) -> WindowId;
     fn pid(&self) -> ProcessId;
-    fn title(&self) -> PlatformResult<String>;
-    fn position(&self) -> PlatformResult<Position>;
-    fn size(&self) -> PlatformResult<Size>;
-    fn visible(&self) -> PlatformResult<bool>;
+    fn title(&self) -> String;
+    fn position(&self) -> Position;
+    fn size(&self) -> Size;
+    fn visible(&self) -> bool;
 
-    fn move_to(&self, x: u32, y: u32) -> PlatformResult<()>;
-    fn resize(&self, width: u32, height: u32) -> PlatformResult<()>;
+    fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()>;
 }

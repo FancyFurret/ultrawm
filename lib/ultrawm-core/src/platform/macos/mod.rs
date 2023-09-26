@@ -1,3 +1,4 @@
+pub use manageable::*;
 pub use tile_preview::*;
 pub use window::*;
 
@@ -5,15 +6,17 @@ use crate::platform::macos::event_listener_ax::EventListenerAX;
 use crate::platform::macos::event_listener_cg::EventListenerCG;
 use crate::platform::macos::event_listener_ns::EventListenerNS;
 use crate::platform::macos::ffi::{window_info, AXUIElementExt, CFArrayExt, CFDictionaryExt};
+use crate::platform::macos::ObserveError::NotManageable;
 use crate::platform::traits::{PlatformImpl, PlatformInitImpl};
-use crate::platform::{EventDispatcher, PlatformResult, ProcessId};
+use crate::platform::{Bounds, Display, EventDispatcher, PlatformResult, ProcessId};
 use application_services::accessibility_ui::AXUIElement;
 use application_services::pid_t;
 use core_graphics::window::{copy_window_info, kCGNullWindowID, kCGWindowListOptionAll};
 use icrate::block2::{ConcreteBlock, RcBlock};
 use icrate::objc2::rc::autoreleasepool;
-use icrate::AppKit::{NSApplication, NSApplicationLoad};
-use icrate::Foundation::{is_main_thread, NSBlockOperation, NSOperationQueue, NSThread};
+use icrate::AppKit::{NSApplication, NSApplicationLoad, NSDeviceDescriptionKey, NSScreen};
+use icrate::Foundation::{is_main_thread, NSBlockOperation, NSNumber, NSOperationQueue, NSThread};
+use objc2::rc::Id;
 use std::collections::HashSet;
 use std::ffi::c_void;
 use std::mem::ManuallyDrop;
@@ -23,6 +26,7 @@ mod event_listener_ax;
 mod event_listener_cg;
 mod event_listener_ns;
 mod ffi;
+mod manageable;
 mod tile_preview;
 mod window;
 
@@ -72,27 +76,6 @@ impl MacOSPlatform {
 }
 
 impl PlatformImpl for MacOSPlatform {
-    fn list_all_windows() -> PlatformResult<Vec<MacOSPlatformWindow>> {
-        let mut windows = Vec::new();
-        for pid in MacOSPlatform::find_pids_with_windows()? {
-            let app = AXUIElementExt::from(
-                AXUIElement::create_application(pid as pid_t)
-                    .map_err(|_| format!("Could not create AXUIElement for pid {}", pid))?,
-            );
-
-            if let Ok(app_windows) = app.windows() {
-                for window in app_windows {
-                    let window = MacOSPlatformWindow::new(window);
-                    if let Ok(window) = window {
-                        windows.push(window);
-                    }
-                }
-            }
-        }
-
-        Ok(windows)
-    }
-
     fn is_main_thread() -> bool {
         NSThread::currentThread().isMainThread()
     }
@@ -134,5 +117,77 @@ impl PlatformImpl for MacOSPlatform {
 
         let result = result.lock().unwrap().take().unwrap().unwrap();
         Ok(result)
+    }
+
+    fn list_all_windows() -> PlatformResult<Vec<MacOSPlatformWindow>> {
+        let mut windows = Vec::new();
+        for pid in MacOSPlatform::find_pids_with_windows()? {
+            let app = AXUIElementExt::from(
+                AXUIElement::create_application(pid as pid_t)
+                    .map_err(|_| format!("Could not create AXUIElement for pid {}", pid))?,
+            );
+
+            match app_is_manageable(&app) {
+                Ok(_) => {}
+                Err(NotManageable(_)) => continue,
+                Err(e) => return Err(e.into()),
+            }
+
+            if let Ok(app_windows) = app.windows() {
+                for window in app_windows {
+                    match window_is_manageable(&window) {
+                        Ok(_) => {}
+                        Err(NotManageable(_)) => continue,
+                        Err(e) => return Err(e.into()),
+                    }
+
+                    let window = MacOSPlatformWindow::new(window);
+                    if let Ok(window) = window {
+                        windows.push(window);
+                    }
+                }
+            }
+        }
+
+        Ok(windows)
+    }
+
+    fn list_all_displays() -> PlatformResult<Vec<Display>> {
+        unsafe {
+            let mut result = Vec::new();
+            let displays = NSScreen::screens();
+
+            for screen in displays {
+                let desc = screen.deviceDescription();
+                let key = NSDeviceDescriptionKey::from_str("NSScreenNumber");
+                let obj = desc.objectForKey(&key).ok_or("Could not get screen id")?;
+                let number = Id::cast::<NSNumber>(obj);
+
+                let frame = screen.frame();
+                let visible_frame = screen.visibleFrame();
+
+                let total_screen_height = frame.size.height;
+
+                result.push(Display {
+                    id: number.unsignedIntegerValue() as u32,
+                    name: screen.localizedName().to_string(),
+                    bounds: Bounds::new(
+                        frame.origin.x as i32,
+                        (total_screen_height - frame.origin.y - frame.size.height) as i32,
+                        frame.size.width as u32,
+                        frame.size.height as u32,
+                    ),
+                    work_area: Bounds::new(
+                        visible_frame.origin.x as i32,
+                        (total_screen_height - visible_frame.origin.y - visible_frame.size.height)
+                            as i32,
+                        visible_frame.size.width as u32,
+                        visible_frame.size.height as u32,
+                    ),
+                });
+            }
+
+            Ok(result)
+        }
     }
 }

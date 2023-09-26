@@ -34,6 +34,6 @@ impl EventDispatcher {
     pub fn send(&self, event: PlatformEvent) {
         self.sender
             .send(event)
-            .map_or_else(|e| println!("Error sending event: {}", e), |_| {})
+            .expect("Error sending event to event bridge");
     }
 }
