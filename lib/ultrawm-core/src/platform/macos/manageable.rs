@@ -34,17 +34,14 @@ pub enum ObserveError {
 
 pub type ObserveResult = Result<(), ObserveError>;
 pub trait ObserveResultExt {
-    fn report(self, name: &str) -> PlatformResult<()>;
+    fn handle_observe_error(self) -> PlatformResult<()>;
 }
 
 impl ObserveResultExt for ObserveResult {
-    fn report(self, name: &str) -> PlatformResult<()> {
+    fn handle_observe_error(self) -> PlatformResult<()> {
         match self {
             Ok(_) => Ok(()),
-            Err(ObserveError::NotManageable(e)) => {
-                println!("{} is not manageable, ignoring: {}", name, e);
-                Ok(())
-            }
+            Err(ObserveError::NotManageable(_e)) => Ok(()),
             Err(ObserveError::PlatformError(e)) => Err(e.into()),
         }
     }

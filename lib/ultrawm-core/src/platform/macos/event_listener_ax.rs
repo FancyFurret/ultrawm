@@ -47,7 +47,10 @@ impl EventListenerAX {
         listener.borrow_mut().self_ref = Rc::downgrade(&listener);
 
         for pid in MacOSPlatform::find_pids_with_windows()? {
-            listener.borrow_mut().observe_app(pid).report("App")?;
+            listener
+                .borrow_mut()
+                .observe_app(pid)
+                .handle_observe_error()?;
         }
 
         Ok(listener)
@@ -62,8 +65,6 @@ impl EventListenerAX {
         let run_loop = CFRunLoop::get_current();
 
         app_is_manageable(&app)?;
-
-        println!("Observing app: {:?}", app.title()?);
 
         let observer = AXObserver::new(pid as pid_t)?;
         let notifications = self.get_app_notifications(&observer, &app).map_err(|_| {
@@ -100,8 +101,6 @@ impl EventListenerAX {
 
     fn observe_window(&mut self, window: &AXUIElementExt) -> ObserveResult {
         window_is_manageable(window)?;
-
-        println!("Observing window: {:?}", window.title()?);
 
         let id = get_window_id(&window.element).ok_or("Window has no id")?;
         let pid = window.pid()? as ProcessId;
@@ -140,7 +139,6 @@ impl EventListenerAX {
                 )?));
             return Ok(());
         } else if notification == notification::application_shown() {
-            println!("Application shown");
             for window in element.windows()? {
                 if window.minimized()? {
                     continue;
@@ -151,7 +149,6 @@ impl EventListenerAX {
             }
             return Ok(());
         } else if notification == notification::application_hidden() {
-            println!("Application hidden");
             for window in element.windows()? {
                 if window.minimized()? {
                     continue;
@@ -169,10 +166,7 @@ impl EventListenerAX {
         // Grab the window from the callback data if it's provided. This important for destroyed
         // windows, since once a window is destroyed, we can no longer get it's window id.
         let window = match data {
-            Some(window) => {
-                println!("Got window from callback data");
-                window
-            }
+            Some(window) => window,
             None => (MacOSPlatformWindow::new(element))?,
         };
 
@@ -181,7 +175,7 @@ impl EventListenerAX {
         } else if notification == notification::window_created() {
             let result = self.observe_window(&window.element);
             if result.is_err() {
-                return result.report("Window");
+                return result.handle_observe_error();
             }
 
             PlatformEvent::WindowCreated(window)
@@ -253,19 +247,16 @@ impl EventListenerAX {
                              element: AXUIElement,
                              notification: CFString,
                              window: &Option<MacOSPlatformWindow>| {
-            let res = self_ref
+            let _ = self_ref
                 .borrow_mut()
                 .handle_event(element, notification, window.to_owned());
-            if let Err(e) = res {
-                println!("Error handling AX event: {:?}", e);
-            }
         };
 
         Ok(observer.add_notification(&element.element, notification, callback, data.to_owned())?)
     }
 
     pub fn app_launched(&mut self, pid: ProcessId) -> PlatformResult<()> {
-        self.observe_app(pid).report("App")
+        self.observe_app(pid).handle_observe_error()
     }
 
     pub fn app_terminated(&mut self, pid: ProcessId) -> PlatformResult<()> {

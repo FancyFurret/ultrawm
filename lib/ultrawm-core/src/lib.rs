@@ -76,14 +76,9 @@ async fn start_async(mut bridge: EventBridge) -> UltraWMResult<()> {
     let _wm = WindowManager::new()?;
 
     loop {
-        let event = bridge
+        let _event = bridge
             .next_event()
             .await
             .ok_or("Could not get next event")?;
-
-        let window = event.window();
-        let title = window.map_or("NO WINDOW".to_owned(), |w| w.title());
-
-        println!("Event Received: {} | {:?}", title, event);
     }
 }
