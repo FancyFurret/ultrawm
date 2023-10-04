@@ -9,13 +9,13 @@ pub struct Window {
 }
 
 impl Window {
-    pub fn new(platform_window: &PlatformWindow) -> Self {
+    pub fn new(platform_window: PlatformWindow) -> Self {
         Self {
             bounds: Bounds {
                 position: platform_window.position(),
                 size: platform_window.size(),
             },
-            platform_window: platform_window.clone(),
+            platform_window,
             dirty: AtomicBool::new(false),
         }
     }
@@ -37,7 +37,7 @@ impl Window {
         self.dirty.load(Ordering::Relaxed)
     }
 
-    pub fn flush(&self) -> PlatformResult<()> {
+    pub fn flush(&mut self) -> PlatformResult<()> {
         self.dirty.store(false, Ordering::Relaxed);
         self.platform_window.set_bounds(&self.bounds)?;
 

@@ -68,7 +68,7 @@ impl PlatformWindowImpl for MacOSPlatformWindow {
         self.element.minimized().unwrap_or(false)
     }
 
-    fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()> {
+    fn set_bounds(&mut self, bounds: &Bounds) -> PlatformResult<()> {
         self.element.set_position(CGPoint::new(
             bounds.position.x as f64,
             bounds.position.y as f64,

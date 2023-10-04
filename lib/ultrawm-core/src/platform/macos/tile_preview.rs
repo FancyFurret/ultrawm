@@ -1,6 +1,6 @@
 use crate::platform::thread_lock::MainThreadLock;
 use crate::platform::traits::PlatformTilePreviewImpl;
-use crate::platform::PlatformResult;
+use crate::platform::{Bounds, PlatformResult};
 use core_foundation::base::ToVoid;
 use core_graphics::color::CGColor;
 use icrate::block2::ConcreteBlock;
@@ -55,15 +55,12 @@ impl PlatformTilePreviewImpl for MacOSTilePreview {
         })
     }
 
-    fn move_to(&mut self, x: u32, y: u32, width: u32, height: u32) -> PlatformResult<()> {
+    fn move_to(&mut self, bounds: &Bounds) -> PlatformResult<()> {
         self.window.access(|w| unsafe {
             CATransaction::begin();
             CATransaction::setAnimationDuration(ANIMATION_DURATION);
-            let frame = NSRect::new(
-                CGPoint::new(x as f64, y as f64),
-                CGSize::new(width as f64, height as f64),
-            );
-            w.animator().setFrame_display_animate(frame, true, true);
+            w.animator()
+                .setFrame_display_animate(bounds.clone().into(), true, true);
             CATransaction::commit();
         })
     }

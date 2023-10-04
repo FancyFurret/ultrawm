@@ -8,14 +8,17 @@ use crate::platform::macos::event_listener_ns::EventListenerNS;
 use crate::platform::macos::ffi::{window_info, AXUIElementExt, CFArrayExt, CFDictionaryExt};
 use crate::platform::macos::ObserveError::NotManageable;
 use crate::platform::traits::{PlatformImpl, PlatformInitImpl};
-use crate::platform::{Bounds, Display, EventDispatcher, PlatformResult, ProcessId};
+use crate::platform::{Bounds, Display, EventDispatcher, PlatformResult, Position, ProcessId};
 use application_services::accessibility_ui::AXUIElement;
 use application_services::pid_t;
 use core_graphics::window::{copy_window_info, kCGNullWindowID, kCGWindowListOptionAll};
 use icrate::block2::{ConcreteBlock, RcBlock};
 use icrate::objc2::rc::autoreleasepool;
-use icrate::AppKit::{NSApplication, NSApplicationLoad, NSDeviceDescriptionKey, NSScreen};
-use icrate::Foundation::{is_main_thread, NSBlockOperation, NSNumber, NSOperationQueue, NSThread};
+use icrate::AppKit::{NSApplication, NSApplicationLoad, NSDeviceDescriptionKey, NSEvent, NSScreen};
+use icrate::Foundation::{
+    is_main_thread, CGPoint, CGRect, CGSize, NSBlockOperation, NSNumber, NSOperationQueue, NSRect,
+    NSThread,
+};
 use objc2::rc::Id;
 use std::collections::HashSet;
 use std::ffi::c_void;
@@ -163,31 +166,82 @@ impl PlatformImpl for MacOSPlatform {
                 let obj = desc.objectForKey(&key).ok_or("Could not get screen id")?;
                 let number = Id::cast::<NSNumber>(obj);
 
-                let frame = screen.frame();
-                let visible_frame = screen.visibleFrame();
-
-                let total_screen_height = frame.size.height;
-
                 result.push(Display {
                     id: number.unsignedIntegerValue() as u32,
                     name: screen.localizedName().to_string(),
-                    bounds: Bounds::new(
-                        frame.origin.x as i32,
-                        (total_screen_height - frame.origin.y - frame.size.height) as i32,
-                        frame.size.width as u32,
-                        frame.size.height as u32,
-                    ),
-                    work_area: Bounds::new(
-                        visible_frame.origin.x as i32,
-                        (total_screen_height - visible_frame.origin.y - visible_frame.size.height)
-                            as i32,
-                        visible_frame.size.width as u32,
-                        visible_frame.size.height as u32,
-                    ),
+                    bounds: screen.frame().into(),
+                    work_area: screen.visibleFrame().into(),
                 });
             }
 
             Ok(result)
+        }
+    }
+
+    fn get_mouse_position() -> PlatformResult<Position> {
+        // TODO: Slow?
+        unsafe {
+            let pos = NSEvent::mouseLocation();
+            let position = Position::new(pos.x as i32, pos.y as i32);
+            let screen = get_screen_for_position(&position).unwrap();
+            let total_height = screen.frame().size.height as f64;
+            Ok(Position::new(
+                position.x,
+                total_height as i32 - position.y - 1,
+            ))
+        }
+    }
+}
+
+fn get_screen_for_position(position: &Position) -> Option<Id<NSScreen>> {
+    unsafe {
+        let screens = NSScreen::screens();
+        for screen in screens {
+            let frame = screen.frame();
+            if position.x >= frame.origin.x as i32
+                && position.x < frame.origin.x as i32 + frame.size.width as i32
+                && position.y >= frame.origin.y as i32
+                && position.y < frame.origin.y as i32 + frame.size.height as i32
+            {
+                return Some(screen);
+            }
+        }
+
+        None
+    }
+}
+
+impl From<Bounds> for CGRect {
+    fn from(value: Bounds) -> Self {
+        unsafe {
+            let screen = get_screen_for_position(&value.position).unwrap();
+            let total_height = screen.frame().size.height as f64;
+            CGRect::new(
+                CGPoint::new(
+                    value.position.x as f64,
+                    total_height - value.position.y as f64 - value.size.height as f64,
+                ),
+                CGSize::new(value.size.width as f64, value.size.height as f64),
+            )
+        }
+    }
+}
+
+impl From<CGRect> for Bounds {
+    fn from(value: NSRect) -> Self {
+        unsafe {
+            let screen = get_screen_for_position(&Position::new(
+                value.origin.x as i32,
+                value.origin.y as i32,
+            ))
+            .unwrap();
+            let total_height = screen.frame().size.height as i32;
+            Bounds::new(
+                value.origin.x as i32,
+                total_height - value.origin.y as i32 - value.size.height as i32,
+                value.size.width as u32,
+                value.size.height as u32,
+            )
         }
     }
 }

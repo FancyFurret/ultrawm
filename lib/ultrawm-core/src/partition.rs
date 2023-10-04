@@ -10,6 +10,7 @@ pub struct Partition {
     id: PartitionId,
     name: String,
     bounds: Bounds,
+    current_workspace: Option<WorkspaceId>,
     assigned_workspaces: HashSet<WorkspaceId>,
 }
 
@@ -22,6 +23,7 @@ impl Partition {
             id,
             name,
             bounds,
+            current_workspace: None,
             assigned_workspaces: HashSet::new(),
         }
     }
@@ -38,7 +40,16 @@ impl Partition {
         &self.bounds
     }
 
+    pub fn current_workspace(&self) -> Option<WorkspaceId> {
+        self.current_workspace
+    }
+
+    pub fn assigned_workspaces(&self) -> &HashSet<WorkspaceId> {
+        &self.assigned_workspaces
+    }
+
     pub fn assign_workspace(&mut self, workspace_id: WorkspaceId) {
+        self.current_workspace.get_or_insert(workspace_id);
         self.assigned_workspaces.insert(workspace_id);
     }
 }

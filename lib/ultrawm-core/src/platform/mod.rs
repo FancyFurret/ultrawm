@@ -10,7 +10,14 @@ mod traits;
 use cfg_if::cfg_if;
 
 cfg_if! {
-    if #[cfg(target_os = "macos")] {
+    if #[cfg(test)] {
+        pub mod mock;
+        pub type PlatformInit = mock::MockPlatformInit;
+        pub type Platform = mock::MockPlatform;
+        pub type PlatformWindow = mock::MockPlatformWindow;
+        pub type PlatformTilePreview = mock::MockPlatformTilePreview;
+    }
+    else if #[cfg(target_os = "macos")] {
         mod macos;
         pub type PlatformInit = macos::MacOSPlatformInit;
         pub type Platform = macos::MacOSPlatform;

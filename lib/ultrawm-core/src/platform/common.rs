@@ -1,4 +1,5 @@
 use crate::platform::PlatformWindow;
+use serde::{Deserialize, Serialize};
 use std::backtrace::Backtrace;
 use std::fmt::Debug;
 
@@ -58,6 +59,7 @@ pub enum PlatformEvent {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum MouseButton {
     Left,
     Right,
@@ -65,6 +67,7 @@ pub enum MouseButton {
 }
 
 impl PlatformEvent {
+    #[allow(dead_code)]
     pub fn window(&self) -> Option<&PlatformWindow> {
         match self {
             PlatformEvent::WindowCreated(window)
@@ -82,7 +85,7 @@ pub type DisplayId = u32;
 pub type ProcessId = u32;
 pub type WindowId = u32;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bounds {
     pub position: Position,
     pub size: Size,
@@ -115,7 +118,7 @@ impl Bounds {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Size {
     pub width: u32,
     pub height: u32,
@@ -127,7 +130,7 @@ impl Size {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Position {
     pub x: i32,
     pub y: i32,

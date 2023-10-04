@@ -1,5 +1,7 @@
+use crate::config::ConfigRef;
 use crate::layouts::WindowLayout;
-use crate::platform::PlatformResult;
+use crate::platform::Bounds;
+use crate::window::Window;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub type WorkspaceId = usize;
@@ -14,8 +16,14 @@ pub struct Workspace {
 static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 impl Workspace {
-    pub fn new(layout: Box<dyn WindowLayout>, name: String) -> Self {
+    pub fn new<TLayout: WindowLayout + 'static>(
+        config: ConfigRef,
+        bounds: Bounds,
+        windows: Vec<Window>,
+        name: String,
+    ) -> Self {
         let id = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let layout = Box::new(TLayout::new(config, bounds, windows));
         Self { id, name, layout }
     }
 
@@ -31,12 +39,7 @@ impl Workspace {
         &*self.layout
     }
 
-    pub fn flush(&self) -> PlatformResult<()> {
-        let dirty_windows = self.layout.iter().filter(|w| w.dirty());
-        for window in dirty_windows {
-            window.flush()?;
-        }
-
-        Ok(())
+    pub fn layout_mut(&mut self) -> &mut dyn WindowLayout {
+        &mut *self.layout
     }
 }

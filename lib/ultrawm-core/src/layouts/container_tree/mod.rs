@@ -1,96 +1,129 @@
-use crate::config::ConfigRef;
-use crate::layouts::container_tree::container::{Container, ContainerChild};
-use crate::layouts::WindowLayout;
-use crate::platform::{Bounds, PlatformResult, PlatformWindowImpl};
-use crate::window::Window;
+pub use container_tree::*;
+
+use crate::layouts::container_tree::container::{ContainerChildRef, WindowRef};
 
 mod container;
+mod container_tree;
+mod container_tree_iterator;
+mod serialize;
 
-#[derive(Debug)]
+// Percentage of half the container size that the mouse must be within
+const MOUSE_SWAP_THRESHOLD: f32 = 1.0;
+const MOUSE_SPLIT_THRESHOLD: f32 = 0.6;
+const MOUSE_ADD_TO_PARENT_THRESHOLD: f32 = 0.2;
+const MOUSE_SPLIT_PREVIEW_RATIO: f32 = 0.5;
+const MOUSE_ADD_TO_PARENT_PREVIEW_RATIO: f32 = 0.25;
+
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Direction {
     Horizontal,
     Vertical,
 }
 
+impl Direction {
+    fn opposite(&self) -> Self {
+        match self {
+            Direction::Horizontal => Direction::Vertical,
+            Direction::Vertical => Direction::Horizontal,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum Side {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+impl Side {
+    fn direction(&self) -> Direction {
+        match self {
+            Side::Left | Side::Right => Direction::Horizontal,
+            Side::Top | Side::Bottom => Direction::Vertical,
+        }
+    }
+}
+
 #[derive(Debug)]
-pub struct ContainerTree {
-    config: ConfigRef,
-    bounds: Bounds,
-    root: Container,
+enum TileAction {
+    FillRoot,
+    Swap(WindowRef),
+    AddToParent(ContainerChildRef, Side),
+    Split(WindowRef, Side),
 }
 
-impl ContainerTree {}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{Config, ConfigRef};
+    use crate::layouts::container_tree::container::{Container, ContainerRef};
+    use crate::platform::mock::MockPlatformWindow;
+    use crate::platform::{Bounds, PlatformWindowImpl};
+    use crate::window::Window;
+    use std::fmt::Debug;
+    use std::rc::Rc;
 
-impl WindowLayout for ContainerTree {
-    fn new(config: ConfigRef, bounds: Bounds, mut windows: Vec<Window>) -> PlatformResult<Self>
-    where
-        Self: Sized,
-    {
-        // For now, just add each window to the root container.
-        // Later, we should try to keep the windows in similar positions to how they were before
-        // as to not mess up the user's layout.
-
-        let root_bounds = Bounds::new(
-            bounds.position.x + config.partition_gap as i32,
-            bounds.position.y + config.partition_gap as i32,
-            bounds.size.width - config.partition_gap * 2,
-            bounds.size.height - config.partition_gap * 2,
-        );
-
-        let mut root = Container::new(config.clone(), root_bounds, Direction::Horizontal);
-
-        // Sort by x position so that they stay in somewhat the same order
-        windows.sort_by_key(|w| w.platform_window().position().x);
-
-        for window in windows {
-            root.add_window(window);
-        }
-
-        Ok(Self {
-            config,
-            bounds,
-            root,
-        })
+    #[test]
+    fn test_direction_opposite() {
+        assert_eq!(Direction::Horizontal.opposite(), Direction::Vertical);
+        assert_eq!(Direction::Vertical.opposite(), Direction::Horizontal);
     }
 
-    fn iter<'a>(&'a self) -> Box<(dyn Iterator<Item = &'a Window> + 'a)> {
-        Box::new(ContainerTreeIterator::<'a>::new(&self.root))
+    #[test]
+    fn test_side_direction() {
+        assert_eq!(Side::Left.direction(), Direction::Horizontal);
+        assert_eq!(Side::Right.direction(), Direction::Horizontal);
+        assert_eq!(Side::Top.direction(), Direction::Vertical);
+        assert_eq!(Side::Bottom.direction(), Direction::Vertical);
     }
-}
 
-struct ContainerTreeIterator<'a> {
-    stack: Vec<&'a Container>,
-    current_windows: Vec<&'a Window>,
-}
-
-impl<'a> ContainerTreeIterator<'a> {
-    fn new(root: &'a Container) -> Self {
-        let mut stack = Vec::new();
-        stack.push(root);
-        Self {
-            stack,
-            current_windows: Vec::new(),
+    pub fn assert_is_container(child: &ContainerChildRef) -> ContainerRef {
+        match child {
+            ContainerChildRef::Container(c) => c.clone(),
+            _ => panic!("Expected {:?} to be a container", child),
         }
     }
-}
 
-impl<'a> Iterator for ContainerTreeIterator<'a> {
-    type Item = &'a Window;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        while let Some(container) = self.stack.pop() {
-            for child in container.children() {
-                match child {
-                    ContainerChild::Container(container) => self.stack.push(container),
-                    ContainerChild::Window(window) => self.current_windows.push(window),
-                }
-            }
+    pub fn assert_is_window(child: &ContainerChildRef) -> WindowRef {
+        match child {
+            ContainerChildRef::Window(w) => w.clone(),
+            _ => panic!("Expected {:?} to be a window", child),
         }
+    }
 
-        if let Some(window) = self.current_windows.pop() {
-            return Some(window);
-        }
+    pub fn assert_window(child: &ContainerChildRef, window: &WindowRef) {
+        let child_window = assert_is_window(child);
+        assert_eq!(child_window, *window);
+    }
 
-        None
+    pub fn new_bounds() -> Bounds {
+        Bounds::new(0, 0, 500, 500)
+    }
+
+    pub fn new_config() -> ConfigRef {
+        Rc::new(Config::default())
+    }
+
+    pub fn new_container() -> ContainerRef {
+        Container::new_root(new_config(), new_bounds())
+    }
+
+    pub fn new_window() -> Window {
+        let bounds = new_bounds();
+        Window::new(MockPlatformWindow::new(
+            bounds.position,
+            bounds.size,
+            "Mock Window".to_owned(),
+        ))
+    }
+
+    pub fn new_window_with_bounds(bounds: Bounds) -> Window {
+        Window::new(MockPlatformWindow::new(
+            bounds.position,
+            bounds.size,
+            "Mock Window".to_owned(),
+        ))
     }
 }

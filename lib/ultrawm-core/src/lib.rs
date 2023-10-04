@@ -1,14 +1,17 @@
+use crate::drag_tracker::{DragTracker, WindowDragEvent};
 use crate::platform::{
     EventBridge, Platform, PlatformError, PlatformImpl, PlatformInit, PlatformInitImpl,
-    PlatformWindowImpl,
+    PlatformTilePreview, PlatformTilePreviewImpl,
 };
 use crate::wm::WindowManager;
 use std::{process, thread};
 
 mod config;
+mod drag_tracker;
 mod layouts;
 mod partition;
 mod platform;
+mod serialize;
 mod window;
 mod wm;
 mod workspace;
@@ -73,12 +76,70 @@ pub fn start() -> UltraWMResult<()> {
 async fn start_async(mut bridge: EventBridge) -> UltraWMResult<()> {
     println!("Handling events...");
 
-    let _wm = WindowManager::new()?;
+    let mut _wm = WindowManager::new()?;
+    let mut drag_tracker = DragTracker::new();
+    let mut tile_preview = PlatformTilePreview::new()?;
+    let mut last_preview_bounds = None;
+    let mut tile_preview_shown = false;
 
     loop {
-        let _event = bridge
+        let event = bridge
             .next_event()
             .await
             .ok_or("Could not get next event")?;
+
+        match event {
+            _ => {}
+        }
+
+        match drag_tracker.handle_event(&event) {
+            Some(WindowDragEvent::Start(_, _)) => {}
+            Some(WindowDragEvent::Move(window, position)) => {
+                let pos = _wm.get_tile_preview_for_position(&window, &position);
+                if let Some(pos) = pos {
+                    if let Some(last_preview_bounds) = &last_preview_bounds {
+                        if &pos == last_preview_bounds {
+                            continue;
+                        }
+                    }
+
+                    if !tile_preview_shown {
+                        tile_preview.show()?;
+                        tile_preview_shown = true;
+                    }
+                    tile_preview.move_to(&pos)?;
+                    last_preview_bounds = Some(pos);
+                } else {
+                    if tile_preview_shown {
+                        tile_preview.hide()?;
+                        tile_preview_shown = false;
+                        last_preview_bounds = None;
+                    }
+                }
+            }
+            Some(WindowDragEvent::End(window, position)) => {
+                if tile_preview_shown {
+                    tile_preview.hide()?;
+                    tile_preview_shown = false;
+                    last_preview_bounds = None;
+
+                    _wm.insert_window_at_position(&window, &position)
+                        .unwrap_or_else(|_| {
+                            println!("Could not insert window at position");
+                        });
+                    _wm.flush_windows().unwrap_or_else(|_| {
+                        println!("Could not flush windows");
+                    });
+
+                    let new_layout = _wm.serialize();
+                    std::fs::write(
+                        "current_layout.yaml",
+                        serde_yaml::to_string(&new_layout).unwrap(),
+                    )
+                    .unwrap();
+                }
+            }
+            _ => {}
+        }
     }
 }

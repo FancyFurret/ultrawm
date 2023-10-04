@@ -19,7 +19,7 @@ where
 
 pub trait PlatformImpl
 where
-    Self: Sized + Send + Sync,
+    Self: Send + Sync,
 {
     fn is_main_thread() -> bool;
 
@@ -36,6 +36,9 @@ where
 
     /// Returns a list of all monitors connected to the system.
     fn list_all_displays() -> PlatformResult<Vec<Display>>;
+
+    /// Returns the current mouse position.
+    fn get_mouse_position() -> PlatformResult<Position>;
 }
 
 pub trait PlatformTilePreviewImpl
@@ -46,7 +49,7 @@ where
     fn new() -> PlatformResult<Self>;
     fn show(&mut self) -> PlatformResult<()>;
     fn hide(&mut self) -> PlatformResult<()>;
-    fn move_to(&mut self, x: u32, y: u32, width: u32, height: u32) -> PlatformResult<()>;
+    fn move_to(&mut self, bounds: &Bounds) -> PlatformResult<()>;
 }
 
 /// Should be lightweight, and freely copyable
@@ -61,5 +64,5 @@ where
     fn size(&self) -> Size;
     fn visible(&self) -> bool;
 
-    fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()>;
+    fn set_bounds(&mut self, bounds: &Bounds) -> PlatformResult<()>;
 }
