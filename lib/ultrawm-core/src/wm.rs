@@ -92,6 +92,16 @@ impl WindowManager {
         windows_in_partition
     }
 
+    pub fn get_window_bounds(&self, window: &PlatformWindow) -> Option<Bounds> {
+        for workspace in self.workspaces.values() {
+            if let Some(bounds) = workspace.layout().get_window_bounds(window) {
+                return Some(bounds);
+            }
+        }
+
+        None
+    }
+
     pub fn get_tile_preview_for_position(
         &self,
         window: &PlatformWindow,
@@ -134,6 +144,16 @@ impl WindowManager {
         workspace
             .layout_mut()
             .insert_window_at_position(window, position)
+    }
+
+    pub fn remove_window(&mut self, window: WindowId) -> Result<(), ()> {
+        for workspace in self.workspaces.values_mut() {
+            if workspace.layout_mut().remove_window(window).is_ok() {
+                return Ok(());
+            }
+        }
+
+        Ok(())
     }
 
     pub fn flush_windows(&mut self) -> PlatformResult<()> {

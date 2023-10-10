@@ -1,7 +1,7 @@
 use crate::drag_tracker::{DragTracker, WindowDragEvent};
 use crate::platform::{
-    EventBridge, Platform, PlatformError, PlatformImpl, PlatformInit, PlatformInitImpl,
-    PlatformTilePreview, PlatformTilePreviewImpl,
+    EventBridge, Platform, PlatformError, PlatformEvent, PlatformImpl, PlatformInit,
+    PlatformInitImpl, PlatformTilePreview, PlatformTilePreviewImpl, PlatformWindowImpl,
 };
 use crate::wm::WindowManager;
 use std::{process, thread};
@@ -88,7 +88,23 @@ async fn start_async(mut bridge: EventBridge) -> UltraWMResult<()> {
             .await
             .ok_or("Could not get next event")?;
 
-        match event {
+        match &event {
+            PlatformEvent::WindowDestroyed(window) => {
+                _wm.remove_window(*window).unwrap_or_else(|_| {
+                    println!("Could not remove window");
+                });
+                _wm.flush_windows().unwrap_or_else(|_| {
+                    println!("Could not flush windows");
+                });
+            }
+            PlatformEvent::WindowHidden(window) => {
+                _wm.remove_window(window.id()).unwrap_or_else(|_| {
+                    println!("Could not remove window");
+                });
+                _wm.flush_windows().unwrap_or_else(|_| {
+                    println!("Could not flush windows");
+                });
+            }
             _ => {}
         }
 
@@ -117,7 +133,7 @@ async fn start_async(mut bridge: EventBridge) -> UltraWMResult<()> {
                     }
                 }
             }
-            Some(WindowDragEvent::End(window, position)) => {
+            Some(WindowDragEvent::End(mut window, position)) => {
                 if tile_preview_shown {
                     tile_preview.hide()?;
                     tile_preview_shown = false;
@@ -137,6 +153,10 @@ async fn start_async(mut bridge: EventBridge) -> UltraWMResult<()> {
                         serde_yaml::to_string(&new_layout).unwrap(),
                     )
                     .unwrap();
+                } else {
+                    // Move the window back to its original position
+                    let original_position = _wm.get_window_bounds(&window).unwrap();
+                    window.set_bounds(&original_position).unwrap();
                 }
             }
             _ => {}

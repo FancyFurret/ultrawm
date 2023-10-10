@@ -227,7 +227,7 @@ impl Container {
         b_parent.balance();
     }
 
-    fn remove_child(&self, child: &ContainerChildRef) {
+    pub fn remove_child(&self, child: &ContainerChildRef) {
         self.children_mut().retain(|c| c != child);
 
         // If there is only one child left, remove ourselves

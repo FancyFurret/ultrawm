@@ -16,8 +16,10 @@ impl EventListenerCG {
             CGEventType::MouseMoved,
             CGEventType::LeftMouseDown,
             CGEventType::LeftMouseUp,
+            CGEventType::LeftMouseDragged,
             CGEventType::RightMouseDown,
             CGEventType::RightMouseUp,
+            CGEventType::RightMouseDragged,
             CGEventType::OtherMouseUp,
             CGEventType::OtherMouseDown,
         ];
@@ -52,6 +54,7 @@ impl EventListenerCG {
             CGEventType::MouseMoved => PlatformEvent::MouseMoved(position),
             CGEventType::LeftMouseDown => PlatformEvent::MouseDown(position, MouseButton::Left),
             CGEventType::LeftMouseUp => PlatformEvent::MouseUp(position, MouseButton::Left),
+            CGEventType::LeftMouseDragged => PlatformEvent::MouseMoved(position),
             CGEventType::RightMouseDown => PlatformEvent::MouseDown(position, MouseButton::Right),
             CGEventType::RightMouseUp => PlatformEvent::MouseUp(position, MouseButton::Right),
             CGEventType::OtherMouseDown => {

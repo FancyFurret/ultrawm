@@ -1,3 +1,5 @@
+use std::cmp;
+
 use crate::config::ConfigRef;
 use crate::layouts::container_tree::container::{
     Container, ContainerChildRef, ContainerRef, WindowRef, WindowType,
@@ -8,7 +10,7 @@ use crate::layouts::container_tree::{
     TileAction, MOUSE_ADD_TO_PARENT_PREVIEW_RATIO, MOUSE_ADD_TO_PARENT_THRESHOLD,
     MOUSE_SPLIT_PREVIEW_RATIO, MOUSE_SPLIT_THRESHOLD, MOUSE_SWAP_THRESHOLD,
 };
-use crate::layouts::{Direction, Side, WindowLayout};
+use crate::layouts::{Side, WindowLayout};
 use crate::platform::{Bounds, PlatformResult, PlatformWindow, PlatformWindowImpl, Position};
 use crate::window::Window;
 
@@ -95,6 +97,7 @@ impl ContainerTree {
         }
 
         let target = target.unwrap();
+        let target_child = ContainerChildRef::Window(target.clone());
         if target.platform_window().id() == window.id() {
             // Can't tile a window onto itself
             return None;
@@ -106,17 +109,13 @@ impl ContainerTree {
         let split_direction = side.direction();
         let parent_direction = target.parent().direction();
 
-        let window_size = match side.direction() {
-            Direction::Horizontal => window_bounds.size.width,
-            Direction::Vertical => window_bounds.size.height,
-        };
-
         enum MouseAction {
             Swap,
             Split,
             SplitParent,
         }
 
+        let window_size = cmp::min(window_bounds.size.width, window_bounds.size.height);
         let half_window_size = window_size / 2;
         let action = if (distance as f32) < half_window_size as f32 * MOUSE_ADD_TO_PARENT_THRESHOLD
         {
@@ -136,10 +135,7 @@ impl ContainerTree {
                 // If were splitting in the other direction, create a new container
                 if split_direction == parent_direction {
                     // Add to parent
-                    Some(TileAction::AddToParent(
-                        ContainerChildRef::Window(target),
-                        side,
-                    ))
+                    Some(TileAction::AddToParent(target_child, side))
                 } else {
                     // Split child into new container
                     Some(TileAction::Split(target, side))
@@ -151,11 +147,33 @@ impl ContainerTree {
                 //      If were splitting in the same direction, add to the container
                 //      If were splitting in the other direction, create a new container
                 if split_direction == parent_direction {
-                    // Add to parent
-                    Some(TileAction::AddToParent(
-                        ContainerChildRef::Window(target),
-                        side,
-                    ))
+                    // Check if target is the first or last child
+                    let parent = target.parent();
+                    let index = parent.index_of_child(&target_child)?;
+
+                    // If it's the first child, make sure we are splitting left or up
+                    // or if it's the last child, make sure we are splitting right or down
+                    let first_child = index == 0;
+                    let last_child = index == parent.children().len() - 1;
+                    if (first_child && (side == Side::Left || side == Side::Top))
+                        || (last_child && (side == Side::Right || side == Side::Bottom))
+                    {
+                        // Add to the parent's parent, if it exists
+                        if let Some(parent) = parent.parent() {
+                            Some(TileAction::AddToParent(
+                                ContainerChildRef::Container(parent),
+                                side,
+                            ))
+                        } else {
+                            // Just add to parent
+                            Some(TileAction::AddToParent(target_child, side))
+                        }
+                    } else {
+                        // Just add to parent
+                        Some(TileAction::AddToParent(target_child, side))
+                    }
+
+                    // Add to parent's parent, if it exists
                 } else {
                     // Split child into new container
                     let parent = target.parent();
@@ -232,15 +250,18 @@ impl WindowLayout for ContainerTree {
         serialize_tree(self)
     }
 
+    fn get_window_bounds(&self, window: &PlatformWindow) -> Option<Bounds> {
+        let window = self.find_window_from_platform(window)?;
+        Some(window.bounds())
+    }
+
     fn get_tile_preview_for_position(
         &self,
         window: &PlatformWindow,
         position: &Position,
     ) -> Option<Bounds> {
-        println!("Getting tile preview for position: {:?}", position);
-
         return match self.get_tile_action(window, position)? {
-            TileAction::FillRoot => Some(self.bounds.clone()),
+            TileAction::FillRoot => Some(self.root().bounds().clone()),
             TileAction::Swap(child) => Some(child.bounds().clone()),
             TileAction::AddToParent(child, side) => Some(Self::get_preview_for_side(
                 &child.bounds(),
@@ -325,6 +346,18 @@ impl WindowLayout for ContainerTree {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    fn remove_window(&mut self, window: crate::platform::WindowId) -> Result<(), ()> {
+        let window = self
+            .window_iter()
+            .find(|w| w.platform_window().id() == window)
+            .ok_or(())?;
+
+        let parent = window.parent();
+        parent.remove_child(&ContainerChildRef::Window(window));
 
         Ok(())
     }

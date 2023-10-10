@@ -60,10 +60,7 @@ impl DragTracker {
                             Platform::get_mouse_position().ok()?,
                         ))
                     } else {
-                        Some(WindowDragEvent::Move(
-                            window.clone(),
-                            Platform::get_mouse_position().ok()?,
-                        ))
+                        None
                     };
                 }
             }
