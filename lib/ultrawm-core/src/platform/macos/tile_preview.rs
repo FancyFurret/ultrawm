@@ -15,9 +15,18 @@ use icrate::AppKit::{
 };
 use icrate::CoreAnimation::{CALayer, CATransaction};
 use icrate::Foundation::{CGPoint, CGSize, NSRect};
+use std::sync::{Arc, Mutex};
+
+#[derive(PartialEq)]
+enum AnimationState {
+    None,
+    Showing,
+    Hiding,
+}
 
 pub struct MacOSTilePreview {
     window: MainThreadLock<Id<NSWindow>>,
+    state: Arc<Mutex<AnimationState>>,
 }
 
 const ANIMATION_DURATION: f64 = 0.15;
@@ -25,25 +34,45 @@ const ANIMATION_DURATION: f64 = 0.15;
 impl PlatformTilePreviewImpl for MacOSTilePreview {
     fn new() -> PlatformResult<Self> {
         let window = MainThreadLock::new(|| make_window())?;
-        Ok(Self { window })
+        Ok(Self {
+            window,
+            state: Arc::new(Mutex::new(AnimationState::None)),
+        })
     }
 
     fn show(&mut self) -> PlatformResult<()> {
+        let state = self.state.clone();
+        *state.lock().unwrap() = AnimationState::Showing;
+
         self.window.access(|w| unsafe {
+            let completion_block = ConcreteBlock::new(move || {
+                if *state.lock().unwrap() == AnimationState::Showing {
+                    *state.lock().unwrap() = AnimationState::None;
+                }
+            });
+            let completion_block = completion_block.copy();
+
             w.orderFront(None);
 
             CATransaction::begin();
             CATransaction::setAnimationDuration(ANIMATION_DURATION);
+            CATransaction::setCompletionBlock(Some(&completion_block));
             w.animator().setAlphaValue(1.0);
             CATransaction::commit();
         })
     }
 
     fn hide(&mut self) -> PlatformResult<()> {
+        let state = self.state.clone();
+        *state.lock().unwrap() = AnimationState::Hiding;
+
         self.window.access(|w| unsafe {
             let window_ref = w.clone();
             let completion_block = ConcreteBlock::new(move || {
-                window_ref.orderOut(None);
+                if *state.lock().unwrap() == AnimationState::Hiding {
+                    window_ref.orderOut(None);
+                    *state.lock().unwrap() = AnimationState::None;
+                }
             });
             let completion_block = completion_block.copy();
 
