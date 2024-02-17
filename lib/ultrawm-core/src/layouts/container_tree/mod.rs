@@ -1,10 +1,9 @@
 pub use container_tree::*;
 
-use crate::layouts::container_tree::container::{ContainerChildRef, WindowRef};
+use crate::layouts::container_tree::container::{ContainerChildRef, ContainerWindowRef};
 
 mod container;
 mod container_tree;
-mod container_tree_iterator;
 mod serialize;
 
 // Percentage of half the container size that the mouse must be within
@@ -49,9 +48,9 @@ impl Side {
 #[derive(Debug)]
 enum TileAction {
     FillRoot,
-    Swap(WindowRef),
+    Swap(ContainerWindowRef),
     AddToParent(ContainerChildRef, Side),
-    Split(WindowRef, Side),
+    Split(ContainerWindowRef, Side),
 }
 
 #[cfg(test)]
@@ -60,9 +59,8 @@ mod tests {
     use crate::config::{Config, ConfigRef};
     use crate::layouts::container_tree::container::{Container, ContainerRef};
     use crate::platform::mock::MockPlatformWindow;
-    use crate::platform::{Bounds, PlatformWindowImpl};
-    use crate::window::Window;
-    use std::fmt::Debug;
+    use crate::platform::Bounds;
+    use crate::window::{Window, WindowRef};
     use std::rc::Rc;
 
     #[test]
@@ -86,14 +84,14 @@ mod tests {
         }
     }
 
-    pub fn assert_is_window(child: &ContainerChildRef) -> WindowRef {
+    pub fn assert_is_window(child: &ContainerChildRef) -> ContainerWindowRef {
         match child {
             ContainerChildRef::Window(w) => w.clone(),
             _ => panic!("Expected {:?} to be a window", child),
         }
     }
 
-    pub fn assert_window(child: &ContainerChildRef, window: &WindowRef) {
+    pub fn assert_window(child: &ContainerChildRef, window: &ContainerWindowRef) {
         let child_window = assert_is_window(child);
         assert_eq!(child_window, *window);
     }
@@ -110,20 +108,20 @@ mod tests {
         Container::new_root(new_config(), new_bounds())
     }
 
-    pub fn new_window() -> Window {
+    pub fn new_window() -> WindowRef {
         let bounds = new_bounds();
-        Window::new(MockPlatformWindow::new(
+        Rc::new(Window::new(MockPlatformWindow::new(
             bounds.position,
             bounds.size,
             "Mock Window".to_owned(),
-        ))
+        )))
     }
 
-    pub fn new_window_with_bounds(bounds: Bounds) -> Window {
-        Window::new(MockPlatformWindow::new(
+    pub fn new_window_with_bounds(bounds: Bounds) -> WindowRef {
+        Rc::new(Window::new(MockPlatformWindow::new(
             bounds.position,
             bounds.size,
             "Mock Window".to_owned(),
-        ))
+        )))
     }
 }

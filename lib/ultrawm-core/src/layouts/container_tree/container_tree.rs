@@ -1,25 +1,25 @@
 use std::cmp;
+use std::collections::HashMap;
 
 use crate::config::ConfigRef;
 use crate::layouts::container_tree::container::{
-    Container, ContainerChildRef, ContainerRef, WindowRef, WindowType,
+    Container, ContainerChildRef, ContainerRef, ContainerWindowRef, WindowType,
 };
-use crate::layouts::container_tree::container_tree_iterator::ContainerTreeIterator;
 use crate::layouts::container_tree::serialize::serialize_tree;
 use crate::layouts::container_tree::{
     TileAction, MOUSE_ADD_TO_PARENT_PREVIEW_RATIO, MOUSE_ADD_TO_PARENT_THRESHOLD,
     MOUSE_SPLIT_PREVIEW_RATIO, MOUSE_SPLIT_THRESHOLD, MOUSE_SWAP_THRESHOLD,
 };
 use crate::layouts::{Side, WindowLayout};
-use crate::platform::{Bounds, PlatformResult, PlatformWindow, PlatformWindowImpl, Position};
-use crate::window::Window;
+use crate::platform::{Bounds, PlatformWindowImpl, Position, WindowId};
+use crate::window::WindowRef;
 
 #[derive(Debug)]
 pub struct ContainerTree {
-    #[allow(dead_code)]
     config: ConfigRef,
     bounds: Bounds,
     root: ContainerRef,
+    windows: HashMap<WindowId, ContainerWindowRef>,
 }
 
 impl ContainerTree {
@@ -31,7 +31,7 @@ impl ContainerTree {
         self.root.clone()
     }
 
-    fn find_window_at_position(&self, position: &Position) -> Option<WindowRef> {
+    fn find_window_at_position(&self, position: &Position) -> Option<ContainerWindowRef> {
         let mut current_container = self.root.clone();
         while !current_container.children().is_empty() {
             let child = current_container
@@ -50,11 +50,6 @@ impl ContainerTree {
             }
         }
         return None;
-    }
-
-    fn find_window_from_platform(&self, platform_window: &PlatformWindow) -> Option<WindowRef> {
-        self.window_iter()
-            .find(|w| w.platform_window().id() == platform_window.id())
     }
 
     fn get_closest_distance_from_side(bounds: &Bounds, position: &Position) -> (i32, Side) {
@@ -85,7 +80,7 @@ impl ContainerTree {
         (closest, side)
     }
 
-    fn get_tile_action(&self, window: &PlatformWindow, position: &Position) -> Option<TileAction> {
+    fn get_tile_action(&self, window: &WindowRef, position: &Position) -> Option<TileAction> {
         let target = self.find_window_at_position(position);
         if target.is_none() {
             return if self.root.children().is_empty() {
@@ -142,7 +137,7 @@ impl ContainerTree {
                 }
             }
             MouseAction::SplitParent => {
-                // If its at the edge, split the parent container
+                // If it's at the edge, split the parent container
                 // (Only if this is first or last window in parent container)
                 //      If were splitting in the same direction, add to the container
                 //      If were splitting in the other direction, create a new container
@@ -208,14 +203,10 @@ impl ContainerTree {
 
         preview_bounds
     }
-
-    fn window_iter(&self) -> Box<dyn Iterator<Item = WindowRef>> {
-        Box::new(ContainerTreeIterator::new(self.root.clone()))
-    }
 }
 
 impl WindowLayout for ContainerTree {
-    fn new(config: ConfigRef, bounds: Bounds, mut windows: Vec<Window>) -> Self
+    fn new(config: ConfigRef, bounds: Bounds, windows: &Vec<WindowRef>) -> Self
     where
         Self: Sized,
     {
@@ -233,16 +224,23 @@ impl WindowLayout for ContainerTree {
         let root = Container::new_root(config.clone(), root_bounds);
 
         // Sort by x position so that they stay in somewhat the same order
+        let mut windows = windows
+            .iter()
+            .map(|w| w.clone())
+            .collect::<Vec<WindowRef>>();
         windows.sort_by_key(|w| w.platform_window().position().x);
+        let mut windows_map = HashMap::new();
 
         for window in windows {
-            root.add_window(window.into());
+            let new_window = root.add_window(window.into());
+            windows_map.insert(new_window.id(), new_window);
         }
 
         Self {
             config,
             bounds,
             root,
+            windows: windows_map,
         }
     }
 
@@ -250,16 +248,7 @@ impl WindowLayout for ContainerTree {
         serialize_tree(self)
     }
 
-    fn get_window_bounds(&self, window: &PlatformWindow) -> Option<Bounds> {
-        let window = self.find_window_from_platform(window)?;
-        Some(window.bounds())
-    }
-
-    fn get_tile_preview_for_position(
-        &self,
-        window: &PlatformWindow,
-        position: &Position,
-    ) -> Option<Bounds> {
+    fn get_tile_bounds(&self, window: &WindowRef, position: &Position) -> Option<Bounds> {
         return match self.get_tile_action(window, position)? {
             TileAction::FillRoot => Some(self.root().bounds().clone()),
             TileAction::Swap(child) => Some(child.bounds().clone()),
@@ -276,29 +265,25 @@ impl WindowLayout for ContainerTree {
         };
     }
 
-    fn insert_window_at_position(
-        &mut self,
-        window: &PlatformWindow,
-        position: &Position,
-    ) -> Result<(), ()> {
+    fn tile_window(&mut self, window: &WindowRef, position: &Position) -> Result<(), ()> {
         // First, check if the drop position is valid
         let action = self.get_tile_action(window, position).ok_or(())?;
 
         // Then, check if this window is already in the tree
-        let source_window = self.find_window_from_platform(window);
-        let window = if let Some(source_window) = source_window.as_ref() {
+        let source_window = self.windows.get(&window.id());
+        let window = if let Some(source_window) = source_window {
             WindowType::Existing(source_window.clone())
         } else {
-            WindowType::New(Window::new(window.clone()))
+            WindowType::New(window.clone())
         };
 
-        // Finally, perform the action
+        // Perform the action
         match action {
             TileAction::FillRoot => {
                 self.root.add_window(window);
             }
             TileAction::Swap(target_window) => {
-                if let Some(source_window) = source_window.as_ref() {
+                if let Some(source_window) = source_window {
                     Container::swap(
                         &ContainerChildRef::Window(source_window.clone()),
                         &ContainerChildRef::Window(target_window.clone()),
@@ -350,23 +335,10 @@ impl WindowLayout for ContainerTree {
         Ok(())
     }
 
-    fn remove_window(&mut self, window: crate::platform::WindowId) -> Result<(), ()> {
-        let window = self
-            .window_iter()
-            .find(|w| w.platform_window().id() == window)
-            .ok_or(())?;
-
+    fn remove_window(&mut self, window: &WindowRef) -> Result<(), ()> {
+        let window = self.windows.get(&window.id()).ok_or(())?;
         let parent = window.parent();
-        parent.remove_child(&ContainerChildRef::Window(window));
-
-        Ok(())
-    }
-
-    fn flush(&mut self) -> PlatformResult<()> {
-        for window in self.window_iter().filter(|w| w.dirty()) {
-            window.flush()?;
-        }
-
+        parent.remove_child(&ContainerChildRef::Window(window.clone()));
         Ok(())
     }
 }

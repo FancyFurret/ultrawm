@@ -46,13 +46,16 @@ pub type PlatformResult<T> = Result<T, PlatformError>;
 
 #[derive(Debug)]
 pub enum PlatformEvent {
-    WindowCreated(PlatformWindow),
-    WindowDestroyed(WindowId),
-    WindowFocused(PlatformWindow),
-    WindowMoved(PlatformWindow),
-    WindowResized(PlatformWindow),
-    WindowShown(PlatformWindow),
-    WindowHidden(PlatformWindow),
+    /// A new window has been opened. *If needed*, can also be sent when a window is shown after
+    /// being hidden.
+    WindowOpened(PlatformWindow),
+    WindowClosed(WindowId),
+    WindowShown(WindowId),
+    WindowHidden(WindowId),
+    WindowFocused(WindowId),
+    /// The window has begun to be moved or resized. Preferably only sent once per window
+    /// transformation, but may be sent multiple times. Extra events will be ignored.
+    WindowTransformStarted(WindowId),
     MouseDown(Position, MouseButton),
     MouseUp(Position, MouseButton),
     MouseMoved(Position),
@@ -64,21 +67,6 @@ pub enum MouseButton {
     Left,
     Right,
     Middle,
-}
-
-impl PlatformEvent {
-    #[allow(dead_code)]
-    pub fn window(&self) -> Option<&PlatformWindow> {
-        match self {
-            PlatformEvent::WindowCreated(window)
-            | PlatformEvent::WindowFocused(window)
-            | PlatformEvent::WindowMoved(window)
-            | PlatformEvent::WindowResized(window)
-            | PlatformEvent::WindowShown(window)
-            | PlatformEvent::WindowHidden(window) => Some(window),
-            _ => None,
-        }
-    }
 }
 
 pub type DisplayId = u32;
@@ -101,6 +89,13 @@ impl Bounds {
 
     pub fn from_position(position: Position, size: Size) -> Self {
         Self { position, size }
+    }
+
+    pub fn center(&self) -> Position {
+        Position::new(
+            self.position.x + self.size.width as i32 / 2,
+            self.position.y + self.size.height as i32 / 2,
+        )
     }
 
     pub fn contains(&self, position: &Position) -> bool {

@@ -35,7 +35,7 @@ pub fn serialize_wm(wm: &WindowManager) -> serde_yaml::Value {
                         let workspace = wm.workspaces().get(id).unwrap();
                         SerializedWorkspace {
                             name: workspace.name().to_string(),
-                            layout: workspace.layout().serialize(),
+                            layout: workspace.serialize(),
                         }
                     })
                     .collect(),

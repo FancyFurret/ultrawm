@@ -1,13 +1,15 @@
-use crate::layouts::container_tree::container::{ContainerRef, ParentContainerRef, WindowRef};
-use crate::platform::{Bounds, PlatformResult, PlatformWindow};
-use crate::window::Window;
-use std::cell::{Ref, RefCell, RefMut};
+use crate::layouts::container_tree::container::{
+    ContainerRef, ContainerWindowRef, ParentContainerRef,
+};
+use crate::platform::{Bounds, PlatformResult, PlatformWindow, WindowId};
+use crate::window::WindowRef;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct ContainerWindow {
     parent: RefCell<ParentContainerRef>,
-    window: RefCell<Window>,
+    window: WindowRef,
 }
 
 impl PartialEq for ContainerWindow {
@@ -17,20 +19,24 @@ impl PartialEq for ContainerWindow {
 }
 
 impl ContainerWindow {
-    pub fn new(parent: ParentContainerRef, window: Window) -> WindowRef {
+    pub fn new(parent: ParentContainerRef, window: WindowRef) -> ContainerWindowRef {
         let window = Self {
             parent: RefCell::new(parent),
-            window: RefCell::new(window),
+            window,
         };
         Rc::new(window)
     }
 
+    pub fn id(&self) -> WindowId {
+        self.window.id()
+    }
+
     pub fn bounds(&self) -> Bounds {
-        self.window().bounds().clone()
+        self.window.bounds().clone()
     }
 
     pub(super) fn set_bounds(&self, bounds: Bounds) {
-        self.window_mut().set_bounds(bounds);
+        self.window.set_bounds(bounds);
     }
 
     pub fn parent(&self) -> ContainerRef {
@@ -41,23 +47,19 @@ impl ContainerWindow {
         self.parent.replace(parent);
     }
 
-    pub fn window(&self) -> Ref<Window> {
-        self.window.borrow()
-    }
-
-    fn window_mut(&self) -> RefMut<Window> {
-        self.window.borrow_mut()
+    pub fn window(&self) -> WindowRef {
+        self.window.clone()
     }
 
     pub fn platform_window(&self) -> PlatformWindow {
-        self.window().platform_window().clone()
+        self.window.platform_window().clone()
     }
 
     pub fn dirty(&self) -> bool {
-        self.window().dirty()
+        self.window.dirty()
     }
 
     pub fn flush(&self) -> PlatformResult<()> {
-        self.window_mut().flush()
+        self.window.flush()
     }
 }

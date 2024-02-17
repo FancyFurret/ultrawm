@@ -1,7 +1,10 @@
-use std::env;
-use std::path::PathBuf;
-use std::process::Command;
+#[cfg(target_os = "macos")]
+use {std::env, std::path::PathBuf, std::process::Command};
 
+#[cfg(not(target_os = "macos"))]
+fn main() {}
+
+#[cfg(target_os = "macos")]
 fn main() {
     println!("cargo:rustc-link-search=/System/Library/Frameworks/");
     println!("cargo:rustc-link-lib=framework=ApplicationServices");

@@ -1,7 +1,8 @@
 use crate::config::ConfigRef;
 use crate::layouts::WindowLayout;
-use crate::platform::Bounds;
-use crate::window::Window;
+use crate::platform::{Bounds, Position, WindowId};
+use crate::window::WindowRef;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub type WorkspaceId = usize;
@@ -11,6 +12,7 @@ pub struct Workspace {
     id: WorkspaceId,
     name: String,
     layout: Box<dyn WindowLayout>,
+    windows: HashMap<WindowId, WindowRef>,
 }
 
 static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -19,12 +21,18 @@ impl Workspace {
     pub fn new<TLayout: WindowLayout + 'static>(
         config: ConfigRef,
         bounds: Bounds,
-        windows: Vec<Window>,
+        windows: &Vec<WindowRef>,
         name: String,
     ) -> Self {
         let id = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
         let layout = Box::new(TLayout::new(config, bounds, windows));
-        Self { id, name, layout }
+        let windows = windows.iter().map(|w| (w.id(), w.clone())).collect();
+        Self {
+            id,
+            name,
+            layout,
+            windows,
+        }
     }
 
     pub fn id(&self) -> WorkspaceId {
@@ -35,11 +43,34 @@ impl Workspace {
         &self.name
     }
 
-    pub fn layout(&self) -> &dyn WindowLayout {
-        &*self.layout
+    pub fn has_window(&self, id: WindowId) -> bool {
+        self.windows.contains_key(&id)
     }
 
-    pub fn layout_mut(&mut self) -> &mut dyn WindowLayout {
-        &mut *self.layout
+    pub fn get_tile_bounds(&self, window: &WindowRef, position: &Position) -> Option<Bounds> {
+        self.layout.get_tile_bounds(window, position)
+    }
+
+    pub fn remove_window(&mut self, window: &WindowRef) -> Result<(), ()> {
+        self.layout.remove_window(window)?;
+        self.windows.remove(&window.id());
+        Ok(())
+    }
+
+    pub fn tile_window(&mut self, window: &WindowRef, position: &Position) -> Result<(), ()> {
+        self.layout.tile_window(window, position)?;
+        self.windows.insert(window.id(), window.clone());
+        Ok(())
+    }
+
+    pub fn flush_windows(&mut self) -> Result<(), ()> {
+        for window in self.windows.values_mut() {
+            window.flush().map_err(|_| ())?;
+        }
+        Ok(())
+    }
+
+    pub fn serialize(&self) -> serde_yaml::Value {
+        self.layout.serialize()
     }
 }

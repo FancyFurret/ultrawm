@@ -1,6 +1,6 @@
 use std::{cell::RefCell, sync::Arc, thread::ThreadId};
 
-use super::{Platform, PlatformImpl, PlatformResult};
+use super::{PlatformMainThread, PlatformMainThreadImpl, PlatformResult};
 
 pub struct MainThreadLock<T: 'static> {
     /// # Safety
@@ -22,7 +22,7 @@ impl<T> MainThreadLock<T> {
     where
         F: FnOnce() -> T + Send,
     {
-        Platform::run_on_main_thread(|| {
+        PlatformMainThread::run_on_main_thread(|| {
             let inner = init();
             Self {
                 inner: Arc::new(RefCell::new(Some(inner))),
@@ -39,7 +39,7 @@ impl<T> MainThreadLock<T> {
         if self.thread_id == std::thread::current().id() {
             Ok(f(&self.inner.borrow().as_ref().unwrap()))
         } else {
-            Platform::run_on_main_thread(|| f(&self.inner.borrow().as_ref().unwrap()))
+            PlatformMainThread::run_on_main_thread(|| f(&self.inner.borrow().as_ref().unwrap()))
         }
     }
 
@@ -52,7 +52,9 @@ impl<T> MainThreadLock<T> {
         if self.thread_id == std::thread::current().id() {
             Ok(f(&mut self.inner.borrow_mut().as_mut().unwrap()))
         } else {
-            Platform::run_on_main_thread(|| f(&mut self.inner.borrow_mut().as_mut().unwrap()))
+            PlatformMainThread::run_on_main_thread(|| {
+                f(&mut self.inner.borrow_mut().as_mut().unwrap())
+            })
         }
     }
 }
@@ -62,7 +64,7 @@ impl<T> MainThreadLock<T> {
 impl<T> Drop for MainThreadLock<T> {
     fn drop(&mut self) {
         if Arc::strong_count(&self.inner) == 1 && self.thread_id != std::thread::current().id() {
-            Platform::run_on_main_thread(|| {
+            PlatformMainThread::run_on_main_thread(|| {
                 let s = &self;
                 let data = s.inner.borrow_mut().take().unwrap();
                 drop(data);

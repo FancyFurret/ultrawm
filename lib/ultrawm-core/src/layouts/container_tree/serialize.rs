@@ -1,4 +1,6 @@
-use crate::layouts::container_tree::container::{ContainerChildRef, ContainerRef, WindowRef};
+use crate::layouts::container_tree::container::{
+    ContainerChildRef, ContainerRef, ContainerWindowRef,
+};
 use crate::layouts::ContainerTree;
 use crate::platform::{Bounds, PlatformWindowImpl, WindowId};
 use serde::{Deserialize, Serialize};
@@ -55,7 +57,7 @@ fn serialize_container(container: &ContainerRef) -> SerializedContainer {
     }
 }
 
-fn serialize_window(window: &WindowRef) -> SerializedWindow {
+fn serialize_window(window: &ContainerWindowRef) -> SerializedWindow {
     SerializedWindow {
         bounds: window.bounds(),
         id: window.window().platform_window().id(),

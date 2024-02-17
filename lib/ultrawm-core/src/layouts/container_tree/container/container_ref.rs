@@ -4,12 +4,12 @@ use crate::platform::Bounds;
 use std::rc::Rc;
 
 pub type ContainerRef = Rc<Container>;
-pub type WindowRef = Rc<ContainerWindow>;
+pub type ContainerWindowRef = Rc<ContainerWindow>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ContainerChildRef {
     Container(ContainerRef),
-    Window(WindowRef),
+    Window(ContainerWindowRef),
 }
 
 impl ContainerChildRef {
@@ -51,8 +51,8 @@ impl PartialEq<ContainerRef> for ContainerChildRef {
     }
 }
 
-impl PartialEq<WindowRef> for ContainerChildRef {
-    fn eq(&self, other: &WindowRef) -> bool {
+impl PartialEq<ContainerWindowRef> for ContainerChildRef {
+    fn eq(&self, other: &ContainerWindowRef) -> bool {
         match self {
             ContainerChildRef::Container(_) => false,
             ContainerChildRef::Window(window) => window == other,

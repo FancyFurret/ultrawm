@@ -133,10 +133,9 @@ impl EventListenerAX {
         // First look at the application events. In this case element will be an application
         if notification == notification::application_activated() {
             let focused_window = element.focused_window()?;
+            let window = MacOSPlatformWindow::new(focused_window)?;
             self.dispatcher
-                .send(PlatformEvent::WindowFocused(MacOSPlatformWindow::new(
-                    focused_window,
-                )?));
+                .send(PlatformEvent::WindowFocused(window.id()));
             return Ok(());
         } else if notification == notification::application_shown() {
             for window in element.windows()? {
@@ -145,7 +144,8 @@ impl EventListenerAX {
                 }
 
                 let window = MacOSPlatformWindow::new(window)?;
-                self.dispatcher.send(PlatformEvent::WindowShown(window));
+                self.dispatcher
+                    .send(PlatformEvent::WindowShown(window.id()));
             }
             return Ok(());
         } else if notification == notification::application_hidden() {
@@ -155,7 +155,8 @@ impl EventListenerAX {
                 }
 
                 let window = MacOSPlatformWindow::new(window)?;
-                self.dispatcher.send(PlatformEvent::WindowHidden(window));
+                self.dispatcher
+                    .send(PlatformEvent::WindowHidden(window.id()));
             }
             return Ok(());
         }
@@ -167,28 +168,28 @@ impl EventListenerAX {
         // windows, since once a window is destroyed, we can no longer get it's window id.
         let window = match data {
             Some(window) => window,
-            None => (MacOSPlatformWindow::new(element))?,
+            None => MacOSPlatformWindow::new(element)?,
         };
 
         let event = if notification == notification::focused_window_changed() {
-            PlatformEvent::WindowFocused(window)
+            PlatformEvent::WindowFocused(window.id())
         } else if notification == notification::window_created() {
             let result = self.observe_window(&window.element);
             if result.is_err() {
                 return result.handle_observe_error();
             }
 
-            PlatformEvent::WindowCreated(window)
+            PlatformEvent::WindowOpened(window)
         } else if notification == notification::window_miniaturized() {
-            PlatformEvent::WindowHidden(window)
+            PlatformEvent::WindowHidden(window.id())
         } else if notification == notification::window_deminiaturized() {
-            PlatformEvent::WindowShown(window)
+            PlatformEvent::WindowShown(window.id())
         } else if notification == notification::window_moved() {
-            PlatformEvent::WindowMoved(window)
+            PlatformEvent::WindowTransformStarted(window.id()) // TODO: Too many times
         } else if notification == notification::window_resized() {
-            PlatformEvent::WindowResized(window)
+            PlatformEvent::WindowTransformStarted(window.id())
         } else if notification == notification::element_destroyed() {
-            PlatformEvent::WindowDestroyed(window.id())
+            PlatformEvent::WindowClosed(window.id())
         } else {
             println!("Unknown notification: {:?}", notification);
             return Ok(());

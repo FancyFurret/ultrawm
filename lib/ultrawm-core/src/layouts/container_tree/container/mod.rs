@@ -4,7 +4,7 @@ use crate::config::ConfigRef;
 use crate::layouts::container_tree::container::container_window::ContainerWindow;
 use crate::layouts::Direction;
 use crate::platform::Bounds;
-use crate::window::Window;
+use crate::window::WindowRef;
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::{Rc, Weak};
 
@@ -14,17 +14,17 @@ mod container_window;
 pub type ParentContainerRef = Weak<Container>;
 
 pub enum WindowType {
-    New(Window),
-    Existing(WindowRef),
+    New(WindowRef),
+    Existing(ContainerWindowRef),
 }
 
-impl Into<WindowType> for Window {
+impl Into<WindowType> for WindowRef {
     fn into(self) -> WindowType {
         WindowType::New(self)
     }
 }
 
-impl Into<WindowType> for WindowRef {
+impl Into<WindowType> for ContainerWindowRef {
     fn into(self) -> WindowType {
         WindowType::Existing(self)
     }
@@ -113,12 +113,12 @@ impl Container {
         self.children().iter().position(|c| c == child)
     }
 
-    pub fn add_window(&self, window: WindowType) -> WindowRef {
+    pub fn add_window(&self, window: WindowType) -> ContainerWindowRef {
         let index = self.children().len();
         self.insert_window(index, window)
     }
 
-    pub fn insert_window(&self, mut index: usize, window: WindowType) -> WindowRef {
+    pub fn insert_window(&self, mut index: usize, window: WindowType) -> ContainerWindowRef {
         let window_ref = match window {
             WindowType::New(w) => ContainerWindow::new(self.self_ref(), w),
             WindowType::Existing(w) => w,
@@ -155,7 +155,7 @@ impl Container {
 
     pub fn split_window(
         &self,
-        window_to_split: &WindowRef,
+        window_to_split: &ContainerWindowRef,
         new_window: WindowType,
     ) -> ContainerRef {
         let new_container = Container::new(

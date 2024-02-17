@@ -1,7 +1,7 @@
 use crate::platform::{
-    Bounds, Display, EventDispatcher, PlatformImpl, PlatformInitImpl, PlatformResult,
-    PlatformTilePreviewImpl, PlatformWindow, PlatformWindowImpl, Position, ProcessId, Size,
-    WindowId,
+    Bounds, Display, EventDispatcher, PlatformImpl, PlatformInitImpl, PlatformMainThreadImpl,
+    PlatformResult, PlatformTilePreviewImpl, PlatformWindow, PlatformWindowImpl, Position,
+    ProcessId, Size, WindowId,
 };
 
 pub struct MockPlatformInit;
@@ -16,6 +16,21 @@ unsafe impl PlatformInitImpl for MockPlatformInit {
 
 pub struct MockPlatform;
 impl PlatformImpl for MockPlatform {
+    fn list_visible_windows() -> PlatformResult<Vec<PlatformWindow>> {
+        return Ok(vec![]);
+    }
+
+    fn list_all_displays() -> PlatformResult<Vec<Display>> {
+        return Ok(vec![]);
+    }
+
+    fn get_mouse_position() -> PlatformResult<Position> {
+        return Ok(Position { x: 0, y: 0 });
+    }
+}
+
+pub struct MockMainThread;
+impl PlatformMainThreadImpl for MockMainThread {
     fn is_main_thread() -> bool {
         return true;
     }
@@ -26,18 +41,6 @@ impl PlatformImpl for MockPlatform {
         R: Send + 'static,
     {
         return Ok(f());
-    }
-
-    fn list_all_windows() -> PlatformResult<Vec<PlatformWindow>> {
-        return Ok(vec![]);
-    }
-
-    fn list_all_displays() -> PlatformResult<Vec<Display>> {
-        return Ok(vec![]);
-    }
-
-    fn get_mouse_position() -> PlatformResult<Position> {
-        return Ok(Position { x: 0, y: 0 });
     }
 }
 
