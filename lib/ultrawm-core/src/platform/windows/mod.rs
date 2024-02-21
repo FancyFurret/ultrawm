@@ -195,18 +195,18 @@ unsafe extern "system" fn win_event_hook_proc(
     let window = WindowsPlatformWindow::new(hwnd).unwrap();
 
     let event = match event {
-        EVENT_SYSTEM_MOVESIZESTART => PlatformEvent::WindowTransformStarted(window.clone()),
-        EVENT_SYSTEM_MINIMIZESTART => PlatformEvent::WindowHidden(window.clone()),
-        EVENT_SYSTEM_MINIMIZEEND => PlatformEvent::WindowShown(window.clone()),
-        EVENT_OBJECT_SHOW => PlatformEvent::WindowShown(window.clone()),
-        EVENT_OBJECT_FOCUS => PlatformEvent::WindowFocused(window.clone()),
+        EVENT_SYSTEM_MOVESIZESTART => PlatformEvent::WindowTransformStarted(window.id()),
+        EVENT_SYSTEM_MINIMIZESTART => PlatformEvent::WindowHidden(window.id()),
+        EVENT_SYSTEM_MINIMIZEEND => PlatformEvent::WindowShown(window.id()),
+        EVENT_OBJECT_SHOW => PlatformEvent::WindowOpened(window.clone()),
+        EVENT_OBJECT_FOCUS => PlatformEvent::WindowFocused(window.id()),
         EVENT_OBJECT_DESTROY => PlatformEvent::WindowClosed(window.id()),
         _ => return,
     };
 
     // If it's a show event, make sure the window is manageable
     // The WM will automatically ignore unmanaged windows for other events
-    if let PlatformEvent::WindowShown(window) = &event {
+    if let PlatformEvent::WindowOpened(window) = &event {
         if window_is_manageable(window).is_err() {
             return;
         }
