@@ -143,10 +143,7 @@ impl ContainerTree {
 
         let target = target.unwrap();
         let target_child = ContainerChildRef::Window(target.clone());
-        if target.platform_window().id() == window.id() {
-            // Can't tile a window onto itself
-            return None;
-        }
+        let is_same_window = target.platform_window().id() == window.id();
 
         let window_bounds = target.bounds().clone();
 
@@ -174,8 +171,17 @@ impl ContainerTree {
         };
 
         return match action {
-            MouseAction::Swap => Some(TileAction::Swap(target)),
+            MouseAction::Swap => {
+                if is_same_window {
+                    return None;
+                }
+                Some(TileAction::Swap(target))
+            }
             MouseAction::Split => {
+                if is_same_window {
+                    return None;
+                }
+
                 // If were splitting in the same direction, add to the parent container
                 // If were splitting in the other direction, create a new container
                 if split_direction == parent_direction {
@@ -192,6 +198,10 @@ impl ContainerTree {
                 //      If were splitting in the same direction, add to the container
                 //      If were splitting in the other direction, create a new container
                 if split_direction == parent_direction {
+                    if is_same_window {
+                        return None;
+                    }
+
                     // Check if target is the first or last child
                     let parent = target.parent();
                     let index = parent.index_of_child(&target_child)?;
