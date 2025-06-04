@@ -1,6 +1,7 @@
 use crate::config::ConfigRef;
 use crate::layouts::WindowLayout;
 use crate::platform::{Bounds, Position, WindowId};
+use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -48,7 +49,7 @@ impl Workspace {
     }
 
     pub fn get_tile_bounds(&self, window: &WindowRef, position: &Position) -> Option<Bounds> {
-        self.layout.get_tile_bounds(window, position)
+        self.layout.get_preview_bounds(window, position)
     }
 
     pub fn remove_window(&mut self, window: &WindowRef) -> Result<(), ()> {
@@ -57,10 +58,14 @@ impl Workspace {
         Ok(())
     }
 
-    pub fn tile_window(&mut self, window: &WindowRef, position: &Position) -> Result<(), ()> {
-        self.layout.tile_window(window, position)?;
+    pub fn tile_window(
+        &mut self,
+        window: &WindowRef,
+        position: &Position,
+    ) -> Result<InsertResult, ()> {
+        let action = self.layout.insert_window(window, position)?;
         self.windows.insert(window.id(), window.clone());
-        Ok(())
+        Ok(action)
     }
 
     pub fn flush_windows(&mut self) -> Result<(), ()> {

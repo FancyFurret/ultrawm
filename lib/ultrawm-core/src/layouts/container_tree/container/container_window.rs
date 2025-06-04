@@ -1,7 +1,8 @@
+use crate::config::Config;
 use crate::layouts::container_tree::container::{
-    ContainerRef, ContainerWindowRef, ParentContainerRef,
+    Container, ContainerRef, ContainerWindowRef, ParentContainerRef,
 };
-use crate::platform::{Bounds, PlatformResult, PlatformWindow, WindowId};
+use crate::platform::{Bounds, PlatformResult, PlatformWindow, Position, Size, WindowId};
 use crate::window::WindowRef;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -18,10 +19,27 @@ impl PartialEq for ContainerWindow {
     }
 }
 
+thread_local! {
+    static TEMP_CONTAINER: ContainerRef = Container::new_root(
+        Rc::new(Config::default()),
+        Bounds {
+            position: Position { x: 0, y: 0 },
+            size: Size {
+                width: 0,
+                height: 0,
+            },
+        },
+    );
+}
+
+fn get_temp_container_ref() -> ParentContainerRef {
+    TEMP_CONTAINER.with(|container| container.self_ref())
+}
+
 impl ContainerWindow {
-    pub fn new(parent: ParentContainerRef, window: WindowRef) -> ContainerWindowRef {
+    pub fn new(window: WindowRef) -> ContainerWindowRef {
         let window = Self {
-            parent: RefCell::new(parent),
+            parent: RefCell::new(get_temp_container_ref()),
             window,
         };
         Rc::new(window)

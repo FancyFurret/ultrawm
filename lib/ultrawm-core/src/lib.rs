@@ -15,6 +15,7 @@ mod layouts;
 mod partition;
 pub mod platform;
 mod serialize;
+mod tile_result;
 mod window;
 mod wm;
 mod workspace;
@@ -96,8 +97,9 @@ async fn start_async(mut bridge: EventBridge) -> UltraWMResult<()> {
                 // TODO: If the window was hidden, then bring it back to where it was
             }
             PlatformEvent::WindowClosed(id) | PlatformEvent::WindowHidden(id) => {
+                // TODO: Check if manageable
                 wm.remove_window(*id).unwrap_or_else(|_| {
-                    println!("Could not remove window");
+                    // println!("Could not remove window");
                 });
             }
             _ => {}
@@ -150,10 +152,7 @@ async fn start_async(mut bridge: EventBridge) -> UltraWMResult<()> {
                     } else {
                         // Move the window back to its original position
                         let window = wm.get_window(id).unwrap();
-                        let tiled_bounds = Bounds::from_position(
-                            window.platform_window().position(),
-                            window.platform_window().size(),
-                        );
+                        let tiled_bounds = window.bounds().clone();
                         window.set_bounds(tiled_bounds);
                         window.flush().unwrap();
                     }

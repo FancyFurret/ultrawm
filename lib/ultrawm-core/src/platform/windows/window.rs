@@ -5,7 +5,7 @@ use windows::core::w;
 use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowInfo, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsIconic, SetWindowPos,
-    SWP_NOZORDER, WINDOWINFO, WS_VISIBLE,
+    ShowWindow, SWP_NOSENDCHANGING, SWP_NOZORDER, SW_RESTORE, WINDOWINFO, WS_VISIBLE,
 };
 
 #[derive(Debug, Clone)]
@@ -65,8 +65,11 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
         unsafe { !IsIconic(self.hwnd).as_bool() }
     }
 
-    fn set_bounds(&mut self, bounds: &Bounds) -> PlatformResult<()> {
+    fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()> {
         unsafe {
+            // First restore the window if it's maximized
+            ShowWindow(self.hwnd, SW_RESTORE);
+
             SetWindowPos(
                 self.hwnd,
                 None,

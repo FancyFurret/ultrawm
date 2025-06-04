@@ -55,7 +55,7 @@ where
     fn size(&self) -> Size;
     fn visible(&self) -> bool;
 
-    fn set_bounds(&mut self, bounds: &Bounds) -> PlatformResult<()>;
+    fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()>;
 }
 
 /// Optional, this trait only needs to be implemented if main thread utils like MainThreadLock

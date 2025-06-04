@@ -3,21 +3,28 @@ pub use tile_preview::*;
 pub use window::*;
 
 use crate::platform::{
-    Bounds, Display, DisplayId, EventDispatcher, PlatformEvent, PlatformImpl, PlatformInitImpl,
-    PlatformResult, PlatformWindow, PlatformWindowImpl, Position, WindowId,
+    Bounds, Display, DisplayId, EventDispatcher, MouseButton, PlatformEvent, PlatformImpl,
+    PlatformInitImpl, PlatformResult, PlatformWindow, PlatformWindowImpl, Position, WindowId,
 };
 use serde::{Deserialize, Serialize};
 use std::mem::size_of;
-use windows::Win32::Foundation::{BOOL, HWND, LPARAM, POINT, RECT};
+use windows::Win32::Foundation::{BOOL, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
-    EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFOEXW,
+    EnumDisplayMonitors, GetMonitorInfoW, MonitorFromPoint, HDC, HMONITOR, MONITORINFOEXW,
+    MONITOR_DEFAULTTONEAREST,
 };
 use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
+use windows::Win32::UI::HiDpi::{
+    GetDpiForMonitor, GetDpiForSystem, SetProcessDpiAwarenessContext,
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, MDT_EFFECTIVE_DPI,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
-    DispatchMessageW, EnumWindows, GetCursorPos, GetMessageW, TranslateMessage, EVENT_MAX,
-    EVENT_MIN, EVENT_OBJECT_DESTROY, EVENT_OBJECT_FOCUS, EVENT_OBJECT_SHOW,
-    EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MOVESIZESTART, MSG,
-    OBJID_CLIENT, WINEVENT_OUTOFCONTEXT,
+    CallNextHookEx, DispatchMessageW, EnumWindows, GetCursorPos, GetMessageW, SetWindowsHookExW,
+    TranslateMessage, UnhookWindowsHookEx, EVENT_MAX, EVENT_MIN, EVENT_OBJECT_DESTROY,
+    EVENT_OBJECT_FOCUS, EVENT_OBJECT_SHOW, EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZESTART,
+    EVENT_SYSTEM_MOVESIZESTART, HHOOK, MOUSEHOOKSTRUCT, MSG, OBJID_CLIENT, WH_MOUSE_LL,
+    WINEVENT_OUTOFCONTEXT, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP,
+    WM_MOUSEMOVE, WM_RBUTTONDOWN, WM_RBUTTONUP,
 };
 
 pub mod manageable;
@@ -26,6 +33,7 @@ mod tile_preview;
 mod window;
 
 static mut EVENT_DISPATCHER: Option<EventDispatcher> = None;
+static mut MOUSE_HOOK: Option<HHOOK> = None;
 
 pub struct WindowsPlatformInit;
 
@@ -50,23 +58,47 @@ unsafe impl PlatformInitImpl for WindowsPlatformInit {
 
         EVENT_DISPATCHER = Some(dispatcher);
 
-        let hook = SetWinEventHook(
-            EVENT_MIN,
-            EVENT_MAX,
-            None,
-            Some(win_event_hook_proc),
-            0,
-            0,
-            WINEVENT_OUTOFCONTEXT,
-        );
-        if hook.0 == 0 {
-            return Err("Could not set win event hook".into());
+        // Set up hooks for specific events we care about
+        let events = [
+            EVENT_SYSTEM_MOVESIZESTART,
+            EVENT_SYSTEM_MINIMIZESTART,
+            EVENT_SYSTEM_MINIMIZEEND,
+            EVENT_OBJECT_SHOW,
+            EVENT_OBJECT_FOCUS,
+            EVENT_OBJECT_DESTROY,
+        ];
+
+        let mut hooks = Vec::new();
+        for event in events {
+            let hook = SetWinEventHook(
+                event,
+                event, // Same event for min and max to only hook this specific event
+                None,
+                Some(win_event_hook_proc),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT,
+            );
+            if hook.0 == 0 {
+                return Err(format!("Could not set win event hook for event {}", event).into());
+            }
+            hooks.push(hook);
         }
+
+        // Set up low-level mouse hook
+        let mouse_hook = SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_hook_proc), None, 0)
+            .map_err(|e| format!("Could not set mouse hook: {:?}", e))?;
+        MOUSE_HOOK = Some(mouse_hook);
 
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
+        }
+
+        // Clean up hooks
+        if let Some(hook) = MOUSE_HOOK {
+            UnhookWindowsHookEx(hook);
         }
 
         Ok(())
@@ -188,10 +220,6 @@ unsafe extern "system" fn win_event_hook_proc(
     _id_event_thread: u32,
     _dwms_event_time: u32,
 ) {
-    if _id_object != OBJID_CLIENT.0 {
-        return;
-    }
-
     let window = WindowsPlatformWindow::new(hwnd).unwrap();
 
     let event = match event {
@@ -212,5 +240,35 @@ unsafe extern "system" fn win_event_hook_proc(
         }
     }
 
+    // println!("Dispatching event: {:?}", event);
+
     EVENT_DISPATCHER.as_ref().unwrap().send(event);
+}
+
+unsafe extern "system" fn mouse_hook_proc(
+    n_code: i32,
+    w_param: WPARAM,
+    l_param: LPARAM,
+) -> LRESULT {
+    if n_code >= 0 {
+        // Use GetCursorPos to get the logical position of the mouse
+        let mut position = POINT::default();
+        let _ = GetCursorPos(&mut position);
+        let position = Position::new(position.x, position.y);
+
+        let event = match w_param.0 as u32 {
+            WM_LBUTTONDOWN => PlatformEvent::MouseDown(position, MouseButton::Left),
+            WM_LBUTTONUP => PlatformEvent::MouseUp(position, MouseButton::Left),
+            WM_RBUTTONDOWN => PlatformEvent::MouseDown(position, MouseButton::Right),
+            WM_RBUTTONUP => PlatformEvent::MouseUp(position, MouseButton::Right),
+            WM_MBUTTONDOWN => PlatformEvent::MouseDown(position, MouseButton::Middle),
+            WM_MBUTTONUP => PlatformEvent::MouseUp(position, MouseButton::Middle),
+            WM_MOUSEMOVE => PlatformEvent::MouseMoved(position),
+            _ => return unsafe { CallNextHookEx(None, n_code, w_param, l_param) },
+        };
+
+        EVENT_DISPATCHER.as_ref().unwrap().send(event);
+    }
+
+    unsafe { CallNextHookEx(None, n_code, w_param, l_param) }
 }

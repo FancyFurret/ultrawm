@@ -202,3 +202,8 @@ $RECYCLE.BIN/
 
 .idea
 .vscode
+.cargo
+lib/windows
+current_layout.yaml
+TODO.md
+ultrawm_events.log

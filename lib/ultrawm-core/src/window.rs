@@ -48,7 +48,7 @@ impl Window {
         self.dirty.replace(false);
 
         let bounds = self.bounds.borrow().clone();
-        self.platform_window.borrow_mut().set_bounds(&bounds)?;
+        self.platform_window.borrow().set_bounds(&bounds)?;
 
         Ok(())
     }

@@ -100,7 +100,7 @@ impl PlatformWindowImpl for MockPlatformWindow {
     fn visible(&self) -> bool {
         return self.visible;
     }
-    fn set_bounds(&mut self, bounds: &Bounds) -> PlatformResult<()> {
+    fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()> {
         return Ok(());
     }
 }

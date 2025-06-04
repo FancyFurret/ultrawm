@@ -1,5 +1,6 @@
 use crate::config::ConfigRef;
 use crate::platform::{Bounds, Position};
+use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
 pub use container_tree::*;
 use std::fmt::Debug;
@@ -13,9 +14,17 @@ pub trait WindowLayout: Debug {
 
     fn serialize(&self) -> serde_yaml::Value;
 
-    fn get_tile_bounds(&self, window: &WindowRef, position: &Position) -> Option<Bounds>;
+    fn get_preview_bounds(&self, window: &WindowRef, position: &Position) -> Option<Bounds>;
 
-    fn tile_window(&mut self, window: &WindowRef, position: &Position) -> Result<(), ()>;
+    fn insert_window(
+        &mut self,
+        window: &WindowRef,
+        position: &Position,
+    ) -> Result<InsertResult, ()>;
+
+    fn replace_window(&mut self, old_window: &WindowRef, new_window: &WindowRef) -> Result<(), ()>;
 
     fn remove_window(&mut self, window: &WindowRef) -> Result<(), ()>;
+
+    fn debug_layout(&self) -> String;
 }
