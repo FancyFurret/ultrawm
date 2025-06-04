@@ -364,319 +364,316 @@ impl Container {
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
-    // use crate::layouts::container_tree::tests::{
-    //     assert_is_container, assert_is_window, assert_window, new_bounds, new_config,
-    //     new_container, new_window,
-    // };
+    use super::*;
+    use crate::layouts::container_tree::tests::{
+        assert_is_container, assert_is_window, assert_window, new_bounds, new_config,
+        new_container, new_window,
+    };
 
-    // pub(super) fn new_container_with_bounds(bounds: Bounds) -> ContainerRef {
-    //     Container::new(new_config(), bounds, Direction::Horizontal, None)
-    // }
+    pub(super) fn new_container_with_bounds(bounds: Bounds) -> ContainerRef {
+        Container::new(new_config(), bounds, Direction::Horizontal, None)
+    }
 
-    // pub(super) fn new_container_with_direction(direction: Direction) -> ContainerRef {
-    //     Container::new(new_config(), new_bounds(), direction, None)
-    // }
+    pub(super) fn new_container_with_direction(direction: Direction) -> ContainerRef {
+        Container::new(new_config(), new_bounds(), direction, None)
+    }
 
-    // pub(super) fn new_container_with_parent(parent: ContainerRef) -> ContainerRef {
-    //     Container::new(
-    //         new_config(),
-    //         new_bounds(),
-    //         Direction::Horizontal,
-    //         Some(parent.self_ref()),
-    //     )
-    // }
+    pub(super) fn new_container_with_parent(parent: ContainerRef) -> ContainerRef {
+        Container::new(
+            new_config(),
+            new_bounds(),
+            Direction::Horizontal,
+            Some(parent.self_ref()),
+        )
+    }
 
-    // #[test]
-    // fn test_bounds() {
-    //     let root = new_container_with_bounds(new_bounds());
-    //     assert_eq!(root.bounds(), new_bounds());
-    // }
+    #[test]
+    fn test_bounds() {
+        let root = new_container_with_bounds(new_bounds());
+        assert_eq!(root.bounds(), new_bounds());
+    }
 
-    // #[test]
-    // fn test_direction() {
-    //     let root = new_container_with_direction(Direction::Horizontal);
-    //     assert_eq!(root.direction(), Direction::Horizontal);
-    // }
+    #[test]
+    fn test_direction() {
+        let root = new_container_with_direction(Direction::Horizontal);
+        assert_eq!(root.direction(), Direction::Horizontal);
+    }
 
-    // #[test]
-    // fn test_parent() {
-    //     let root = new_container();
-    //     let container = new_container_with_parent(root.clone());
-    //     assert_eq!(&container.parent(), &Some(root));
-    // }
+    #[test]
+    fn test_parent() {
+        let root = new_container();
+        let container = new_container_with_parent(root.clone());
+        assert_eq!(&container.parent(), &Some(root));
+    }
 
-    // #[test]
-    // fn test_children() {
-    //     let root = new_container();
-    //     assert_eq!(root.children().len(), 0);
-    // }
+    #[test]
+    fn test_children() {
+        let root = new_container();
+        assert_eq!(root.children().len(), 0);
+    }
 
-    // #[test]
-    // fn test_add_new_window() {
-    //     let root = new_container();
-    //     let window = root.add_window(new_window().into());
-    //     assert_eq!(root.children().len(), 1);
-    //     assert_window(&root.children()[0], &window);
-    //     assert_eq!(window.parent(), root);
-    // }
+    #[test]
+    fn test_add_new_window() {
+        let root = new_container();
+        let window = root.add_window(new_window());
+        assert_eq!(root.children().len(), 1);
+        assert_window(&root.children()[0], &window);
+        assert_eq!(window.parent(), root);
+    }
 
-    // #[test]
-    // fn test_add_new_window_multiple() {
-    //     let root = new_container();
+    #[test]
+    fn test_add_new_window_multiple() {
+        let root = new_container();
 
-    //     let ref_a = root.add_window(new_window().into());
-    //     let ref_b = root.add_window(new_window().into());
-    //     let ref_c = root.add_window(new_window().into());
+        let ref_a = root.add_window(new_window());
+        let ref_b = root.add_window(new_window());
+        let ref_c = root.add_window(new_window());
 
-    //     assert_eq!(root.children().len(), 3);
-    //     assert_window(&root.children()[0], &ref_a);
-    //     assert_window(&root.children()[1], &ref_b);
-    //     assert_window(&root.children()[2], &ref_c);
-    //     assert_eq!(ref_a.parent(), root);
-    //     assert_eq!(ref_b.parent(), root);
-    //     assert_eq!(ref_c.parent(), root);
-    // }
+        assert_eq!(root.children().len(), 3);
+        assert_window(&root.children()[0], &ref_a);
+        assert_window(&root.children()[1], &ref_b);
+        assert_window(&root.children()[2], &ref_c);
+        assert_eq!(ref_a.parent(), root);
+        assert_eq!(ref_b.parent(), root);
+        assert_eq!(ref_c.parent(), root);
+    }
 
-    // #[test]
-    // fn test_add_existing_window() {
-    //     let root_a = new_container();
-    //     let root_b = new_container();
-    //     let ref_a = root_a.add_window(new_window().into());
-    //     let ref_b = root_b.add_window(new_window().into());
+    #[test]
+    fn test_add_existing_window() {
+        let root_a = new_container();
+        let root_b = new_container();
+        let ref_a = root_a.add_window(new_window());
+        let ref_b = root_b.add_window(new_window());
 
-    //     root_a.add_window(ref_b.clone().into());
+        root_a.add_window(ref_b.clone());
 
-    //     assert_eq!(root_a.children().len(), 2);
-    //     assert_window(&root_a.children()[0], &ref_a);
-    //     assert_window(&root_a.children()[1], &ref_b);
-    //     assert_eq!(ref_a.parent(), root_a);
-    //     assert_eq!(ref_b.parent(), root_a);
-    //     assert_eq!(root_b.children().len(), 0);
-    // }
+        assert_eq!(root_a.children().len(), 2);
+        assert_window(&root_a.children()[0], &ref_a);
+        assert_window(&root_a.children()[1], &ref_b);
+        assert_eq!(ref_a.parent(), root_a);
+        assert_eq!(ref_b.parent(), root_a);
+        assert_eq!(root_b.children().len(), 0);
+    }
 
-    // #[test]
-    // fn test_add_existing_window_same_window() {
-    //     let root = new_container();
-    //     let ref_a = root.add_window(new_window().into());
+    #[test]
+    fn test_add_existing_window_same_window() {
+        let root = new_container();
+        let ref_a = root.add_window(new_window());
 
-    //     root.add_window(ref_a.clone().into());
+        root.add_window(ref_a.clone());
 
-    //     assert_eq!(root.children().len(), 1);
-    //     assert_window(&root.children()[0], &ref_a);
-    //     assert_eq!(ref_a.parent(), root);
-    // }
+        assert_eq!(root.children().len(), 1);
+        assert_window(&root.children()[0], &ref_a);
+        assert_eq!(ref_a.parent(), root);
+    }
 
-    // #[test]
-    // fn test_insert_existing_window_same_parent() {
-    //     let root = new_container();
-    //     let ref_a = root.add_window(new_window().into());
-    //     let ref_b = root.add_window(new_window().into());
+    #[test]
+    fn test_insert_existing_window_same_parent() {
+        let root = new_container();
+        let ref_a = root.add_window(new_window());
+        let ref_b = root.add_window(new_window());
 
-    //     root.insert_window(0, ref_b.clone().into());
+        root.insert_window(0, ref_b.clone());
 
-    //     assert_eq!(root.children().len(), 2);
-    //     assert_window(&root.children()[0], &ref_b);
-    //     assert_window(&root.children()[1], &ref_a);
-    //     assert_eq!(ref_a.parent(), root);
-    //     assert_eq!(ref_b.parent(), root);
-    // }
+        assert_eq!(root.children().len(), 2);
+        assert_window(&root.children()[0], &ref_b);
+        assert_window(&root.children()[1], &ref_a);
+        assert_eq!(ref_a.parent(), root);
+        assert_eq!(ref_b.parent(), root);
+    }
 
-    // #[test]
-    // fn test_insert_existing_window_into_collapsing_container() {
-    //     let root = new_container();
-    //     let ref_a = root.add_window(new_window().into());
-    //     let ref_b = root.add_window(new_window().into());
-    //     let container = root.split_self(new_window().into(), InsertOrder::default());
-    //     let child_container = assert_is_container(&container.children()[0]);
-    //     let ref_c = assert_is_window(&container.children()[1]);
+    #[test]
+    fn test_insert_existing_windowollapsing_container() {
+        let root = new_container();
+        let ref_a = root.add_window(new_window());
+        let ref_b = root.add_window(new_window());
+        let container = root.split_self(new_window(), InsertOrder::default());
+        let child_container = assert_is_container(&container.children()[0]);
+        let ref_c = assert_is_window(&container.children()[1]);
 
-    //     // Should remove container/child_container, since it is now the only child of container,
-    //     // and all 3 windows should now be children of root
-    //     assert_eq!(child_container.children().len(), 2);
-    //     child_container.insert_window(0, ref_c.clone().into());
+        // Should remove container/child_container, since it is now the only child of container,
+        // and all 3 windows should now be children of root
+        assert_eq!(child_container.children().len(), 2);
+        child_container.insert_window(0, ref_c.clone());
 
-    //     assert_eq!(root.children().len(), 3);
-    //     assert_window(&root.children()[0], &ref_c);
-    //     assert_window(&root.children()[1], &ref_a);
-    //     assert_window(&root.children()[2], &ref_b);
-    //     assert_eq!(ref_a.parent(), root);
-    //     assert_eq!(ref_b.parent(), root);
-    //     assert_eq!(ref_c.parent(), root);
-    // }
+        assert_eq!(root.children().len(), 3);
+        assert_window(&root.children()[0], &ref_c);
+        assert_window(&root.children()[1], &ref_a);
+        assert_window(&root.children()[2], &ref_b);
+        assert_eq!(ref_a.parent(), root);
+        assert_eq!(ref_b.parent(), root);
+        assert_eq!(ref_c.parent(), root);
+    }
 
-    // #[test]
-    // fn test_insert_new_window() {
-    //     let root = new_container();
-    //     let ref_a = root.add_window(new_window().into());
-    //     let ref_b = root.add_window(new_window().into());
+    #[test]
+    fn test_insert_new_window() {
+        let root = new_container();
+        let ref_a = root.add_window(new_window());
+        let ref_b = root.add_window(new_window());
 
-    //     root.insert_window(0, new_window().into());
+        root.insert_window(0, new_window());
 
-    //     assert_eq!(root.children().len(), 3);
-    //     assert_is_window(&root.children()[0]);
-    //     assert_window(&root.children()[1], &ref_a);
-    //     assert_window(&root.children()[2], &ref_b);
-    // }
+        assert_eq!(root.children().len(), 3);
+        assert_is_window(&root.children()[0]);
+        assert_window(&root.children()[1], &ref_a);
+        assert_window(&root.children()[2], &ref_b);
+    }
 
-    // #[test]
-    // fn test_split_new_window() {
-    //     let root = new_container();
-    //     let ref_a = root.add_window(new_window().into());
-    //     let window_b = new_window();
+    #[test]
+    fn test_split_new_window() {
+        let root = new_container();
+        let ref_a = root.add_window(new_window());
+        let window_b = new_window();
 
-    //     let new_container = root.split_window(&ref_a, window_b.into(), InsertOrder::default());
-    //     let ref_b = new_container.children()[1].clone();
+        let new_container = root.split_window(&ref_a, window_b, InsertOrder::default());
+        let ref_b = new_container.children()[1].clone();
 
-    //     assert_eq!(root.children().len(), 1);
-    //     assert_is_container(&root.children()[0]);
-    //     assert_eq!(new_container.children().len(), 2);
-    //     assert_window(&new_container.children()[0], &ref_a);
-    //     assert_is_window(&ref_b);
-    //     assert_eq!(ref_a.parent(), new_container);
-    //     assert_eq!(ref_b.parent(), Some(new_container.clone()));
-    //     assert_eq!(new_container.parent(), Some(root));
-    // }
+        assert_eq!(root.children().len(), 1);
+        assert_is_container(&root.children()[0]);
+        assert_eq!(new_container.children().len(), 2);
+        assert_window(&new_container.children()[0], &ref_a);
+        assert_is_window(&ref_b);
+        assert_eq!(ref_a.parent(), new_container);
+        assert_eq!(ref_b.parent(), Some(new_container.clone()));
+        assert_eq!(new_container.parent(), Some(root));
+    }
 
-    // #[test]
-    // fn test_split_existing_window() {
-    //     let root_a = new_container();
-    //     let root_b = new_container();
-    //     let ref_a = root_a.add_window(new_window().into());
-    //     let ref_b = root_b.add_window(new_window().into());
+    #[test]
+    fn test_split_existing_window() {
+        let root_a = new_container();
+        let root_b = new_container();
+        let ref_a = root_a.add_window(new_window());
+        let ref_b = root_b.add_window(new_window());
 
-    //     let new_container =
-    //         root_a.split_window(&ref_a, ref_b.clone().into(), InsertOrder::default());
+        let new_container = root_a.split_window(&ref_a, ref_b.clone(), InsertOrder::default());
 
-    //     assert_eq!(root_a.children().len(), 1);
-    //     assert_is_container(&root_a.children()[0]);
-    //     assert_eq!(new_container.children().len(), 2);
-    //     assert_window(&new_container.children()[0], &ref_a);
-    //     assert_window(&new_container.children()[1], &ref_b);
-    //     assert_eq!(ref_a.parent(), new_container);
-    //     assert_eq!(ref_b.parent(), new_container);
-    //     assert_eq!(new_container.parent(), Some(root_a));
-    //     assert_eq!(root_b.children().len(), 0);
-    // }
+        assert_eq!(root_a.children().len(), 1);
+        assert_is_container(&root_a.children()[0]);
+        assert_eq!(new_container.children().len(), 2);
+        assert_window(&new_container.children()[0], &ref_a);
+        assert_window(&new_container.children()[1], &ref_b);
+        assert_eq!(ref_a.parent(), new_container);
+        assert_eq!(ref_b.parent(), new_container);
+        assert_eq!(new_container.parent(), Some(root_a));
+        assert_eq!(root_b.children().len(), 0);
+    }
 
-    // #[test]
-    // fn test_split_existing_window_same_parent() {
-    //     let root = new_container();
-    //     let ref_a = root.add_window(new_window().into());
-    //     let ref_b = root.add_window(new_window().into());
+    #[test]
+    fn test_split_existing_window_same_parent() {
+        let root = new_container();
+        let ref_a = root.add_window(new_window());
+        let ref_b = root.add_window(new_window());
 
-    //     let new_container = root.split_window(&ref_a, ref_b.clone().into(), InsertOrder::default());
+        let new_container = root.split_window(&ref_a, ref_b.clone(), InsertOrder::default());
 
-    //     assert_eq!(root.children().len(), 1);
-    //     assert_is_container(&root.children()[0]);
-    //     assert_eq!(new_container.children().len(), 2);
-    //     assert_window(&new_container.children()[0], &ref_a);
-    //     assert_window(&new_container.children()[1], &ref_b);
-    // }
+        assert_eq!(root.children().len(), 1);
+        assert_is_container(&root.children()[0]);
+        assert_eq!(new_container.children().len(), 2);
+        assert_window(&new_container.children()[0], &ref_a);
+        assert_window(&new_container.children()[1], &ref_b);
+    }
 
-    // #[test]
-    // fn test_swap_same_parent() {
-    //     let root = new_container();
-    //     let ref_a = root.add_window(new_window().into());
-    //     let ref_b = root.add_window(new_window().into());
-    //     let ref_c = root.add_window(new_window().into());
+    #[test]
+    fn test_swap_same_parent() {
+        let root = new_container();
+        let ref_a = root.add_window(new_window());
+        let ref_b = root.add_window(new_window());
+        let ref_c = root.add_window(new_window());
 
-    //     Container::swap(
-    //         &ContainerChildRef::Window(ref_a.clone()),
-    //         &ContainerChildRef::Window(ref_c.clone()),
-    //     );
+        Container::swap(
+            &ContainerChildRef::Window(ref_a.clone()),
+            &ContainerChildRef::Window(ref_c.clone()),
+        );
 
-    //     assert_eq!(root.children().len(), 3);
-    //     assert_window(&root.children()[0], &ref_c);
-    //     assert_window(&root.children()[1], &ref_b);
-    //     assert_window(&root.children()[2], &ref_a);
-    //     assert_eq!(ref_a.parent(), root);
-    //     assert_eq!(ref_b.parent(), root);
-    //     assert_eq!(ref_c.parent(), root);
-    // }
+        assert_eq!(root.children().len(), 3);
+        assert_window(&root.children()[0], &ref_c);
+        assert_window(&root.children()[1], &ref_b);
+        assert_window(&root.children()[2], &ref_a);
+        assert_eq!(ref_a.parent(), root);
+        assert_eq!(ref_b.parent(), root);
+        assert_eq!(ref_c.parent(), root);
+    }
 
-    // #[test]
-    // fn test_swap_child_parent() {
-    //     let root = new_container();
-    //     let ref_a = root.add_window(new_window().into());
-    //     let ref_b = root.add_window(new_window().into());
-    //     let new_container = root.split_window(&ref_b, new_window().into(), InsertOrder::default());
-    //     let ref_c = assert_is_window(&new_container.children()[1]);
+    #[test]
+    fn test_swap_child_parent() {
+        let root = new_container();
+        let ref_a = root.add_window(new_window());
+        let ref_b = root.add_window(new_window());
+        let new_container = root.split_window(&ref_b, new_window(), InsertOrder::default());
+        let ref_c = assert_is_window(&new_container.children()[1]);
 
-    //     Container::swap(
-    //         &ContainerChildRef::Window(ref_a.clone()),
-    //         &ContainerChildRef::Window(ref_c.clone()),
-    //     );
+        Container::swap(
+            &ContainerChildRef::Window(ref_a.clone()),
+            &ContainerChildRef::Window(ref_c.clone()),
+        );
 
-    //     assert_eq!(root.children().len(), 2);
-    //     assert_window(&root.children()[0], &ref_c);
-    //     assert_eq!(
-    //         root.children()[1],
-    //         ContainerChildRef::Container(new_container.clone())
-    //     );
-    //     assert_eq!(new_container.children().len(), 2);
-    //     assert_window(&new_container.children()[0], &ref_b);
-    //     assert_window(&new_container.children()[1], &ref_a);
-    // }
+        assert_eq!(root.children().len(), 2);
+        assert_window(&root.children()[0], &ref_c);
+        assert_eq!(
+            root.children()[1],
+            ContainerChildRef::Container(new_container.clone())
+        );
+        assert_eq!(new_container.children().len(), 2);
+        assert_window(&new_container.children()[0], &ref_b);
+        assert_window(&new_container.children()[1], &ref_a);
+    }
 
-    // #[test]
-    // fn test_add_existing_window_last_child() {
-    //     let root_a = new_container();
-    //     let root_b = new_container();
-    //     let ref_a = root_a.add_window(new_window().into());
+    #[test]
+    fn test_add_existing_window_last_child() {
+        let root_a = new_container();
+        let root_b = new_container();
+        let ref_a = root_a.add_window(new_window());
 
-    //     root_b.add_window(ref_a.clone().into());
+        root_b.add_window(ref_a.clone());
 
-    //     assert_eq!(root_a.children().len(), 0);
-    //     assert_eq!(root_b.children().len(), 1);
-    //     assert_window(&root_b.children()[0], &ref_a);
-    //     assert_eq!(&ref_a.parent(), &root_b);
-    // }
+        assert_eq!(root_a.children().len(), 0);
+        assert_eq!(root_b.children().len(), 1);
+        assert_window(&root_b.children()[0], &ref_a);
+        assert_eq!(&ref_a.parent(), &root_b);
+    }
 
-    // #[test]
-    // fn test_add_existing_window_last_of_split() {
-    //     let root_a = new_container();
-    //     let root_b = new_container();
-    //     let ref_a = root_a.add_window(new_window().into());
-    //     let new_container =
-    //         root_a.split_window(&ref_a, new_window().into(), InsertOrder::default());
-    //     let ref_b = assert_is_window(&new_container.children()[1]);
+    #[test]
+    fn test_add_existing_window_last_of_split() {
+        let root_a = new_container();
+        let root_b = new_container();
+        let ref_a = root_a.add_window(new_window());
+        let new_container = root_a.split_window(&ref_a, new_window(), InsertOrder::default());
+        let ref_b = assert_is_window(&new_container.children()[1]);
 
-    //     root_b.add_window(ref_b.clone().into());
+        root_b.add_window(ref_b.clone());
 
-    //     assert_eq!(root_a.children().len(), 1);
-    //     // Since there is only one child left in that container, it should be turned back into a window
-    //     assert_window(&root_a.children()[0], &ref_a);
-    //     assert_eq!(&ref_a.parent(), &root_a);
-    //     assert_eq!(root_b.children().len(), 1);
-    //     assert_window(&root_b.children()[0], &ref_b);
-    //     assert_eq!(&ref_b.parent(), &root_b);
-    // }
+        assert_eq!(root_a.children().len(), 1);
+        // Since there is only one child left in that container, it should be turned back window
+        assert_window(&root_a.children()[0], &ref_a);
+        assert_eq!(&ref_a.parent(), &root_a);
+        assert_eq!(root_b.children().len(), 1);
+        assert_window(&root_b.children()[0], &ref_b);
+        assert_eq!(&ref_b.parent(), &root_b);
+    }
 
-    // #[test]
-    // fn test_add_existing_window_last_of_split_with_splits() {
-    //     let root_a = new_container();
-    //     let root_b = new_container();
-    //     let ref_a = root_a.add_window(new_window().into());
-    //     let new_container_a =
-    //         root_a.split_window(&ref_a, new_window().into(), InsertOrder::default());
-    //     let ref_b = assert_is_window(&new_container_a.children()[1]);
-    //     let new_container_b =
-    //         new_container_a.split_window(&ref_b, new_window().into(), InsertOrder::default());
-    //     let ref_c = assert_is_window(&new_container_b.children()[1]);
-    //     let ref_d = new_container_b.add_window(new_window().into());
+    #[test]
+    fn test_add_existing_window_last_of_split_with_splits() {
+        let root_a = new_container();
+        let root_b = new_container();
+        let ref_a = root_a.add_window(new_window());
+        let new_container_a = root_a.split_window(&ref_a, new_window(), InsertOrder::default());
+        let ref_b = assert_is_window(&new_container_a.children()[1]);
+        let new_container_b =
+            new_container_a.split_window(&ref_b, new_window(), InsertOrder::default());
+        let ref_c = assert_is_window(&new_container_b.children()[1]);
+        let ref_d = new_container_b.add_window(new_window());
 
-    //     root_b.add_window(ref_a.clone().into());
+        root_b.add_window(ref_a.clone());
 
-    //     assert_eq!(root_a.children().len(), 3);
-    //     assert_window(&root_a.children()[0], &ref_b);
-    //     assert_window(&root_a.children()[1], &ref_c);
-    //     assert_window(&root_a.children()[2], &ref_d);
-    //     assert_eq!(&ref_b.parent(), &root_a);
-    //     assert_eq!(&ref_c.parent(), &root_a);
-    //     assert_eq!(&ref_d.parent(), &root_a);
-    //     assert_eq!(root_b.children().len(), 1);
-    //     assert_window(&root_b.children()[0], &ref_a);
-    //     assert_eq!(&ref_a.parent(), &root_b);
-    // }
+        assert_eq!(root_a.children().len(), 3);
+        assert_window(&root_a.children()[0], &ref_b);
+        assert_window(&root_a.children()[1], &ref_c);
+        assert_window(&root_a.children()[2], &ref_d);
+        assert_eq!(&ref_b.parent(), &root_a);
+        assert_eq!(&ref_c.parent(), &root_a);
+        assert_eq!(&ref_d.parent(), &root_a);
+        assert_eq!(root_b.children().len(), 1);
+        assert_window(&root_b.children()[0], &ref_a);
+        assert_eq!(&ref_a.parent(), &root_b);
+    }
 }

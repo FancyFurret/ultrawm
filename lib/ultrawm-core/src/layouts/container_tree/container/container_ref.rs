@@ -62,40 +62,40 @@ impl PartialEq<ContainerWindowRef> for ContainerChildRef {
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
-    // use crate::layouts::container_tree::container::tests::{
-    //     new_container_with_bounds, new_container_with_parent,
-    // };
-    // use crate::layouts::container_tree::tests::{
-    //     new_bounds, new_container, new_window, new_window_with_bounds,
-    // };
+    use super::*;
+    use crate::layouts::container_tree::container::tests::{
+        new_container_with_bounds, new_container_with_parent,
+    };
+    use crate::layouts::container_tree::tests::{
+        new_bounds, new_container, new_window, new_window_with_bounds,
+    };
 
-    // #[test]
-    // fn test_container_bounds() {
-    //     let container_child = ContainerChildRef::Container(new_container_with_bounds(new_bounds()));
-    //     assert_eq!(container_child.bounds(), new_bounds());
-    // }
+    #[test]
+    fn test_container_bounds() {
+        let container_child = ContainerChildRef::Container(new_container_with_bounds(new_bounds()));
+        assert_eq!(container_child.bounds(), new_bounds());
+    }
 
-    // #[test]
-    // fn test_container_parent() {
-    //     let root = new_container();
-    //     let container_child = ContainerChildRef::Container(new_container_with_parent(root.clone()));
-    //     assert_eq!(&container_child.parent(), &Some(root));
-    // }
+    #[test]
+    fn test_container_parent() {
+        let root = new_container();
+        let container_child = ContainerChildRef::Container(new_container_with_parent(root.clone()));
+        assert_eq!(&container_child.parent(), &Some(root));
+    }
 
-    // #[test]
-    // fn test_window_bounds() {
-    //     let root = new_container();
-    //     let window = root.add_window(new_window_with_bounds(new_bounds()).into());
-    //     let container_child = ContainerChildRef::Window(window);
-    //     assert_eq!(container_child.bounds(), new_bounds());
-    // }
+    #[test]
+    fn test_window_bounds() {
+        let root = new_container();
+        let window = root.add_window(new_window_with_bounds(new_bounds()).into());
+        let container_child = ContainerChildRef::Window(window);
+        assert_eq!(container_child.bounds(), new_bounds());
+    }
 
-    // #[test]
-    // fn test_window_parent() {
-    //     let root = new_container();
-    //     let window = root.add_window(new_window().into());
-    //     let container_child = ContainerChildRef::Window(window);
-    //     assert_eq!(&container_child.parent(), &Some(root));
-    // }
+    #[test]
+    fn test_window_parent() {
+        let root = new_container();
+        let window = root.add_window(new_window().into());
+        let container_child = ContainerChildRef::Window(window);
+        assert_eq!(&container_child.parent(), &Some(root));
+    }
 }

@@ -57,7 +57,7 @@ enum TileAction {
 mod tests {
     use super::*;
     use crate::config::{Config, ConfigRef};
-    use crate::layouts::container_tree::container::{Container, ContainerRef};
+    use crate::layouts::container_tree::container::{Container, ContainerRef, ContainerWindow};
     use crate::platform::mock::MockPlatformWindow;
     use crate::platform::Bounds;
     use crate::window::{Window, WindowRef};
@@ -108,20 +108,22 @@ mod tests {
         Container::new_root(new_config(), new_bounds())
     }
 
-    pub fn new_window() -> WindowRef {
+    pub fn new_window() -> ContainerWindowRef {
         let bounds = new_bounds();
-        Rc::new(Window::new(MockPlatformWindow::new(
+        let window = Rc::new(Window::new(MockPlatformWindow::new(
             bounds.position,
             bounds.size,
             "Mock Window".to_owned(),
-        )))
+        )));
+        ContainerWindow::new(window)
     }
 
-    pub fn new_window_with_bounds(bounds: Bounds) -> WindowRef {
-        Rc::new(Window::new(MockPlatformWindow::new(
+    pub fn new_window_with_bounds(bounds: Bounds) -> ContainerWindowRef {
+        let window = Rc::new(Window::new(MockPlatformWindow::new(
             bounds.position,
             bounds.size,
             "Mock Window".to_owned(),
-        )))
+        )));
+        ContainerWindow::new(window)
     }
 }
