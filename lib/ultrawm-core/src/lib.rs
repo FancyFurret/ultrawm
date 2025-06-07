@@ -3,8 +3,8 @@
 
 use crate::drag_tracker::{WindowDragEvent, WindowDragTracker, WindowDragType};
 use crate::platform::{
-    Bounds, EventBridge, PlatformError, PlatformEvent, PlatformInit, PlatformInitImpl,
-    PlatformTilePreview, PlatformTilePreviewImpl, PlatformWindowImpl,
+    EventBridge, PlatformError, PlatformEvent, PlatformInit, PlatformInitImpl, PlatformTilePreview,
+    PlatformTilePreviewImpl,
 };
 use crate::wm::WindowManager;
 use std::{process, thread};

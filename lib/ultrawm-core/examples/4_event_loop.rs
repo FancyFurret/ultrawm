@@ -10,7 +10,7 @@ fn init() {
 fn main() {
     init();
 
-    let (tx, rx) = mpsc::unbounded_channel();
+    let (tx, _rx) = mpsc::unbounded_channel();
     let dispatch = EventDispatcher::new(tx);
     unsafe {
         PlatformInit::run_event_loop(dispatch).expect("Error running event loop");

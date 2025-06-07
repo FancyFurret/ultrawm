@@ -8,9 +8,8 @@ use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
 use windows::Win32::Graphics::Gdi::UpdateWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetWindowInfo, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsIconic, SetWindowPos,
-    ShowWindow, SWP_FRAMECHANGED, SWP_NOSENDCHANGING, SWP_NOZORDER, SW_RESTORE, WINDOWINFO,
-    WS_VISIBLE,
+    GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsIconic, SetWindowPos, ShowWindow,
+    SWP_FRAMECHANGED, SWP_NOZORDER, SW_RESTORE,
 };
 
 #[derive(Debug, Clone)]
@@ -145,8 +144,6 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
         unsafe {
             ShowWindow(self.hwnd, SW_RESTORE);
 
-            println!("Setting bounds: {:?}", bounds);
-
             let (left_offset, top_offset, right_offset, bottom_offset) = self.get_border_offsets();
             let adjusted_x = bounds.position.x - left_offset;
             let adjusted_y = bounds.position.y - top_offset;
@@ -181,8 +178,6 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
                 }
                 let _ = window.set_bounds(&bounds);
             }
-
-            println!("task finished");
         });
 
         Ok(())

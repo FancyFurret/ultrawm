@@ -60,7 +60,7 @@ mod tests {
     use crate::layouts::container_tree::container::{Container, ContainerRef, ContainerWindow};
     use crate::platform::mock::MockPlatformWindow;
     use crate::platform::Bounds;
-    use crate::window::{Window, WindowRef};
+    use crate::window::Window;
     use std::rc::Rc;
 
     #[test]
@@ -110,20 +110,18 @@ mod tests {
 
     pub fn new_window() -> ContainerWindowRef {
         let bounds = new_bounds();
-        let window = Rc::new(Window::new(MockPlatformWindow::new(
-            bounds.position,
-            bounds.size,
-            "Mock Window".to_owned(),
-        )));
+        let window = Rc::new(Window::new(
+            MockPlatformWindow::new(bounds.position, bounds.size, "Mock Window".to_owned()),
+            new_config(),
+        ));
         ContainerWindow::new(window)
     }
 
     pub fn new_window_with_bounds(bounds: Bounds) -> ContainerWindowRef {
-        let window = Rc::new(Window::new(MockPlatformWindow::new(
-            bounds.position,
-            bounds.size,
-            "Mock Window".to_owned(),
-        )));
+        let window = Rc::new(Window::new(
+            MockPlatformWindow::new(bounds.position, bounds.size, "Mock Window".to_owned()),
+            new_config(),
+        ));
         ContainerWindow::new(window)
     }
 }

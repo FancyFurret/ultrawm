@@ -8,23 +8,21 @@ use crate::platform::{
 };
 use serde::{Deserialize, Serialize};
 use std::mem::size_of;
+use std::sync::OnceLock;
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
-    EnumDisplayMonitors, GetMonitorInfoW, MonitorFromPoint, HDC, HMONITOR, MONITORINFOEXW,
-    MONITOR_DEFAULTTONEAREST,
+    EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFOEXW,
 };
 use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
 use windows::Win32::UI::HiDpi::{
-    GetDpiForMonitor, GetDpiForSystem, SetProcessDpiAwarenessContext,
-    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, MDT_EFFECTIVE_DPI,
+    SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, DispatchMessageW, EnumWindows, GetCursorPos, GetMessageW, SetWindowsHookExW,
-    TranslateMessage, UnhookWindowsHookEx, EVENT_MAX, EVENT_MIN, EVENT_OBJECT_DESTROY,
-    EVENT_OBJECT_FOCUS, EVENT_OBJECT_SHOW, EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZESTART,
-    EVENT_SYSTEM_MOVESIZESTART, HHOOK, MOUSEHOOKSTRUCT, MSG, OBJID_CLIENT, WH_MOUSE_LL,
-    WINEVENT_OUTOFCONTEXT, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP,
-    WM_MOUSEMOVE, WM_RBUTTONDOWN, WM_RBUTTONUP,
+    TranslateMessage, UnhookWindowsHookEx, EVENT_OBJECT_DESTROY, EVENT_OBJECT_FOCUS,
+    EVENT_OBJECT_SHOW, EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZESTART,
+    EVENT_SYSTEM_MOVESIZESTART, HHOOK, MSG, WH_MOUSE_LL, WINEVENT_OUTOFCONTEXT, WM_LBUTTONDOWN,
+    WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_RBUTTONDOWN, WM_RBUTTONUP,
 };
 
 pub mod manageable;
@@ -32,7 +30,7 @@ pub mod manageable;
 mod tile_preview;
 mod window;
 
-static mut EVENT_DISPATCHER: Option<EventDispatcher> = None;
+static EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
 static mut MOUSE_HOOK: Option<HHOOK> = None;
 
 pub struct WindowsPlatformInit;
@@ -58,7 +56,7 @@ unsafe impl PlatformInitImpl for WindowsPlatformInit {
     unsafe fn run_event_loop(dispatcher: EventDispatcher) -> PlatformResult<()> {
         println!("Current working directory: {:?}", std::env::current_dir());
 
-        EVENT_DISPATCHER = Some(dispatcher);
+        let _ = EVENT_DISPATCHER.set(dispatcher);
 
         // Set up hooks for specific events we care about
         let events = [
@@ -100,7 +98,7 @@ unsafe impl PlatformInitImpl for WindowsPlatformInit {
 
         // Clean up hooks
         if let Some(hook) = MOUSE_HOOK {
-            UnhookWindowsHookEx(hook);
+            let _ = UnhookWindowsHookEx(hook);
         }
 
         Ok(())
@@ -244,7 +242,7 @@ unsafe extern "system" fn win_event_hook_proc(
 
     // println!("Dispatching event: {:?}", event);
 
-    EVENT_DISPATCHER.as_ref().unwrap().send(event);
+    EVENT_DISPATCHER.get().unwrap().send(event);
 }
 
 unsafe extern "system" fn mouse_hook_proc(
@@ -269,7 +267,7 @@ unsafe extern "system" fn mouse_hook_proc(
             _ => return unsafe { CallNextHookEx(None, n_code, w_param, l_param) },
         };
 
-        EVENT_DISPATCHER.as_ref().unwrap().send(event);
+        EVENT_DISPATCHER.get().unwrap().send(event);
     }
 
     unsafe { CallNextHookEx(None, n_code, w_param, l_param) }

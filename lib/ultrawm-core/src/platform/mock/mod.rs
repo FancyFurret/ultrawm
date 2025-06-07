@@ -9,7 +9,7 @@ unsafe impl PlatformInitImpl for MockPlatformInit {
     unsafe fn initialize() -> PlatformResult<()> {
         return Ok(());
     }
-    unsafe fn run_event_loop(dispatcher: EventDispatcher) -> PlatformResult<()> {
+    unsafe fn run_event_loop(_dispatcher: EventDispatcher) -> PlatformResult<()> {
         return Ok(());
     }
 }
@@ -100,7 +100,7 @@ impl PlatformWindowImpl for MockPlatformWindow {
     fn visible(&self) -> bool {
         return self.visible;
     }
-    fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()> {
+    fn set_bounds(&self, _bounds: &Bounds) -> PlatformResult<()> {
         return Ok(());
     }
 }

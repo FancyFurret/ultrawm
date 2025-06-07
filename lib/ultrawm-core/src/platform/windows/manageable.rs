@@ -1,5 +1,5 @@
 use crate::platform::windows::WindowsPlatformWindow;
-use crate::platform::{PlatformError, PlatformErrorType, PlatformWindowImpl};
+use crate::platform::{PlatformError, PlatformErrorType};
 use std::mem::size_of;
 use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
 use windows::Win32::UI::WindowsAndMessaging::{

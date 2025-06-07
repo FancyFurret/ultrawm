@@ -4,7 +4,6 @@ pub use container_window::*;
 use crate::config::ConfigRef;
 use crate::layouts::Direction;
 use crate::platform::Bounds;
-use crate::window::WindowRef;
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::{Rc, Weak};
 
