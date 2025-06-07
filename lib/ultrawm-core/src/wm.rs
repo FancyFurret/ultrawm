@@ -37,7 +37,7 @@ impl WindowManager {
         // Sort by window id so that re-running the WM is more stable
         let mut windows = Platform::list_visible_windows()?
             .iter()
-            .map(|w| Rc::new(Window::new(w.clone())))
+            .map(|w| Rc::new(Window::new(w.clone(), config.clone())))
             .collect::<Vec<_>>();
         windows.sort_by_key(|w| w.id());
         let windows_map: HashMap<WindowId, WindowRef> =
@@ -84,7 +84,7 @@ impl WindowManager {
             return Ok(());
         }
 
-        let window = Rc::new(Window::new(window));
+        let window = Rc::new(Window::new(window, self.config.clone()));
         self.windows.insert(window.id(), window.clone());
 
         if !self.config.float_new_windows {

@@ -329,8 +329,8 @@ impl Container {
             Direction::Vertical => self.bounds().size.height,
         };
 
-        let total_gap = self.config.window_gap * (num_children - 1);
-        let child_size = (container_size - total_gap) / num_children;
+        let child_size = container_size / num_children;
+
         let mut current_position = match self.direction {
             Direction::Horizontal => self.bounds().position.x,
             Direction::Vertical => self.bounds().position.y,
@@ -353,7 +353,7 @@ impl Container {
             };
             child.set_bounds(new_bounds);
 
-            current_position += child_size as i32 + self.config.window_gap as i32;
+            current_position += child_size as i32;
 
             if let ContainerChildRef::Container(c) = child {
                 c.balance();
@@ -371,7 +371,7 @@ mod tests {
     };
 
     pub(super) fn new_container_with_bounds(bounds: Bounds) -> ContainerRef {
-        Container::new(new_config(), bounds, Direction::Horizontal, None)
+        Container::new(new_config(), bounds.clone(), Direction::Horizontal, None)
     }
 
     pub(super) fn new_container_with_direction(direction: Direction) -> ContainerRef {

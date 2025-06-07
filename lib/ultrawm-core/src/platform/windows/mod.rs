@@ -50,6 +50,8 @@ pub enum WindowsHookEvent {
 
 unsafe impl PlatformInitImpl for WindowsPlatformInit {
     unsafe fn initialize() -> PlatformResult<()> {
+        SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+            .map_err(|e| format!("Failed to set DPI awareness: {:?}", e))?;
         Ok(())
     }
 

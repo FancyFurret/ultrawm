@@ -274,11 +274,12 @@ impl WindowLayout for ContainerTree {
         // Later, we should try to keep the windows in similar positions to how they were before
         // as to not mess up the user's layout.
 
+        // Apply partition gap and invert the window gap so that the outer gap is 0
         let root_bounds = Bounds::new(
-            bounds.position.x + config.partition_gap as i32,
-            bounds.position.y + config.partition_gap as i32,
-            bounds.size.width - config.partition_gap * 2,
-            bounds.size.height - config.partition_gap * 2,
+            bounds.position.x + config.partition_gap as i32 - config.window_gap as i32 / 2,
+            bounds.position.y + config.partition_gap as i32 - config.window_gap as i32 / 2,
+            bounds.size.width - config.partition_gap * 2 + config.window_gap,
+            bounds.size.height - config.partition_gap * 2 + config.window_gap,
         );
 
         let root = Container::new_root(config.clone(), root_bounds);
