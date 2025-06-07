@@ -80,6 +80,7 @@ async fn start_async(mut bridge: EventBridge) -> UltraWMResult<()> {
     let mut tile_preview = PlatformTilePreview::new(wm.config())?;
     let mut last_preview_bounds = None;
     let mut tile_preview_shown = false;
+    let mut valid_tile_position = false;
 
     loop {
         let event = bridge
@@ -109,27 +110,27 @@ async fn start_async(mut bridge: EventBridge) -> UltraWMResult<()> {
             Some(WindowDragEvent::Start(_, _, _)) => {}
             Some(WindowDragEvent::Drag(id, position, drag_type)) => {
                 if drag_type == WindowDragType::Move {
-                    let bounds = wm.get_tile_bounds(id, &position);
-                    if let Some(bounds) = bounds {
-                        if let Some(last_preview_bounds) = &last_preview_bounds {
-                            if &bounds == last_preview_bounds {
-                                continue;
-                            }
-                        }
-
-                        if !tile_preview_shown {
-                            tile_preview.show()?;
-                            tile_preview_shown = true;
-                        }
-                        tile_preview.move_to(&bounds)?;
-                        last_preview_bounds = Some(bounds);
+                    let bounds = if let Some(bounds) = wm.get_tile_bounds(id, &position) {
+                        valid_tile_position = true;
+                        bounds
                     } else {
-                        if tile_preview_shown {
-                            tile_preview.hide()?;
-                            tile_preview_shown = false;
-                            last_preview_bounds = None;
+                        valid_tile_position = false;
+                        wm.get_window(id).unwrap().bounds().clone()
+                    };
+
+                    if let Some(last_preview_bounds) = &last_preview_bounds {
+                        if &bounds == last_preview_bounds {
+                            continue;
                         }
                     }
+
+                    if !tile_preview_shown {
+                        tile_preview.show()?;
+                        tile_preview_shown = true;
+                    }
+
+                    tile_preview.move_to(&bounds)?;
+                    last_preview_bounds = Some(bounds);
                 }
             }
             Some(WindowDragEvent::End(id, position, drag_type)) => {
@@ -138,7 +139,9 @@ async fn start_async(mut bridge: EventBridge) -> UltraWMResult<()> {
                         tile_preview.hide()?;
                         tile_preview_shown = false;
                         last_preview_bounds = None;
+                    }
 
+                    if valid_tile_position {
                         wm.tile_window(id, &position).unwrap_or_else(|_| {
                             println!("Could not tile window at position");
                         });
