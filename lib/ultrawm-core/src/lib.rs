@@ -77,7 +77,7 @@ async fn start_async(mut bridge: EventBridge) -> UltraWMResult<()> {
 
     let mut wm = WindowManager::new()?;
     let mut drag_tracker = WindowDragTracker::new();
-    let mut tile_preview = PlatformTilePreview::new()?;
+    let mut tile_preview = PlatformTilePreview::new(wm.config())?;
     let mut last_preview_bounds = None;
     let mut tile_preview_shown = false;
 

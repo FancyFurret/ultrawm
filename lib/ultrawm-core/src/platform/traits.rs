@@ -37,7 +37,7 @@ where
     Self: Sized + Send + Sync,
 {
     /// Creates a new tile preview. Should not be shown until `show` is called.
-    fn new() -> PlatformResult<Self>;
+    fn new(config: crate::config::ConfigRef) -> PlatformResult<Self>;
     fn show(&mut self) -> PlatformResult<()>;
     fn hide(&mut self) -> PlatformResult<()>;
     fn move_to(&mut self, bounds: &Bounds) -> PlatformResult<()>;

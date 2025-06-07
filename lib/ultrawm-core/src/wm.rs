@@ -166,4 +166,8 @@ impl WindowManager {
 
         windows_in_partition
     }
+
+    pub fn config(&self) -> ConfigRef {
+        self.config.clone()
+    }
 }

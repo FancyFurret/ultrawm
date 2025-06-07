@@ -1,3 +1,4 @@
+use crate::config::ConfigRef;
 use crate::platform::thread_lock::MainThreadLock;
 use crate::platform::traits::PlatformTilePreviewImpl;
 use crate::platform::{Bounds, PlatformResult};
@@ -32,7 +33,7 @@ pub struct MacOSTilePreview {
 const ANIMATION_DURATION: f64 = 0.15;
 
 impl PlatformTilePreviewImpl for MacOSTilePreview {
-    fn new() -> PlatformResult<Self> {
+    fn new(_config: ConfigRef) -> PlatformResult<Self> {
         let window = MainThreadLock::new(|| make_window())?;
         Ok(Self {
             window,

@@ -46,7 +46,7 @@ impl PlatformMainThreadImpl for MockMainThread {
 
 pub struct MockPlatformTilePreview;
 impl PlatformTilePreviewImpl for MockPlatformTilePreview {
-    fn new() -> PlatformResult<Self> {
+    fn new(_config: crate::config::ConfigRef) -> PlatformResult<Self> {
         return Ok(Self {});
     }
     fn show(&mut self) -> PlatformResult<()> {

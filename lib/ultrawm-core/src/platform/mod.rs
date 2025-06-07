@@ -12,6 +12,8 @@ mod thread_lock;
 
 use cfg_if::cfg_if;
 
+pub mod animation;
+
 cfg_if! {
     if #[cfg(test)] {
         pub mod mock;
