@@ -2,12 +2,15 @@ use crate::platform::{
     Bounds, PlatformResult, PlatformWindowImpl, Position, ProcessId, Size, WindowId,
 };
 use std::mem;
-use windows::core::w;
+use tokio::task;
+use tokio::time::{sleep, Duration, Instant};
 use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
+use windows::Win32::Graphics::Gdi::UpdateWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowInfo, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsIconic, SetWindowPos,
-    ShowWindow, SWP_NOSENDCHANGING, SWP_NOZORDER, SW_RESTORE, WINDOWINFO, WS_VISIBLE,
+    ShowWindow, SWP_FRAMECHANGED, SWP_NOSENDCHANGING, SWP_NOZORDER, SW_RESTORE, WINDOWINFO,
+    WS_VISIBLE,
 };
 
 #[derive(Debug, Clone)]
@@ -83,6 +86,15 @@ impl WindowsPlatformWindow {
 
         (left_offset, top_offset, right_offset, bottom_offset)
     }
+
+    fn bounds_match(&self, bounds: &Bounds) -> bool {
+        let current_pos = self.position();
+        let current_size = self.size();
+        current_pos.x == bounds.position.x
+            && current_pos.y == bounds.position.y
+            && current_size.width == bounds.size.width
+            && current_size.height == bounds.size.height
+    }
 }
 
 impl PlatformWindowImpl for WindowsPlatformWindow {
@@ -131,10 +143,10 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
 
     fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()> {
         unsafe {
-            // First restore the window if it's maximized
             ShowWindow(self.hwnd, SW_RESTORE);
 
-            // Get the border offsets to compensate for invisible borders
+            println!("Setting bounds: {:?}", bounds);
+
             let (left_offset, top_offset, right_offset, bottom_offset) = self.get_border_offsets();
             let adjusted_x = bounds.position.x - left_offset;
             let adjusted_y = bounds.position.y - top_offset;
@@ -148,10 +160,30 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
                 adjusted_y,
                 adjusted_width,
                 adjusted_height,
-                SWP_NOZORDER,
+                SWP_NOZORDER | SWP_FRAMECHANGED,
             )
             .map_err(|_| "Could not set window bounds")?;
+
+            UpdateWindow(self.hwnd);
         }
+
+        // Clone for async task
+        let bounds = bounds.clone();
+        let window = self.clone();
+
+        // Spawn a tokio task to retry for up to 1 second
+        task::spawn(async move {
+            let start = Instant::now();
+            while start.elapsed() < Duration::from_millis(100) {
+                sleep(Duration::from_millis(25)).await;
+                if window.bounds_match(&bounds) {
+                    break;
+                }
+                let _ = window.set_bounds(&bounds);
+            }
+
+            println!("task finished");
+        });
 
         Ok(())
     }

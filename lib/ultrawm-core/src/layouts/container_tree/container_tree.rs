@@ -334,7 +334,7 @@ impl WindowLayout for ContainerTree {
         // First, check if the drop position is valid
         let action = self.get_tile_action(window, position).ok_or(())?;
 
-        println!("Action: {:?}", action);
+        // println!("Action: {:?}", action);
 
         // Then, check if this window is already in the tree
         let existing_window = self.windows.get(&window.id()).map(|w| w.clone());
