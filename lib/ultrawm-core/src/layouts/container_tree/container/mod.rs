@@ -201,8 +201,10 @@ impl Container {
 
         match order {
             InsertOrder::Before => {
-                new_container.add_window(new_window.clone());
                 new_container.add_window(window_to_split.clone());
+
+                // Do this last, in case new_window is already in the container
+                new_container.insert_window(0, new_window.clone());
             }
             InsertOrder::After => {
                 new_container.add_window(window_to_split.clone());
