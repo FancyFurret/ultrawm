@@ -159,9 +159,44 @@ async fn start_async(mut bridge: EventBridge) -> UltraWMResult<()> {
                         window.set_bounds(tiled_bounds);
                         window.flush().unwrap();
                     }
+                } else if drag_type == WindowDragType::Resize {
+                    if let Some(window) = wm.get_window(id) {
+                        let old_bounds = window.bounds().clone();
+                        let new_bounds = window.platform_bounds();
+                        let direction = calculate_resize_direction(&old_bounds, &new_bounds);
+                        wm.resize_window(&window, &new_bounds, direction)
+                            .unwrap_or_else(|_| {
+                                println!("Could not resize window");
+                            });
+                    }
                 }
             }
             _ => {}
         }
+    }
+}
+
+fn calculate_resize_direction(
+    old: &crate::platform::Bounds,
+    new: &crate::platform::Bounds,
+) -> crate::layouts::ResizeDirection {
+    let left_changed = new.position.x != old.position.x;
+    let right_changed =
+        (new.position.x + new.size.width as i32) != (old.position.x + old.size.width as i32);
+    let top_changed = new.position.y != old.position.y;
+    let bottom_changed =
+        (new.position.y + new.size.height as i32) != (old.position.y + old.size.height as i32);
+
+    match (left_changed, right_changed, top_changed, bottom_changed) {
+        (true, false, false, false) => crate::layouts::ResizeDirection::Left,
+        (false, true, false, false) => crate::layouts::ResizeDirection::Right,
+        (false, false, true, false) => crate::layouts::ResizeDirection::Top,
+        (false, false, false, true) => crate::layouts::ResizeDirection::Bottom,
+        (true, false, true, false) => crate::layouts::ResizeDirection::TopLeft,
+        (false, true, true, false) => crate::layouts::ResizeDirection::TopRight,
+        (true, false, false, true) => crate::layouts::ResizeDirection::BottomLeft,
+        (false, true, false, true) => crate::layouts::ResizeDirection::BottomRight,
+        // Default/fallback
+        _ => crate::layouts::ResizeDirection::Right,
     }
 }

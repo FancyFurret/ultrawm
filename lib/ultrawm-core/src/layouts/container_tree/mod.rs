@@ -45,6 +45,52 @@ impl Side {
     }
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ResizeDirection {
+    Left,
+    TopLeft,
+    Top,
+    TopRight,
+    Right,
+    BottomRight,
+    Bottom,
+    BottomLeft,
+}
+
+impl ResizeDirection {
+    pub fn has_left(&self) -> bool {
+        match self {
+            ResizeDirection::Left | ResizeDirection::TopLeft | ResizeDirection::BottomLeft => true,
+            _ => false,
+        }
+    }
+
+    pub fn has_right(&self) -> bool {
+        match self {
+            ResizeDirection::Right | ResizeDirection::TopRight | ResizeDirection::BottomRight => {
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn has_top(&self) -> bool {
+        match self {
+            ResizeDirection::Top | ResizeDirection::TopLeft | ResizeDirection::TopRight => true,
+            _ => false,
+        }
+    }
+
+    pub fn has_bottom(&self) -> bool {
+        match self {
+            ResizeDirection::Bottom
+            | ResizeDirection::BottomLeft
+            | ResizeDirection::BottomRight => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug)]
 enum TileAction {
     FillRoot,

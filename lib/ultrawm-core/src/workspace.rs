@@ -1,5 +1,5 @@
 use crate::config::ConfigRef;
-use crate::layouts::WindowLayout;
+use crate::layouts::{ResizeDirection, WindowLayout};
 use crate::platform::{Bounds, Position, WindowId};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
@@ -65,7 +65,17 @@ impl Workspace {
     ) -> Result<InsertResult, ()> {
         let action = self.layout.insert_window(window, position)?;
         self.windows.insert(window.id(), window.clone());
+        // TODO: If the layout requested a swap, replace the window
         Ok(action)
+    }
+
+    pub fn resize_window(
+        &mut self,
+        window: &WindowRef,
+        bounds: &Bounds,
+        direction: ResizeDirection,
+    ) {
+        self.layout.resize_window(window, bounds, direction);
     }
 
     pub fn flush_windows(&mut self) -> Result<(), ()> {

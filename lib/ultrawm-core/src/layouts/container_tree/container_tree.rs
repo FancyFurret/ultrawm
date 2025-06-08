@@ -4,13 +4,14 @@ use std::collections::HashMap;
 use crate::config::ConfigRef;
 use crate::layouts::container_tree::container::{
     Container, ContainerChildRef, ContainerRef, ContainerWindow, ContainerWindowRef,
+    ResizeDistribution,
 };
 use crate::layouts::container_tree::serialize::serialize_tree;
 use crate::layouts::container_tree::{
     Direction, TileAction, MOUSE_ADD_TO_PARENT_PREVIEW_RATIO, MOUSE_ADD_TO_PARENT_THRESHOLD,
     MOUSE_SPLIT_PREVIEW_RATIO, MOUSE_SPLIT_THRESHOLD, MOUSE_SWAP_THRESHOLD,
 };
-use crate::layouts::{Side, WindowLayout};
+use crate::layouts::{ResizeDirection, Side, WindowLayout};
 use crate::platform::{Bounds, PlatformWindowImpl, Position, WindowId};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
@@ -403,6 +404,62 @@ impl WindowLayout for ContainerTree {
         let parent = window.parent();
         parent.remove_child(&ContainerChildRef::Window(window.clone()));
         Ok(())
+    }
+
+    fn resize_window(&mut self, window: &WindowRef, bounds: &Bounds, direction: ResizeDirection) {
+        let container_window = if let Some(w) = self.windows.get(&window.id()) {
+            w.clone()
+        } else {
+            return; // Not managed by this layout
+        };
+
+        let mut parent = container_window.parent();
+
+        let mut needs_horizontal = direction.has_left() || direction.has_right();
+        let mut needs_vertical = direction.has_top() || direction.has_bottom();
+
+        let bounds = bounds.clone();
+
+        println!("resizing in direction: {:?}", direction);
+        println!("needs_horizontal: {:?}", needs_horizontal);
+        println!("needs_vertical: {:?}", needs_vertical);
+
+        let mut child_ref = ContainerChildRef::Window(container_window.clone());
+        while let Some(p) = Some(parent.clone()) {
+            let child_index = match p.index_of_child(&child_ref) {
+                Some(idx) => idx,
+                None => break,
+            };
+            let is_first = child_index == 0;
+            let is_last = child_index == p.children().len() - 1;
+
+            if needs_horizontal && p.direction() == Direction::Horizontal {
+                if (direction.has_left() && is_first) || (direction.has_right() && is_last) {
+                } else {
+                    p.resize_child(&child_ref, &bounds, direction, ResizeDistribution::Spread);
+                    needs_horizontal = false;
+                }
+            } else if needs_vertical && p.direction() == Direction::Vertical {
+                if (direction.has_top() && is_first) || (direction.has_bottom() && is_last) {
+                } else {
+                    p.resize_child(&child_ref, &bounds, direction, ResizeDistribution::Spread);
+                    needs_vertical = false;
+                }
+            }
+
+            if !needs_horizontal && !needs_vertical {
+                break;
+            }
+
+            child_ref = ContainerChildRef::Container(p.clone());
+            if let Some(grandparent) = p.parent() {
+                parent = grandparent.clone();
+            } else {
+                break;
+            }
+        }
+
+        self.root.balance();
     }
 
     fn debug_layout(&self) -> String {

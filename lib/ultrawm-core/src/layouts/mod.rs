@@ -26,5 +26,7 @@ pub trait WindowLayout: Debug {
 
     fn remove_window(&mut self, window: &WindowRef) -> Result<(), ()>;
 
+    fn resize_window(&mut self, window: &WindowRef, bounds: &Bounds, direction: ResizeDirection);
+
     fn debug_layout(&self) -> String;
 }

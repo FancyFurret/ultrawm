@@ -69,4 +69,19 @@ impl Window {
 
         Ok(())
     }
+
+    pub fn platform_bounds(&self) -> Bounds {
+        let mut bounds = self.platform_window().size().clone();
+        bounds.width += self.config.window_gap as u32;
+        bounds.height += self.config.window_gap as u32;
+
+        let mut position = self.platform_window().position().clone();
+        position.x -= self.config.window_gap as i32 / 2;
+        position.y -= self.config.window_gap as i32 / 2;
+
+        Bounds {
+            position,
+            size: bounds,
+        }
+    }
 }

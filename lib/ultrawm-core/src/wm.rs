@@ -1,5 +1,5 @@
 use crate::config::{Config, ConfigRef};
-use crate::layouts::ContainerTree;
+use crate::layouts::{ContainerTree, ResizeDirection};
 use crate::partition::{Partition, PartitionId};
 use crate::platform::{
     Bounds, Platform, PlatformImpl, PlatformResult, PlatformWindow, PlatformWindowImpl, Position,
@@ -107,6 +107,23 @@ impl WindowManager {
         for workspace in self.workspaces.values_mut() {
             if workspace.remove_window(&window).is_ok() {
                 self.windows.remove(&id);
+                workspace.flush_windows()?;
+                return Ok(());
+            }
+        }
+
+        Err(())
+    }
+
+    pub fn resize_window(
+        &mut self,
+        window: &WindowRef,
+        bounds: &Bounds,
+        direction: ResizeDirection,
+    ) -> Result<(), ()> {
+        for workspace in self.workspaces.values_mut() {
+            if workspace.has_window(window.id()) {
+                workspace.resize_window(window, bounds, direction);
                 workspace.flush_windows()?;
                 return Ok(());
             }
