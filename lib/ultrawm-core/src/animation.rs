@@ -34,17 +34,32 @@ impl Interpolatable for u8 {
 use crate::platform::Bounds;
 impl Interpolatable for Bounds {
     fn interpolate(&self, target: &Self, t: f64) -> Self {
-        let x = self.position.x + ((target.position.x - self.position.x) as f64 * t).round() as i32;
-        let y = self.position.y + ((target.position.y - self.position.y) as f64 * t).round() as i32;
-        let w = self.size.width as f64
-            + ((target.size.width as i32 - self.size.width as i32) as f64 * t).round() as f64;
-        let h = self.size.height as f64
-            + ((target.size.height as i32 - self.size.height as i32) as f64 * t).round() as f64;
+        // Convert everything to f64 first to avoid intermediate rounding
+        let start_x = self.position.x as f64;
+        let start_y = self.position.y as f64;
+        let start_w = self.size.width as f64;
+        let start_h = self.size.height as f64;
+
+        let end_x = target.position.x as f64;
+        let end_y = target.position.y as f64;
+        let end_w = target.size.width as f64;
+        let end_h = target.size.height as f64;
+
+        // Do all calculations in f64
+        let x = start_x + (end_x - start_x) * t;
+        let y = start_y + (end_y - start_y) * t;
+        let w = start_w + (end_w - start_w) * t;
+        let h = start_h + (end_h - start_h) * t;
+
+        // Round only at the very end when converting back to integers
         Bounds {
-            position: crate::platform::Position { x, y },
+            position: crate::platform::Position {
+                x: x.round() as i32,
+                y: y.round() as i32,
+            },
             size: crate::platform::Size {
-                width: w as u32,
-                height: h as u32,
+                width: w.round() as u32,
+                height: h.round() as u32,
             },
         }
     }
