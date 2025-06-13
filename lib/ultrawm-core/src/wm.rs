@@ -1,4 +1,4 @@
-use crate::config::{Config, ConfigRef};
+use crate::config::Config;
 use crate::drag_handle::DragHandle;
 use crate::layouts::{ContainerTree, ResizeDirection};
 use crate::partition::{Partition, PartitionId};
@@ -14,7 +14,6 @@ use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct WindowManager {
-    config: ConfigRef,
     windows: HashMap<WindowId, WindowRef>,
     partitions: HashMap<PartitionId, Partition>,
     workspaces: HashMap<WorkspaceId, Workspace>,
@@ -22,7 +21,8 @@ pub struct WindowManager {
 
 impl WindowManager {
     pub fn new() -> PlatformResult<Self> {
-        let config = Rc::new(Config::default());
+        // TODO: Load from file
+        let _config = Config::current();
 
         let displays = Platform::list_all_displays()?;
 
@@ -38,7 +38,7 @@ impl WindowManager {
         // Sort by window id so that re-running the WM is more stable
         let mut windows = Platform::list_visible_windows()?
             .iter()
-            .map(|w| Rc::new(Window::new(w.clone(), config.clone())))
+            .map(|w| Rc::new(Window::new(w.clone())))
             .collect::<Vec<_>>();
         windows.sort_by_key(|w| w.id());
         let windows_map: HashMap<WindowId, WindowRef> =
@@ -50,7 +50,6 @@ impl WindowManager {
             .map(|partition| {
                 let windows = Self::get_windows_in_bounds(&mut windows, partition.bounds());
                 let workspace = Workspace::new::<ContainerTree>(
-                    config.clone(),
                     partition.bounds().clone(),
                     &windows,
                     "Default".to_string(),
@@ -65,7 +64,6 @@ impl WindowManager {
         }
 
         Ok(Self {
-            config,
             partitions,
             workspaces,
             windows: windows_map,
@@ -85,10 +83,10 @@ impl WindowManager {
             return Ok(());
         }
 
-        let window = Rc::new(Window::new(window, self.config.clone()));
+        let window = Rc::new(Window::new(window));
         self.windows.insert(window.id(), window.clone());
 
-        if !self.config.float_new_windows {
+        if !Config::float_new_windows() {
             self.tile_window(window.id(), &window.bounds().position)?;
         }
 
@@ -185,10 +183,6 @@ impl WindowManager {
         windows_in_partition
     }
 
-    pub fn config(&self) -> ConfigRef {
-        self.config.clone()
-    }
-
     /// Returns a list of drag handles for the workspace that covers the given position.
     pub fn drag_handles(&self, position: &Position) -> Vec<DragHandle> {
         if let Some(workspace) = self.get_workspace_at_position(position) {
@@ -200,7 +194,7 @@ impl WindowManager {
 
     /// Finds the first drag handle that contains the given position (if any).
     pub fn drag_handle_at_position(&self, position: &Position) -> Option<DragHandle> {
-        let thickness = self.config.drag_handle_width as i32;
+        let thickness = Config::drag_handle_width() as i32;
         self.drag_handles(position)
             .into_iter()
             .find(|h| match h.orientation {

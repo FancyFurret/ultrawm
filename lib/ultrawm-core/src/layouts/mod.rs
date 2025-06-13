@@ -1,4 +1,3 @@
-use crate::config::ConfigRef;
 use crate::drag_handle::DragHandle;
 use crate::platform::{Bounds, Position};
 use crate::tile_result::InsertResult;
@@ -9,7 +8,7 @@ use std::fmt::Debug;
 mod container_tree;
 
 pub trait WindowLayout: Debug {
-    fn new(config: ConfigRef, bounds: Bounds, windows: &Vec<WindowRef>) -> Self
+    fn new(bounds: Bounds, windows: &Vec<WindowRef>) -> Self
     where
         Self: Sized;
 

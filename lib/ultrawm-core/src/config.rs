@@ -1,8 +1,8 @@
-use std::rc::Rc;
+use once_cell::sync::Lazy;
+use std::sync::Arc;
+use std::sync::RwLock;
 
-pub type ConfigRef = Rc<Config>;
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
     /// The number of pixels between windows
     pub window_gap: u32,
@@ -24,6 +24,70 @@ pub struct Config {
     pub drag_handle_color: (u8, u8, u8),
     /// Opacity of drag handle highlight (0.0 - 1.0)
     pub drag_handle_opacity: f32,
+}
+
+static CURRENT_CONFIG: Lazy<Arc<RwLock<Config>>> =
+    Lazy::new(|| Arc::new(RwLock::new(Config::default())));
+
+impl Config {
+    pub fn current() -> std::sync::RwLockReadGuard<'static, Config> {
+        CURRENT_CONFIG.read().unwrap()
+    }
+
+    pub fn update<F>(f: F)
+    where
+        F: FnOnce(&mut Config),
+    {
+        if let Ok(mut config) = CURRENT_CONFIG.write() {
+            f(&mut config);
+        }
+    }
+
+    pub fn reset() {
+        if let Ok(mut config) = CURRENT_CONFIG.write() {
+            *config = Config::default();
+        }
+    }
+
+    pub fn window_gap() -> u32 {
+        Self::current().window_gap
+    }
+
+    pub fn partition_gap() -> u32 {
+        Self::current().partition_gap
+    }
+
+    pub fn float_new_windows() -> bool {
+        Self::current().float_new_windows
+    }
+
+    pub fn tile_preview_fps() -> u32 {
+        Self::current().tile_preview_fps
+    }
+
+    pub fn tile_preview_animation_ms() -> u32 {
+        Self::current().tile_preview_animation_ms
+    }
+
+    pub fn tile_preview_fade_animate() -> bool {
+        Self::current().tile_preview_fade_animate
+    }
+
+    pub fn tile_preview_move_animate() -> bool {
+        Self::current().tile_preview_move_animate
+    }
+
+    pub fn drag_handle_width() -> u32 {
+        Self::current().drag_handle_width
+    }
+
+    pub fn drag_handle_color() -> (u8, u8, u8) {
+        Self::current().drag_handle_color
+    }
+
+    pub fn drag_handle_opacity() -> f32 {
+        Self::current().drag_handle_opacity
+    }
 }
 
 impl Default for Config {

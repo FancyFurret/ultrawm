@@ -1,4 +1,3 @@
-use crate::config::ConfigRef;
 use crate::drag_handle::DragHandle;
 use crate::layouts::{ResizeDirection, WindowLayout};
 use crate::platform::{Bounds, Position, WindowId};
@@ -21,13 +20,12 @@ static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 impl Workspace {
     pub fn new<TLayout: WindowLayout + 'static>(
-        config: ConfigRef,
         bounds: Bounds,
         windows: &Vec<WindowRef>,
         name: String,
     ) -> Self {
         let id = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let layout = Box::new(TLayout::new(config, bounds, windows));
+        let layout = Box::new(TLayout::new(bounds, windows));
         let windows = windows.iter().map(|w| (w.id(), w.clone())).collect();
         Self {
             id,

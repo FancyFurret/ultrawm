@@ -1,7 +1,6 @@
 pub use container_ref::*;
 pub use container_window::*;
 
-use crate::config::ConfigRef;
 use crate::layouts::{Direction, ResizeDirection};
 use crate::platform::Bounds;
 use std::cell::{Ref, RefCell, RefMut};
@@ -47,7 +46,6 @@ pub enum ResizeDistribution {
 
 #[derive(Debug)]
 pub struct Container {
-    config: ConfigRef,
     bounds: RefCell<Bounds>,
     direction: Direction,
     parent: Option<RefCell<ParentContainerRef>>,
@@ -63,18 +61,16 @@ impl PartialEq for Container {
 }
 
 impl Container {
-    pub fn new_root(config: ConfigRef, bounds: Bounds) -> ContainerRef {
-        Self::new(config, bounds, Direction::Horizontal, None)
+    pub fn new_root(bounds: Bounds) -> ContainerRef {
+        Self::new(bounds, Direction::Horizontal, None)
     }
 
     fn new(
-        config: ConfigRef,
         bounds: Bounds,
         direction: Direction,
         parent: Option<ParentContainerRef>,
     ) -> ContainerRef {
         let self_rc = Rc::new(Self {
-            config,
             bounds: RefCell::new(bounds),
             direction,
             parent: parent.map(RefCell::new),
@@ -201,7 +197,6 @@ impl Container {
         order: InsertOrder,
     ) -> ContainerRef {
         let new_container = Container::new(
-            self.config.clone(),
             window_to_split.bounds().clone(),
             self.direction.opposite(),
             Some(self.self_ref()),
@@ -230,14 +225,12 @@ impl Container {
 
     pub fn split_self(&self, new_window: ContainerWindowRef, order: InsertOrder) -> ContainerRef {
         let split_container = Container::new(
-            self.config.clone(),
             self.bounds().clone(),
             self.direction.opposite(),
             Some(self.self_ref()),
         );
 
         let new_container = Container::new(
-            self.config.clone(),
             self.bounds().clone(),
             self.direction,
             Some(split_container.self_ref()),

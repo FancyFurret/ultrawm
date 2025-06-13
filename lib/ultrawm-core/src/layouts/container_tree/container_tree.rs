@@ -1,7 +1,7 @@
 use std::cmp;
 use std::collections::HashMap;
 
-use crate::config::ConfigRef;
+use crate::config::Config;
 use crate::drag_handle::{DragHandle, DragHandleProvider, HandleOrientation};
 use crate::layouts::container_tree::container::{
     Container, ContainerChildRef, ContainerRef, ContainerWindow, ContainerWindowRef,
@@ -19,7 +19,6 @@ use crate::window::WindowRef;
 
 #[derive(Debug)]
 pub struct ContainerTree {
-    config: ConfigRef,
     bounds: Bounds,
     root: ContainerRef,
     windows: HashMap<WindowId, ContainerWindowRef>,
@@ -268,13 +267,15 @@ impl ContainerTree {
 }
 
 impl WindowLayout for ContainerTree {
-    fn new(config: ConfigRef, bounds: Bounds, windows: &Vec<WindowRef>) -> Self
+    fn new(bounds: Bounds, windows: &Vec<WindowRef>) -> Self
     where
         Self: Sized,
     {
         // For now, just add each window to the root container.
         // Later, we should try to keep the windows in similar positions to how they were before
         // as to not mess up the user's layout.
+
+        let config = Config::current();
 
         // Apply partition gap and invert the window gap so that the outer gap is 0
         let root_bounds = Bounds::new(
@@ -284,7 +285,7 @@ impl WindowLayout for ContainerTree {
             bounds.size.height - config.partition_gap * 2 + config.window_gap,
         );
 
-        let root = Container::new_root(config.clone(), root_bounds);
+        let root = Container::new_root(root_bounds);
 
         // Sort by x position so that they stay in somewhat the same order
         let mut windows = windows
@@ -300,7 +301,6 @@ impl WindowLayout for ContainerTree {
         }
 
         Self {
-            config,
             bounds,
             root,
             windows: windows_map,

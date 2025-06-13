@@ -1,4 +1,3 @@
-use crate::config::Config;
 use crate::layouts::container_tree::container::{
     Container, ContainerRef, ContainerWindowRef, ParentContainerRef,
 };
@@ -21,7 +20,6 @@ impl PartialEq for ContainerWindow {
 
 thread_local! {
     static TEMP_CONTAINER: ContainerRef = Container::new_root(
-        Rc::new(Config::default()),
         Bounds {
             position: Position { x: 0, y: 0 },
             size: Size {

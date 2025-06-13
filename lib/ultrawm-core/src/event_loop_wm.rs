@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::overlay_window::{OverlayWindowBackgroundStyle, OverlayWindowBorderStyle};
 use crate::{
     drag_handle::DragHandle,
@@ -25,18 +26,20 @@ impl EventLoopWM {
         let mut handle_drag_active = false;
         let mut _active_drag_handle: Option<DragHandle> = None;
         let mut hover_drag_handle: Option<DragHandle> = None;
+        let config = Config::current();
+
         let move_overlay = OverlayWindow::new(OverlayWindowConfig {
-            fade_animation_ms: if wm.config().tile_preview_fade_animate {
-                wm.config().tile_preview_animation_ms
+            fade_animation_ms: if config.tile_preview_fade_animate {
+                config.tile_preview_animation_ms
             } else {
                 0
             },
-            move_animation_ms: if wm.config().tile_preview_move_animate {
-                wm.config().tile_preview_animation_ms
+            move_animation_ms: if config.tile_preview_move_animate {
+                config.tile_preview_animation_ms
             } else {
                 0
             },
-            animation_fps: wm.config().tile_preview_fps,
+            animation_fps: config.tile_preview_fps,
             border_radius: 20.0,
             blur: true,
             background: Some(OverlayWindowBackgroundStyle {
@@ -47,17 +50,17 @@ impl EventLoopWM {
         })
         .await?;
         let handle_overlay = OverlayWindow::new(OverlayWindowConfig {
-            fade_animation_ms: if wm.config().tile_preview_fade_animate {
-                wm.config().tile_preview_animation_ms
+            fade_animation_ms: if config.tile_preview_fade_animate {
+                config.tile_preview_animation_ms
             } else {
                 0
             },
-            move_animation_ms: if wm.config().tile_preview_move_animate {
-                wm.config().tile_preview_animation_ms
+            move_animation_ms: if config.tile_preview_move_animate {
+                config.tile_preview_animation_ms
             } else {
                 0
             },
-            animation_fps: wm.config().tile_preview_fps,
+            animation_fps: config.tile_preview_fps,
             border_radius: 20.0,
             blur: true,
             background: Some(OverlayWindowBackgroundStyle {
@@ -107,7 +110,7 @@ impl EventLoopWM {
                             let preview_bounds = handle_under_cursor
                                 .as_ref()
                                 .unwrap()
-                                .preview_bounds(wm.config().drag_handle_width);
+                                .preview_bounds(config.drag_handle_width);
 
                             if !handle_overlay_shown {
                                 handle_overlay.show()?;
@@ -203,7 +206,7 @@ impl EventLoopWM {
                     _active_drag_handle = Some(handle.clone());
 
                     // Show a thin tile preview bar for the handle
-                    let mut preview_bounds = handle.preview_bounds(wm.config().drag_handle_width);
+                    let mut preview_bounds = handle.preview_bounds(config.drag_handle_width);
                     // Expand preview to full span of container along perpendicular axis for clarity
                     if handle.orientation == crate::drag_handle::HandleOrientation::Vertical {
                         preview_bounds.position.y = 0; // temp full screen; todo: use container bounds
@@ -222,8 +225,7 @@ impl EventLoopWM {
                 }
                 Some(HandleDragEvent::Drag(handle, pos)) => {
                     if handle_drag_active {
-                        let mut preview_bounds =
-                            handle.preview_bounds(wm.config().drag_handle_width);
+                        let mut preview_bounds = handle.preview_bounds(config.drag_handle_width);
                         if handle.orientation == crate::drag_handle::HandleOrientation::Vertical {
                             let clamped_x = handle.clamp_coordinate(pos.x);
                             preview_bounds.position.x =

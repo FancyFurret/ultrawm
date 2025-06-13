@@ -1,4 +1,4 @@
-use crate::config::ConfigRef;
+use crate::config::Config;
 use crate::platform::{Bounds, PlatformResult, PlatformWindow, PlatformWindowImpl, WindowId};
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
@@ -10,11 +10,10 @@ pub struct Window {
     bounds: RefCell<Bounds>,
     platform_window: RefCell<PlatformWindow>,
     dirty: RefCell<bool>,
-    config: ConfigRef,
 }
 
 impl Window {
-    pub fn new(platform_window: PlatformWindow, config: ConfigRef) -> Self {
+    pub fn new(platform_window: PlatformWindow) -> Self {
         Self {
             bounds: RefCell::new(Bounds {
                 position: platform_window.position(),
@@ -22,7 +21,6 @@ impl Window {
             }),
             platform_window: RefCell::new(platform_window),
             dirty: RefCell::new(false),
-            config,
         }
     }
 
@@ -51,19 +49,14 @@ impl Window {
         self.dirty.replace(false);
 
         let mut bounds = self.bounds.borrow().clone();
+        let config = Config::current();
 
         // Apply gap (offset from screen edge)
-        bounds.position.x += self.config.window_gap as i32 / 2;
-        bounds.position.y += self.config.window_gap as i32 / 2;
+        bounds.position.x += config.window_gap as i32 / 2;
+        bounds.position.y += config.window_gap as i32 / 2;
 
-        bounds.size.width = bounds
-            .size
-            .width
-            .saturating_sub(self.config.window_gap as u32);
-        bounds.size.height = bounds
-            .size
-            .height
-            .saturating_sub(self.config.window_gap as u32);
+        bounds.size.width = bounds.size.width.saturating_sub(config.window_gap as u32);
+        bounds.size.height = bounds.size.height.saturating_sub(config.window_gap as u32);
 
         self.platform_window.borrow().set_bounds(&bounds)?;
 
@@ -71,13 +64,15 @@ impl Window {
     }
 
     pub fn platform_bounds(&self) -> Bounds {
+        let config = Config::current();
+
         let mut bounds = self.platform_window().size().clone();
-        bounds.width += self.config.window_gap as u32;
-        bounds.height += self.config.window_gap as u32;
+        bounds.width += config.window_gap as u32;
+        bounds.height += config.window_gap as u32;
 
         let mut position = self.platform_window().position().clone();
-        position.x -= self.config.window_gap as i32 / 2;
-        position.y -= self.config.window_gap as i32 / 2;
+        position.x -= config.window_gap as i32 / 2;
+        position.y -= config.window_gap as i32 / 2;
 
         Bounds {
             position,
