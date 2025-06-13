@@ -2,6 +2,7 @@ use crate::overlay_window::{OverlayWindowBackgroundStyle, OverlayWindowBorderSty
 use crate::{
     drag_handle::DragHandle,
     drag_tracker::{WindowDragEvent, WindowDragTracker, WindowDragType},
+    event_loop_main::EventLoopMain,
     handle_tracker::{HandleDragEvent, HandleDragTracker},
     overlay_window::{OverlayWindow, OverlayWindowConfig},
     platform::{EventBridge, PlatformEvent},
@@ -9,11 +10,13 @@ use crate::{
     UltraWMResult,
 };
 use skia_safe::Color;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 pub struct EventLoopWM {}
 
 impl EventLoopWM {
-    pub async fn run(mut bridge: EventBridge) -> UltraWMResult<()> {
+    pub async fn run(mut bridge: EventBridge, shutdown: Arc<AtomicBool>) -> UltraWMResult<()> {
         println!("Handling events...");
 
         let mut wm = WindowManager::new()?;
@@ -72,7 +75,7 @@ impl EventLoopWM {
         let mut move_overlay_shown = false;
         let mut valid_tile_position = false;
 
-        loop {
+        while !shutdown.load(Ordering::SeqCst) {
             let event = bridge
                 .next_event()
                 .await
@@ -259,5 +262,9 @@ impl EventLoopWM {
                 None => {}
             }
         }
+
+        EventLoopMain::shutdown();
+        wm.cleanup()?;
+        Ok(())
     }
 }

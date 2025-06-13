@@ -4,7 +4,9 @@
 use crate::event_loop_main::EventLoopMain;
 use crate::event_loop_wm::EventLoopWM;
 use crate::platform::{EventBridge, PlatformError, PlatformEvents, PlatformEventsImpl};
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::{process, thread};
 
 mod animation;
@@ -12,7 +14,7 @@ mod config;
 mod drag_handle;
 mod drag_tracker;
 mod event_loop_main;
-mod event_loop_wm;
+pub mod event_loop_wm;
 mod handle_tracker;
 mod layouts;
 mod overlay_window;
@@ -50,7 +52,7 @@ impl From<String> for UltraWMFatalError {
     }
 }
 
-pub fn start() -> UltraWMResult<()> {
+pub fn start(shutdown: Arc<AtomicBool>) -> UltraWMResult<()> {
     let bridge = EventBridge::new();
     let dispatcher = bridge.dispatcher();
 
@@ -58,6 +60,7 @@ pub fn start() -> UltraWMResult<()> {
     let (main_ready_tx, main_ready_rx) = mpsc::channel();
 
     // Spawn the WM thread but wait for main thread to be ready
+    let shutdown_wm = shutdown.clone();
     thread::spawn(move || {
         // Wait for signal that main thread is running
         if main_ready_rx.recv().is_err() {
@@ -70,10 +73,11 @@ pub fn start() -> UltraWMResult<()> {
             .build()
             .unwrap();
 
-        tk.block_on(EventLoopWM::run(bridge)).map_err(|e| {
-            println!("Error running UltraWM: {:?}", e);
-            process::exit(1);
-        })
+        tk.block_on(EventLoopWM::run(bridge, shutdown_wm))
+            .map_err(|e| {
+                println!("Error running UltraWM: {:?}", e);
+                process::exit(1);
+            })
     });
 
     unsafe {
@@ -85,6 +89,7 @@ pub fn start() -> UltraWMResult<()> {
         return Err("Failed to signal main thread ready".into());
     }
 
+    // Start main event loop
     EventLoopMain::run()?;
 
     Ok(())

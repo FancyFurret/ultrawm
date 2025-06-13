@@ -216,4 +216,8 @@ impl WindowManager {
                 }
             })
     }
+
+    pub fn cleanup(&mut self) -> PlatformResult<()> {
+        Ok(())
+    }
 }

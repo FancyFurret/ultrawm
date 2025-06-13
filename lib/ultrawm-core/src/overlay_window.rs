@@ -61,15 +61,14 @@ pub struct OverlayWindowAnimator {
 
 impl OverlayWindow {
     pub async fn new(config: OverlayWindowConfig) -> UltraWMResult<Self> {
-        println!("Creating overlay window");
         let (tx, rx) = channel();
 
         let config_clone = config.clone();
         let animator_thread = thread::spawn(move || {
             let surface = surfaces::raster_n32_premul(skia_safe::ISize::new(100, 100)).unwrap();
             let attributes = WindowAttributes::default()
-                .with_position(PhysicalPosition::new(100, 100))
-                .with_inner_size(LogicalSize::new(100, 100))
+                .with_position(PhysicalPosition::new(0, 0))
+                .with_inner_size(LogicalSize::new(0, 0))
                 .with_decorations(false)
                 .with_transparent(true)
                 .with_blur(true)

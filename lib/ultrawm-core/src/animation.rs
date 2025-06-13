@@ -150,7 +150,8 @@ where
         if t >= 1.0 {
             t = 1.0;
             self.animating = false;
-            self.print_fps();
+            // Can be uncommented for debugging
+            // self.print_fps();
         }
         let eased_t = (self.ease_fn)(t);
         let value = self.from.interpolate(&self.to, eased_t);

@@ -32,8 +32,7 @@ impl EventDispatcher {
     }
 
     pub fn send(&self, event: PlatformEvent) {
-        self.sender
-            .send(event)
-            .expect("Error sending event to event bridge");
+        // If send fails, then the WM is shutting down.
+        let _ = self.sender.send(event);
     }
 }

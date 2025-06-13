@@ -174,7 +174,6 @@ impl PlatformOverlayImpl for WindowsPlatformOverlay {
             }
         }
 
-        // Note: Removed window.set_enable(false) as it can interfere with click-through behavior
         window.set_skip_taskbar(true);
         window.set_undecorated_shadow(false);
         window.set_corner_preference(CornerPreference::Round);

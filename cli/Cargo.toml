@@ -9,3 +9,4 @@ path = "src/main.rs"
 
 [dependencies]
 ultrawm-core = { path = "../lib/ultrawm-core" }
+ctrlc = "3.4"

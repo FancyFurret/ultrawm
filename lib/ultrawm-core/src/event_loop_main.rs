@@ -9,6 +9,7 @@ pub enum MainThreadMessage {
     RunOnMainThread {
         task: Box<dyn FnOnce(&ActiveEventLoop) + Send>,
     },
+    Shutdown,
 }
 
 pub static EVENT_LOOP_PROXY: std::sync::OnceLock<EventLoopProxy<MainThreadMessage>> =
@@ -81,6 +82,12 @@ impl EventLoopMain {
             .map_err(|_| "Failed to start event loop")?;
         Ok(())
     }
+
+    pub fn shutdown() {
+        if let Some(proxy) = EVENT_LOOP_PROXY.get() {
+            let _ = proxy.send_event(MainThreadMessage::Shutdown);
+        }
+    }
 }
 
 struct ActiveAnimation {
@@ -100,6 +107,9 @@ impl ApplicationHandler<MainThreadMessage> for App {
         match event {
             MainThreadMessage::RunOnMainThread { task } => {
                 task(event_loop);
+            }
+            MainThreadMessage::Shutdown => {
+                event_loop.exit();
             }
         }
     }
