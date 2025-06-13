@@ -1,11 +1,21 @@
 use crate::platform::windows::{window_is_manageable, WindowsPlatformWindow};
-use crate::platform::{EventDispatcher, MouseButton, PlatformEvent, PlatformEventsImpl, PlatformResult, PlatformWindowImpl, Position, WindowId};
+use crate::platform::{
+    EventDispatcher, MouseButton, PlatformEvent, PlatformEventsImpl, PlatformResult,
+    PlatformWindowImpl, Position, WindowId,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
-use windows::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
-use windows::Win32::UI::WindowsAndMessaging::{CallNextHookEx, GetCursorPos, SetWindowsHookExW, EVENT_OBJECT_DESTROY, EVENT_OBJECT_FOCUS, EVENT_OBJECT_SHOW, EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MOVESIZESTART, HHOOK, WH_MOUSE_LL, WINEVENT_OUTOFCONTEXT, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_RBUTTONDOWN, WM_RBUTTONUP};
+use windows::Win32::UI::HiDpi::{
+    SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+};
+use windows::Win32::UI::WindowsAndMessaging::{
+    CallNextHookEx, GetCursorPos, SetWindowsHookExW, EVENT_OBJECT_DESTROY, EVENT_OBJECT_FOCUS,
+    EVENT_OBJECT_SHOW, EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZESTART,
+    EVENT_SYSTEM_MOVESIZESTART, HHOOK, WH_MOUSE_LL, WINEVENT_OUTOFCONTEXT, WM_LBUTTONDOWN,
+    WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_RBUTTONDOWN, WM_RBUTTONUP,
+};
 
 static EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
 static mut MOUSE_HOOK: Option<HHOOK> = None;

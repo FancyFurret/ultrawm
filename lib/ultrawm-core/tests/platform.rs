@@ -1,6 +1,6 @@
 #[cfg(feature = "platform-tests")]
 mod platform_tests {
-    use ultrawm_core::platform::{Platform, PlatformImpl, PlatformEvents, PlatformEventsImpl};
+    use ultrawm_core::platform::{Platform, PlatformEvents, PlatformEventsImpl, PlatformImpl};
 
     fn init() {
         unsafe {

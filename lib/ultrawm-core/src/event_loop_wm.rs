@@ -20,7 +20,7 @@ impl EventLoopWM {
         let mut drag_tracker = WindowDragTracker::new();
         let mut handle_tracker = HandleDragTracker::new();
         let mut handle_drag_active = false;
-        let mut active_drag_handle: Option<DragHandle> = None;
+        let mut _active_drag_handle: Option<DragHandle> = None;
         let mut hover_drag_handle: Option<DragHandle> = None;
         let move_overlay = OverlayWindow::new(OverlayWindowConfig {
             fade_animation_ms: if wm.config().tile_preview_fade_animate {
@@ -195,9 +195,9 @@ impl EventLoopWM {
 
             // Handle drag-handle based resizing
             match handle_tracker.handle_event(&event, &wm) {
-                Some(HandleDragEvent::Start(handle, pos)) => {
+                Some(HandleDragEvent::Start(handle, _pos)) => {
                     handle_drag_active = true;
-                    active_drag_handle = Some(handle.clone());
+                    _active_drag_handle = Some(handle.clone());
 
                     // Show a thin tile preview bar for the handle
                     let mut preview_bounds = handle.preview_bounds(wm.config().drag_handle_width);

@@ -4,4 +4,5 @@ members = [
     "cli",
     "lib/ultrawm-core",
     "lib/macos/application-services",
+    "xtask",
 ]

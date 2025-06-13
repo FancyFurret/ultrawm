@@ -1,6 +1,12 @@
 # UltraWM
 
-**UltraWM** is a next-generation, cross-platform tiling window manager written in Rust. Designed for power users with ultrawide or multi-monitor setups, UltraWM enables you to partition your physical displays into multiple virtual monitors, tile windows seamlessly across monitor borders (including picture-by-picture setups), and maintain a consistent, advanced tiling experience across operating systems. UltraWM supports animated previews, flexible layouts, and is built to be highly configurable and extensible. It features robust mouse-driven window management—drag, resize, and tile windows directly with the mouse—while also supporting (and planning to expand) keybind/hotkey controls. While it currently supports Windows and macOS, Linux support is planned.
+**UltraWM** is a next-generation, cross-platform tiling window manager written in Rust. Designed for power users with
+ultrawide or multi-monitor setups, UltraWM enables you to partition your physical displays into multiple virtual
+monitors, tile windows seamlessly across monitor borders (including picture-by-picture setups), and maintain a
+consistent, advanced tiling experience across operating systems. UltraWM supports animated previews, flexible layouts,
+and is built to be highly configurable and extensible. It features robust mouse-driven window management—drag, resize,
+and tile windows directly with the mouse—while also supporting (and planning to expand) keybind/hotkey controls. While
+it currently supports Windows and macOS, Linux support is planned.
 
 ---
 
@@ -19,7 +25,9 @@
 
 ## Terminology
 
-- **Partition**: A "virtual display"—a region of a physical monitor (or the whole monitor) that acts as its own independent screen. Each partition can have multiple workspaces that you can swap between. Each workspace manages windows according to a layout.
+- **Partition**: A "virtual display"—a region of a physical monitor (or the whole monitor) that acts as its own
+  independent screen. Each partition can have multiple workspaces that you can swap between. Each workspace manages
+  windows according to a layout.
 - **Workspace**: A virtual desktop within a partition, containing a set of windows and a layout.
 - **Layout**: The algorithm that arranges windows within a workspace (e.g., tiling, tabbed, floating).
 
@@ -27,7 +35,8 @@
 
 ## Layouts
 
-- **Container Tree**: The default layout, allowing flexible, nested splits and arrangements of windows—well-suited for ultrawide and complex workflows.
+- **Container Tree**: The default layout, allowing flexible, nested splits and arrangements of windows—well-suited for
+  ultrawide and complex workflows.
 - _More layouts may be added down the road_
 
 ---
@@ -63,10 +72,14 @@ On first run, UltraWM will use default configuration values.
 
 ---
 
+## Developing
+
+Before commiting, please run and ensure `cargo tidy` passes to reformat and fix issues.
+
 ## Roadmap
 
-| Feature/Goal                     | Status     |
-| -------------------------------- | ---------- |
+| Feature/Goal                     | Status    |
+|----------------------------------|-----------|
 | macOS support                    | ✅ Done    |
 | Windows support                  | ✅ Done    |
 | Linux support                    | ⏳ Planned |

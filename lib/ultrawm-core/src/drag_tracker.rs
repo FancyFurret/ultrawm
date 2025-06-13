@@ -109,10 +109,9 @@ impl WindowDragTracker {
                         // If the size has changed, then we're resizing
                         if current_bounds.size != drag.start_bounds.size {
                             let start_bounds = drag.start_bounds.clone();
-                            drag.drag_type = Some(WindowDragType::Resize(Self::calculate_resize_direction(
-                                &start_bounds,
-                                &current_bounds
-                            )));
+                            drag.drag_type = Some(WindowDragType::Resize(
+                                Self::calculate_resize_direction(&start_bounds, &current_bounds),
+                            ));
                         } else {
                             drag.drag_type = Some(WindowDragType::Move);
                         }
@@ -132,7 +131,6 @@ impl WindowDragTracker {
 
         None
     }
-
 
     fn calculate_resize_direction(
         old: &crate::platform::Bounds,

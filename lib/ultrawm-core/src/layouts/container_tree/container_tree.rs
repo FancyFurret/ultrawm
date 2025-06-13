@@ -500,15 +500,12 @@ impl ContainerTree {
         if children.len() <= 1 {
             // No split boundaries with single child
         } else {
-            let cfg_width = self.config.drag_handle_width as i32;
             match container.direction() {
                 Direction::Horizontal => {
                     // Vertical handles between horizontally arranged children
                     for idx in 0..children.len() - 1 {
-                        let left_child = &children[idx];
                         let right_child = &children[idx + 1];
                         let boundary_x = right_child.bounds().position.x; // leading edge of right child
-                        let x = boundary_x - cfg_width / 2;
                         let center = Position {
                             x: boundary_x,
                             y: container.bounds().center().y,
@@ -526,10 +523,8 @@ impl ContainerTree {
                 Direction::Vertical => {
                     // Horizontal handles between vertically stacked children
                     for idx in 0..children.len() - 1 {
-                        let top_child = &children[idx];
                         let bottom_child = &children[idx + 1];
                         let boundary_y = bottom_child.bounds().position.y; // top edge of bottom child
-                        let y = boundary_y - cfg_width / 2;
                         let center = Position {
                             x: container.bounds().center().x,
                             y: boundary_y,

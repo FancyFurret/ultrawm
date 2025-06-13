@@ -115,7 +115,7 @@ where
         }
 
         // Track frame timing
-        if let Some(last_frame) = self.last_frame_time {
+        if let Some(_last_frame) = self.last_frame_time {
             self.frame_times.push_back(now);
             if self.frame_times.len() > 60 {
                 self.frame_times.pop_front();

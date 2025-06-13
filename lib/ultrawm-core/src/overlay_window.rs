@@ -4,17 +4,10 @@ use std::time::{Duration, Instant};
 
 use crate::animation::{ease_in_out_cubic, Animator};
 use crate::event_loop_main::run_on_main_thread_blocking;
-use crate::platform::traits::PlatformImpl;
-use crate::platform::{
-    Bounds, Platform, PlatformOverlay, PlatformOverlayImpl, PlatformResult, WindowId,
-};
+use crate::platform::{Bounds, PlatformOverlay, PlatformOverlayImpl, PlatformResult, WindowId};
 use crate::UltraWMResult;
-use skia_safe::luma_color_filter::new;
 use skia_safe::{surfaces, Color, Paint, PaintStyle, RRect, Rect, Surface};
-use winit::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize};
-use winit::raw_window_handle::{
-    HasRawWindowHandle, HasWindowHandle, RawWindowHandle, WindowHandle,
-};
+use winit::dpi::{LogicalSize, PhysicalPosition};
 use winit::window::{Window, WindowAttributes, WindowLevel};
 
 #[derive(Clone)]

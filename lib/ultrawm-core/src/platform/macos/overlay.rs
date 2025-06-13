@@ -104,7 +104,6 @@ impl PlatformOverlayImpl for MacOSPlatformOverlay {
                 let ns_window = ns_view.window();
 
                 if let Some(ns_window) = ns_window {
-                    
                     ns_window.setAlphaValue(0.0);
                     let mut rect = ns_window.frame();
                     rect.origin.x = 0.0;

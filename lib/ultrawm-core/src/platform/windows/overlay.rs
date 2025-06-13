@@ -1,7 +1,7 @@
 use crate::overlay_window::OverlayWindowConfig;
 use crate::platform::windows::ffi::enable_composition_blur;
 use crate::platform::{Bounds, PlatformOverlayImpl, PlatformResult, WindowId};
-use skia_safe::{op, Image};
+use skia_safe::Image;
 use windows::Win32::Foundation::{COLORREF, HWND};
 use windows::Win32::Graphics::Dwm::{
     DwmSetWindowAttribute, DWMWA_TRANSITIONS_FORCEDISABLED, DWMWA_USE_IMMERSIVE_DARK_MODE,

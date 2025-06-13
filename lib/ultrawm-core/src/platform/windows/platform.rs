@@ -1,17 +1,12 @@
 use crate::platform::windows::{window_is_manageable, WindowsPlatformWindow};
 use crate::platform::{
-    Bounds, Display, DisplayId, PlatformImpl, PlatformResult, PlatformWindow, Position, WindowId,
+    Bounds, Display, DisplayId, PlatformImpl, PlatformResult, PlatformWindow, Position,
 };
-use windows::Win32::Foundation::{BOOL, COLORREF, HWND, LPARAM, POINT, RECT};
+use windows::Win32::Foundation::{BOOL, HWND, LPARAM, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
     EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFOEXW,
 };
-use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetCursorPos, SetLayeredWindowAttributes, SetWindowPos, LWA_ALPHA,
-    SWP_ASYNCWINDOWPOS,
-};
-use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use winit::window::Window;
+use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetCursorPos};
 
 pub struct WindowsPlatform;
 

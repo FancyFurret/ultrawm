@@ -4,9 +4,7 @@ use crate::platform::{
     Bounds, Display, EventDispatcher, PlatformEventsImpl, PlatformImpl, PlatformResult,
     PlatformWindow, PlatformWindowImpl, Position, ProcessId, Size, WindowId,
 };
-use skia_safe::image_filters::offset;
 use skia_safe::Image;
-use winit::raw_window_handle::RawWindowHandle;
 use winit::window::Window;
 
 pub struct MockPlatformEvents;

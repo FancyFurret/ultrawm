@@ -1,16 +1,16 @@
-use std::collections::HashSet;
+use crate::platform::macos::ffi::{window_info, AXUIElementExt, CFArrayExt, CFDictionaryExt};
+use crate::platform::macos::ObserveError::NotManageable;
+use crate::platform::macos::{app_is_manageable, window_is_manageable, MacOSPlatformWindow};
+use crate::platform::{Bounds, Display, PlatformImpl, PlatformResult, Position, ProcessId};
+use application_services::accessibility_ui::AXUIElement;
+use application_services::pid_t;
 use core_graphics::display::{kCGNullWindowID, kCGWindowListOptionAll};
 use core_graphics::window::copy_window_info;
 use icrate::AppKit::{NSDeviceDescriptionKey, NSEvent, NSScreen};
 use icrate::Foundation::{CGPoint, CGRect, CGSize, NSNumber, NSRect};
 use objc2::rc::Id;
+use std::collections::HashSet;
 use winit::window::Window;
-use application_services::accessibility_ui::AXUIElement;
-use application_services::pid_t;
-use crate::platform::macos::ffi::{window_info, AXUIElementExt, CFArrayExt, CFDictionaryExt};
-use crate::platform::{Bounds, Display, PlatformImpl, PlatformResult, Position, ProcessId};
-use crate::platform::macos::{app_is_manageable, window_is_manageable, MacOSPlatformWindow};
-use crate::platform::macos::ObserveError::NotManageable;
 
 pub struct MacOSPlatform;
 

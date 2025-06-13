@@ -1,5 +1,4 @@
 use skia_safe::Image;
-use winit::raw_window_handle::RawWindowHandle;
 use winit::window::Window;
 
 use crate::platform::PlatformWindow;
@@ -37,7 +36,7 @@ where
 
 pub trait PlatformOverlayImpl {
     fn get_window_id(window: &Window) -> PlatformResult<WindowId>;
-    
+
     fn set_window_bounds(window_id: WindowId, bounds: Bounds) -> PlatformResult<()>;
 
     fn set_window_opacity(window_id: WindowId, opacity: f32) -> PlatformResult<()>;
