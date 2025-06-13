@@ -1,4 +1,5 @@
 use crate::config::{Config, ConfigRef};
+use crate::drag_handle::DragHandle;
 use crate::layouts::{ContainerTree, ResizeDirection};
 use crate::partition::{Partition, PartitionId};
 use crate::platform::{
@@ -186,5 +187,33 @@ impl WindowManager {
 
     pub fn config(&self) -> ConfigRef {
         self.config.clone()
+    }
+
+    /// Returns a list of drag handles for the workspace that covers the given position.
+    pub fn drag_handles(&self, position: &Position) -> Vec<DragHandle> {
+        if let Some(workspace) = self.get_workspace_at_position(position) {
+            workspace.drag_handles()
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Finds the first drag handle that contains the given position (if any).
+    pub fn drag_handle_at_position(&self, position: &Position) -> Option<DragHandle> {
+        let thickness = self.config.drag_handle_width as i32;
+        self.drag_handles(position)
+            .into_iter()
+            .find(|h| match h.orientation {
+                crate::drag_handle::HandleOrientation::Vertical => {
+                    let dx = (position.x - h.center.x).abs();
+                    let dy = (position.y - h.center.y).abs();
+                    dx <= thickness / 2 && dy <= h.length as i32 / 2
+                }
+                crate::drag_handle::HandleOrientation::Horizontal => {
+                    let dx = (position.x - h.center.x).abs();
+                    let dy = (position.y - h.center.y).abs();
+                    dy <= thickness / 2 && dx <= h.length as i32 / 2
+                }
+            })
     }
 }

@@ -1,10 +1,10 @@
 #[cfg(feature = "platform-tests")]
 mod platform_tests {
-    use ultrawm_core::platform::{Platform, PlatformImpl, PlatformInit, PlatformInitImpl};
+    use ultrawm_core::platform::{Platform, PlatformImpl, PlatformEvents, PlatformEventsImpl};
 
     fn init() {
         unsafe {
-            PlatformInit::initialize().expect("Error initializing platform");
+            PlatformEvents::initialize().expect("Error initializing platform");
         }
     }
 

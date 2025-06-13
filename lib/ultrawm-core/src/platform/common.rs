@@ -71,9 +71,9 @@ pub enum MouseButton {
 
 pub type DisplayId = u32;
 pub type ProcessId = u32;
-pub type WindowId = u32;
+pub type WindowId = u64;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Bounds {
     pub position: Position,
     pub size: Size,
@@ -113,7 +113,7 @@ impl Bounds {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Size {
     pub width: u32,
     pub height: u32,
@@ -125,7 +125,7 @@ impl Size {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Position {
     pub x: i32,
     pub y: i32,

@@ -1,4 +1,5 @@
 use crate::config::ConfigRef;
+use crate::drag_handle::DragHandle;
 use crate::platform::{Bounds, Position};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
@@ -27,6 +28,11 @@ pub trait WindowLayout: Debug {
     fn remove_window(&mut self, window: &WindowRef) -> Result<(), ()>;
 
     fn resize_window(&mut self, window: &WindowRef, bounds: &Bounds, direction: ResizeDirection);
+
+    /// Returns a list of drag handles for this layout (empty by default)
+    fn drag_handles(&self) -> Vec<DragHandle> {
+        Vec::new()
+    }
 
     fn debug_layout(&self) -> String;
 }

@@ -2,6 +2,7 @@ use std::cmp;
 use std::collections::HashMap;
 
 use crate::config::ConfigRef;
+use crate::drag_handle::{DragHandle, DragHandleProvider, HandleOrientation};
 use crate::layouts::container_tree::container::{
     Container, ContainerChildRef, ContainerRef, ContainerWindow, ContainerWindowRef,
     ResizeDistribution,
@@ -311,7 +312,7 @@ impl WindowLayout for ContainerTree {
     }
 
     fn get_preview_bounds(&self, window: &WindowRef, position: &Position) -> Option<Bounds> {
-        return match self.get_tile_action(window, position)? {
+        match self.get_tile_action(window, position)? {
             TileAction::FillRoot => Some(self.root().bounds().clone()),
             TileAction::Swap(child) => Some(child.bounds().clone()),
             TileAction::AddToParent(child, side) => Some(Self::get_preview_for_side(
@@ -324,7 +325,7 @@ impl WindowLayout for ContainerTree {
                 side,
                 MOUSE_SPLIT_PREVIEW_RATIO,
             )),
-        };
+        }
     }
 
     fn insert_window(
@@ -334,8 +335,6 @@ impl WindowLayout for ContainerTree {
     ) -> Result<InsertResult, ()> {
         // First, check if the drop position is valid
         let action = self.get_tile_action(window, position).ok_or(())?;
-
-        // println!("Action: {:?}", action);
 
         // Then, check if this window is already in the tree
         let existing_window = self.windows.get(&window.id()).map(|w| w.clone());
@@ -479,5 +478,80 @@ impl WindowLayout for ContainerTree {
         }
 
         result
+    }
+
+    fn drag_handles(&self) -> Vec<DragHandle> {
+        DragHandleProvider::drag_handles(self)
+    }
+}
+
+impl DragHandleProvider for ContainerTree {
+    fn drag_handles(&self) -> Vec<DragHandle> {
+        let mut handles = Vec::new();
+        self.collect_handles_recursive(&self.root, &mut handles);
+        handles
+    }
+}
+
+impl ContainerTree {
+    /// Recursively collect drag handles for each container in the tree
+    fn collect_handles_recursive(&self, container: &ContainerRef, out: &mut Vec<DragHandle>) {
+        let children = container.children();
+        if children.len() <= 1 {
+            // No split boundaries with single child
+        } else {
+            let cfg_width = self.config.drag_handle_width as i32;
+            match container.direction() {
+                Direction::Horizontal => {
+                    // Vertical handles between horizontally arranged children
+                    for idx in 0..children.len() - 1 {
+                        let left_child = &children[idx];
+                        let right_child = &children[idx + 1];
+                        let boundary_x = right_child.bounds().position.x; // leading edge of right child
+                        let x = boundary_x - cfg_width / 2;
+                        let center = Position {
+                            x: boundary_x,
+                            y: container.bounds().center().y,
+                        };
+                        let handle = DragHandle::new(
+                            center,
+                            container.bounds().size.height,
+                            HandleOrientation::Vertical,
+                            container.bounds().position.x,
+                            container.bounds().position.x + container.bounds().size.width as i32,
+                        );
+                        out.push(handle);
+                    }
+                }
+                Direction::Vertical => {
+                    // Horizontal handles between vertically stacked children
+                    for idx in 0..children.len() - 1 {
+                        let top_child = &children[idx];
+                        let bottom_child = &children[idx + 1];
+                        let boundary_y = bottom_child.bounds().position.y; // top edge of bottom child
+                        let y = boundary_y - cfg_width / 2;
+                        let center = Position {
+                            x: container.bounds().center().x,
+                            y: boundary_y,
+                        };
+                        let handle = DragHandle::new(
+                            center,
+                            container.bounds().size.width,
+                            HandleOrientation::Horizontal,
+                            container.bounds().position.y,
+                            container.bounds().position.y + container.bounds().size.height as i32,
+                        );
+                        out.push(handle);
+                    }
+                }
+            }
+        }
+
+        // Recurse into children containers
+        for child in children.iter() {
+            if let ContainerChildRef::Container(c) = child {
+                self.collect_handles_recursive(c, out);
+            }
+        }
     }
 }

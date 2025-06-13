@@ -102,7 +102,7 @@ impl EventListenerAX {
     fn observe_window(&mut self, window: &AXUIElementExt) -> ObserveResult {
         window_is_manageable(window)?;
 
-        let id = get_window_id(&window.element).ok_or("Window has no id")?;
+        let id = get_window_id(&window.element).ok_or("Window has no id")? as WindowId;
         let pid = window.pid()? as ProcessId;
 
         let listener_app = &self.apps.get(&pid).ok_or("Could not find app")?;

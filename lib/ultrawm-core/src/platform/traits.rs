@@ -1,20 +1,23 @@
-use crate::platform::{
-    Bounds, Display, EventDispatcher, PlatformResult, Position, ProcessId, Size, WindowId,
+use skia_safe::Image;
+use winit::raw_window_handle::RawWindowHandle;
+use winit::window::Window;
+
+use crate::platform::PlatformWindow;
+use crate::{
+    overlay_window::OverlayWindowConfig,
+    platform::{
+        Bounds, Display, EventDispatcher, PlatformResult, Position, ProcessId, Size, WindowId,
+    },
 };
 
 /// # Safety
 /// These functions should only be called from the main thread. They are not thread safe.
-pub unsafe trait PlatformInitImpl
+pub unsafe trait PlatformEventsImpl
 where
     Self: Sized,
 {
     /// Initializes the platform. This should be called once at the start of the program.
-    unsafe fn initialize() -> PlatformResult<()>;
-
-    /// This function should block. Events should be sent via the provided dispatcher.
-    /// Only one event loop should be requested at a time. Window events should only be sent for
-    /// windows that can be managed.
-    unsafe fn run_event_loop(dispatcher: EventDispatcher) -> PlatformResult<()>;
+    unsafe fn initialize(dispatcher: EventDispatcher) -> PlatformResult<()>;
 }
 
 pub trait PlatformImpl
@@ -23,7 +26,7 @@ where
 {
     /// Returns a list of all windows on the system. Should only return application windows, system
     /// windows that cannot be managed should not be returned.
-    fn list_visible_windows() -> PlatformResult<Vec<crate::platform::PlatformWindow>>;
+    fn list_visible_windows() -> PlatformResult<Vec<PlatformWindow>>;
 
     /// Returns a list of all monitors connected to the system.
     fn list_all_displays() -> PlatformResult<Vec<Display>>;
@@ -32,15 +35,19 @@ where
     fn get_mouse_position() -> PlatformResult<Position>;
 }
 
-pub trait PlatformTilePreviewImpl
-where
-    Self: Sized + Send + Sync,
-{
-    /// Creates a new tile preview. Should not be shown until `show` is called.
-    fn new(config: crate::config::ConfigRef) -> PlatformResult<Self>;
-    fn show(&mut self) -> PlatformResult<()>;
-    fn hide(&mut self) -> PlatformResult<()>;
-    fn move_to(&mut self, bounds: &Bounds) -> PlatformResult<()>;
+pub trait PlatformOverlayImpl {
+    fn get_window_id(window: &Window) -> PlatformResult<WindowId>;
+    
+    fn set_window_bounds(window_id: WindowId, bounds: Bounds) -> PlatformResult<()>;
+
+    fn set_window_opacity(window_id: WindowId, opacity: f32) -> PlatformResult<()>;
+
+    fn render_to_window(image: &Image, window_id: WindowId) -> PlatformResult<()>;
+
+    fn initialize_overlay_window(
+        window: &Window,
+        config: &OverlayWindowConfig,
+    ) -> PlatformResult<()>;
 }
 
 /// Should be lightweight, and freely copyable
@@ -56,20 +63,4 @@ where
     fn visible(&self) -> bool;
 
     fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()>;
-}
-
-/// Optional, this trait only needs to be implemented if main thread utils like MainThreadLock
-/// are needed by the platform implementation.
-pub trait PlatformMainThreadImpl
-where
-    Self: Sized + Send + Sync,
-{
-    fn is_main_thread() -> bool;
-
-    /// Runs the provided function on the main thread. Should only be called once the platform's event
-    /// loop has started.
-    fn run_on_main_thread<F, R>(f: F) -> PlatformResult<R>
-    where
-        F: FnOnce() -> R + Send,
-        R: Send + 'static;
 }

@@ -69,7 +69,7 @@ impl WindowsPlatformWindow {
                 self.hwnd,
                 DWMWA_EXTENDED_FRAME_BOUNDS,
                 &mut extended_rect as *mut _ as *mut _,
-                mem::size_of::<RECT>() as u32,
+                size_of::<RECT>() as u32,
             )
             .is_err()
             {
@@ -142,6 +142,12 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
 
     fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()> {
         unsafe {
+            // Disable native resizing by removing WS_THICKFRAME (WS_SIZEBOX)
+            // let style = GetWindowLongW(self.hwnd, GWL_STYLE) as u32;
+            // // Remove both WS_THICKFRAME and WS_SIZEBOX if present
+            // let new_style = style & !(WS_THICKFRAME.0 | WS_SIZEBOX.0);
+            // SetWindowLongW(self.hwnd, GWL_STYLE, new_style as i32);
+
             ShowWindow(self.hwnd, SW_RESTORE);
 
             let (left_offset, top_offset, right_offset, bottom_offset) = self.get_border_offsets();

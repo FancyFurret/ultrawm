@@ -9,7 +9,7 @@ use std::rc::{Rc, Weak};
 
 use super::Side;
 
-mod container_ref;
+pub mod container_ref;
 mod container_window;
 
 pub type ParentContainerRef = Weak<Container>;

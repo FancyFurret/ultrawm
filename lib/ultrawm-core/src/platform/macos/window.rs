@@ -31,7 +31,7 @@ unsafe impl Sync for MacOSPlatformWindow {}
 
 impl PlatformWindowImpl for MacOSPlatformWindow {
     fn id(&self) -> WindowId {
-        self.id
+        self.id as WindowId
     }
 
     fn pid(&self) -> ProcessId {

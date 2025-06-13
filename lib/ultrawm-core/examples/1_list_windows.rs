@@ -1,10 +1,12 @@
 use ultrawm_core::platform::{
-    Platform, PlatformImpl, PlatformInit, PlatformInitImpl, PlatformWindowImpl,
+    EventBridge, Platform, PlatformEvents, PlatformEventsImpl, PlatformImpl, PlatformWindowImpl,
 };
 
 fn init() {
     unsafe {
-        PlatformInit::initialize().expect("Error initializing platform");
+        let bridge = EventBridge::new();
+        let dispatcher = bridge.dispatcher();
+        PlatformEvents::initialize(dispatcher).expect("Error initializing platform");
     }
 }
 

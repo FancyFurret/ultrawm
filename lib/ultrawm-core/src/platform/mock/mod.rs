@@ -1,62 +1,56 @@
+use crate::overlay_window::OverlayWindowConfig;
+use crate::platform::PlatformOverlayImpl;
 use crate::platform::{
-    Bounds, Display, EventDispatcher, PlatformImpl, PlatformInitImpl, PlatformMainThreadImpl,
-    PlatformResult, PlatformTilePreviewImpl, PlatformWindow, PlatformWindowImpl, Position,
-    ProcessId, Size, WindowId,
+    Bounds, Display, EventDispatcher, PlatformEventsImpl, PlatformImpl, PlatformResult,
+    PlatformWindow, PlatformWindowImpl, Position, ProcessId, Size, WindowId,
 };
+use skia_safe::image_filters::offset;
+use skia_safe::Image;
+use winit::raw_window_handle::RawWindowHandle;
+use winit::window::Window;
 
-pub struct MockPlatformInit;
-unsafe impl PlatformInitImpl for MockPlatformInit {
-    unsafe fn initialize() -> PlatformResult<()> {
-        return Ok(());
-    }
-    unsafe fn run_event_loop(_dispatcher: EventDispatcher) -> PlatformResult<()> {
-        return Ok(());
+pub struct MockPlatformEvents;
+unsafe impl PlatformEventsImpl for MockPlatformEvents {
+    unsafe fn initialize(_dispatcher: EventDispatcher) -> PlatformResult<()> {
+        Ok(())
     }
 }
 
 pub struct MockPlatform;
 impl PlatformImpl for MockPlatform {
     fn list_visible_windows() -> PlatformResult<Vec<PlatformWindow>> {
-        return Ok(vec![]);
+        Ok(vec![])
     }
 
     fn list_all_displays() -> PlatformResult<Vec<Display>> {
-        return Ok(vec![]);
+        Ok(vec![])
     }
 
     fn get_mouse_position() -> PlatformResult<Position> {
-        return Ok(Position { x: 0, y: 0 });
+        Ok(Position { x: 0, y: 0 })
     }
 }
 
-pub struct MockMainThread;
-impl PlatformMainThreadImpl for MockMainThread {
-    fn is_main_thread() -> bool {
-        return true;
+pub struct MockPlatformOverlay;
+impl PlatformOverlayImpl for MockPlatformOverlay {
+    fn get_window_id(_window: &Window) -> PlatformResult<WindowId> {
+        Ok(1)
+    }
+    fn set_window_bounds(_window_id: WindowId, _bounds: Bounds) -> PlatformResult<()> {
+        Ok(())
+    }
+    fn set_window_opacity(_window_id: WindowId, _opacity: f32) -> PlatformResult<()> {
+        Ok(())
+    }
+    fn render_to_window(_image: &Image, _window_id: WindowId) -> PlatformResult<()> {
+        Ok(())
     }
 
-    fn run_on_main_thread<F, R>(f: F) -> PlatformResult<R>
-    where
-        F: FnOnce() -> R + Send,
-        R: Send + 'static,
-    {
-        return Ok(f());
-    }
-}
-
-pub struct MockPlatformTilePreview;
-impl PlatformTilePreviewImpl for MockPlatformTilePreview {
-    fn new(_config: crate::config::ConfigRef) -> PlatformResult<Self> {
-        return Ok(Self {});
-    }
-    fn show(&mut self) -> PlatformResult<()> {
-        return Ok(());
-    }
-    fn hide(&mut self) -> PlatformResult<()> {
-        return Ok(());
-    }
-    fn move_to(&mut self, _bounds: &Bounds) -> PlatformResult<()> {
-        return Ok(());
+    fn initialize_overlay_window(
+        _window: &Window,
+        _config: &OverlayWindowConfig,
+    ) -> PlatformResult<()> {
+        Ok(())
     }
 }
 
@@ -71,36 +65,36 @@ pub struct MockPlatformWindow {
 }
 impl MockPlatformWindow {
     pub fn new(position: Position, size: Size, title: String) -> Self {
-        return Self {
+        Self {
             id: 0,
             pid: 0,
             title,
             position,
             size,
             visible: false,
-        };
+        }
     }
 }
 impl PlatformWindowImpl for MockPlatformWindow {
     fn id(&self) -> WindowId {
-        return self.id;
+        self.id
     }
     fn pid(&self) -> ProcessId {
-        return self.pid;
+        self.pid
     }
     fn title(&self) -> String {
-        return self.title.clone();
+        self.title.clone()
     }
     fn position(&self) -> Position {
-        return self.position.clone();
+        self.position.clone()
     }
     fn size(&self) -> Size {
-        return self.size.clone();
+        self.size.clone()
     }
     fn visible(&self) -> bool {
-        return self.visible;
+        self.visible
     }
     fn set_bounds(&self, _bounds: &Bounds) -> PlatformResult<()> {
-        return Ok(());
+        Ok(())
     }
 }

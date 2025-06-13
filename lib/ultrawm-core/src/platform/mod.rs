@@ -4,39 +4,31 @@ pub use traits::*;
 
 mod common;
 mod event_bridge;
-mod traits;
-
-// TODO: Use features instead?
-#[cfg(target_os = "macos")]
-mod thread_lock;
+pub(crate) mod traits;
 
 use cfg_if::cfg_if;
-
-pub mod animation;
 
 cfg_if! {
     if #[cfg(test)] {
         pub mod mock;
-        pub type PlatformInit = mock::MockPlatformInit;
+        pub type PlatformEvents = mock::MockPlatformEvents;
         pub type Platform = mock::MockPlatform;
         pub type PlatformWindow = mock::MockPlatformWindow;
-        pub type PlatformTilePreview = mock::MockPlatformTilePreview;
-        pub type PlatformMainThread = mock::MockMainThread;
+        pub type PlatformOverlay = mock::MockPlatformOverlay;
     }
     else if #[cfg(target_os = "macos")] {
         mod macos;
-        pub type PlatformInit = macos::MacOSPlatformInit;
+        pub type PlatformEvents = macos::MacOSPlatformEvents;
         pub type Platform = macos::MacOSPlatform;
-        pub type PlatformWindow = macos::MacOSPlatformWindow; // TODO: Remove Platform from name?
-        pub type PlatformTilePreview = macos::MacOSTilePreview;
-        pub type PlatformMainThread = macos::MacOSMainThread;
+        pub type PlatformWindow = macos::MacOSPlatformWindow;
+        pub type PlatformOverlay = macos::MacOSPlatformOverlay;
     }
     else if #[cfg(target_os = "windows")] {
         pub mod windows;
-        pub type PlatformInit = windows::WindowsPlatformInit;
+        pub type PlatformEvents = windows::WindowsPlatformEvents;
         pub type Platform = windows::WindowsPlatform;
         pub type PlatformWindow = windows::WindowsPlatformWindow;
-        pub type PlatformTilePreview = windows::WindowsTilePreview;
+        pub type PlatformOverlay = windows::WindowsPlatformOverlay;
     }
     else {
         compile_error!("Unsupported platform");

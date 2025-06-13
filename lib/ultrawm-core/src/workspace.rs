@@ -1,4 +1,5 @@
 use crate::config::ConfigRef;
+use crate::drag_handle::DragHandle;
 use crate::layouts::{ResizeDirection, WindowLayout};
 use crate::platform::{Bounds, Position, WindowId};
 use crate::tile_result::InsertResult;
@@ -87,5 +88,9 @@ impl Workspace {
 
     pub fn serialize(&self) -> serde_yaml::Value {
         self.layout.serialize()
+    }
+
+    pub fn drag_handles(&self) -> Vec<DragHandle> {
+        self.layout.drag_handles()
     }
 }
