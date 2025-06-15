@@ -5,6 +5,7 @@ use crate::platform::{
     PlatformWindow, PlatformWindowImpl, Position, ProcessId, Size, WindowId,
 };
 use skia_safe::Image;
+use std::sync::{Arc, Mutex};
 use winit::window::Window;
 
 pub struct MockPlatformEvents;
@@ -79,6 +80,7 @@ pub struct MockPlatformWindow {
     pub position: Position,
     pub size: Size,
     pub visible: bool,
+    set_bounds_calls: Arc<Mutex<Vec<Bounds>>>,
 }
 impl MockPlatformWindow {
     pub fn new(position: Position, size: Size, title: String) -> Self {
@@ -89,7 +91,16 @@ impl MockPlatformWindow {
             position,
             size,
             visible: false,
+            set_bounds_calls: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    pub fn get_set_bounds_calls(&self) -> Vec<Bounds> {
+        self.set_bounds_calls.lock().unwrap().clone()
+    }
+
+    pub fn clear_set_bounds_calls(&self) {
+        self.set_bounds_calls.lock().unwrap().clear();
     }
 }
 impl PlatformWindowImpl for MockPlatformWindow {
@@ -111,7 +122,8 @@ impl PlatformWindowImpl for MockPlatformWindow {
     fn visible(&self) -> bool {
         self.visible
     }
-    fn set_bounds(&self, _bounds: &Bounds) -> PlatformResult<()> {
+    fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()> {
+        self.set_bounds_calls.lock().unwrap().push(bounds.clone());
         Ok(())
     }
 }

@@ -15,6 +15,7 @@ mod container_window;
 
 pub type ParentContainerRef = Weak<Container>;
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum InsertOrder {
     Before,
     After,
@@ -147,11 +148,26 @@ impl Container {
 
     pub fn insert_window(
         &self,
-        mut index: usize,
+        index: usize,
         window_ref: ContainerWindowRef,
     ) -> ContainerWindowRef {
         let child = ContainerChildRef::Window(window_ref.clone());
+        self.insert_child(index, child);
+        window_ref
+    }
 
+    pub fn add_container(&self, container: ContainerRef) -> ContainerRef {
+        let index = self.children().len();
+        self.insert_container(index, container)
+    }
+
+    pub fn insert_container(&self, index: usize, container: ContainerRef) -> ContainerRef {
+        let child = ContainerChildRef::Container(container.clone());
+        self.insert_child(index, child);
+        container
+    }
+
+    fn insert_child(&self, mut index: usize, child: ContainerChildRef) {
         // If the window is already in this container, remove it
         let current_index = self.children().iter().position(|c| c == &child);
         if let Some(current_index) = current_index {
@@ -170,42 +186,16 @@ impl Container {
         self.insert_ratio_at_index(index);
 
         // If the window has a different parent, remove it from its old parent
-        if self.self_ref.as_ptr() != window_ref.parent().self_ref.as_ptr() {
-            // Remove the window from its current parent
-            let parent = window_ref.parent();
-            window_ref.set_parent(self.self_ref());
-
-            // Do this very last, since it can potentially remove self, if self is now the only child
-            parent.remove_child(&child);
-        }
-
-        window_ref
-    }
-
-    pub fn add_container(&self, container: ContainerRef) -> ContainerRef {
-        let index = self.children().len();
-        self.insert_container(index, container)
-    }
-
-    pub fn insert_container(&self, index: usize, container: ContainerRef) -> ContainerRef {
-        let child = ContainerChildRef::Container(container.clone());
-        self.children_mut().insert(index, child.clone());
-
-        // Handle ratios for the new insertion
-        self.insert_ratio_at_index(index);
-
-        // If the container has a different parent, remove it from its old parent
-        if let Some(parent) = container.parent() {
+        if let Some(parent) = child.parent() {
             if self.self_ref.as_ptr() != parent.self_ref.as_ptr() {
-                // Remove the container from its current parent
-                container.set_parent(self.self_ref());
+                // Remove the window from its current parent
+                child.set_parent(self.self_ref());
+                // Do this very last, since it can potentially remove self, if self is now the only child
                 parent.remove_child(&child);
             }
         } else {
-            container.set_parent(self.self_ref());
+            child.set_parent(self.self_ref());
         }
-
-        container
     }
 
     /// Insert a new ratio at the given index, making the new item get 1/N of the space
@@ -625,6 +615,7 @@ impl Container {
     }
 }
 
+#[allow(dead_code)]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -932,5 +923,679 @@ mod tests {
         assert_eq!(root_b.children().len(), 1);
         assert_window(&root_b.children()[0], &ref_a);
         assert_eq!(&ref_a.parent(), &root_b);
+    }
+
+    // === Container Operations Tests ===
+
+    #[test]
+    fn test_add_new_container() {
+        let root = new_container();
+        let child_container = new_container_with_bounds(new_bounds());
+
+        root.add_container(child_container.clone());
+
+        assert_eq!(root.children().len(), 1);
+        assert_is_container(&root.children()[0]);
+        assert_eq!(child_container.parent(), Some(root.clone()));
+        assert_eq!(root.ratios().len(), 1);
+        assert_eq!(root.ratios()[0], 1.0);
+    }
+
+    #[test]
+    fn test_add_multiple_containers() {
+        let root = new_container();
+        let container_a = new_container_with_bounds(new_bounds());
+        let container_b = new_container_with_bounds(new_bounds());
+        let container_c = new_container_with_bounds(new_bounds());
+
+        root.add_container(container_a.clone());
+        root.add_container(container_b.clone());
+        root.add_container(container_c.clone());
+
+        assert_eq!(root.children().len(), 3);
+        assert_is_container(&root.children()[0]);
+        assert_is_container(&root.children()[1]);
+        assert_is_container(&root.children()[2]);
+        assert_eq!(container_a.parent(), Some(root.clone()));
+        assert_eq!(container_b.parent(), Some(root.clone()));
+        assert_eq!(container_c.parent(), Some(root.clone()));
+
+        // Check ratios are normalized
+        assert_eq!(root.ratios().len(), 3);
+        let ratio_sum: f32 = root.ratios().iter().sum();
+        assert!((ratio_sum - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_insert_container() {
+        let root = new_container();
+        let container_a = new_container_with_bounds(new_bounds());
+        let container_b = new_container_with_bounds(new_bounds());
+        let container_c = new_container_with_bounds(new_bounds());
+
+        root.add_container(container_a.clone());
+        root.add_container(container_c.clone());
+        root.insert_container(1, container_b.clone());
+
+        assert_eq!(root.children().len(), 3);
+        assert_eq!(assert_is_container(&root.children()[0]), container_a);
+        assert_eq!(assert_is_container(&root.children()[1]), container_b);
+        assert_eq!(assert_is_container(&root.children()[2]), container_c);
+    }
+
+    #[test]
+    fn test_add_existing_container_different_parent() {
+        let root_a = new_container();
+        let root_b = new_container();
+        let container = new_container_with_bounds(new_bounds());
+
+        root_a.add_container(container.clone());
+        assert_eq!(root_a.children().len(), 1);
+        assert_eq!(container.parent(), Some(root_a.clone()));
+
+        root_b.add_container(container.clone());
+
+        assert_eq!(root_a.children().len(), 0);
+        assert_eq!(root_b.children().len(), 1);
+        assert_eq!(container.parent(), Some(root_b.clone()));
+    }
+
+    #[test]
+    fn test_add_existing_container_same_parent() {
+        let root = new_container();
+        let container = new_container_with_bounds(new_bounds());
+
+        root.add_container(container.clone());
+        root.add_container(container.clone());
+
+        assert_eq!(root.children().len(), 1);
+        assert_eq!(container.parent(), Some(root.clone()));
+    }
+
+    // === Ratio Operations Tests ===
+
+    #[test]
+    fn test_equalize_ratios_empty() {
+        let root = new_container();
+        root.equalize_ratios();
+        assert_eq!(root.ratios().len(), 0);
+    }
+
+    #[test]
+    fn test_equalize_ratios_single_child() {
+        let root = new_container();
+        root.add_window(new_window());
+        root.equalize_ratios();
+
+        assert_eq!(root.ratios().len(), 1);
+        assert_eq!(root.ratios()[0], 1.0);
+    }
+
+    #[test]
+    fn test_equalize_ratios_multiple_children() {
+        let root = new_container();
+        root.add_window(new_window());
+        root.add_window(new_window());
+        root.add_window(new_window());
+
+        // Set unequal ratios
+        root.set_ratios(vec![0.5, 0.3, 0.2]);
+
+        root.equalize_ratios();
+
+        assert_eq!(root.ratios().len(), 3);
+        for ratio in root.ratios().iter() {
+            assert!((ratio - (1.0 / 3.0)).abs() < f32::EPSILON);
+        }
+    }
+
+    #[test]
+    fn test_set_ratios_normalization() {
+        let root = new_container();
+        root.add_window(new_window());
+        root.add_window(new_window());
+
+        // Set ratios that don't sum to 1.0
+        root.set_ratios(vec![2.0, 4.0]);
+
+        // Should be normalized to sum to 1.0
+        assert_eq!(root.ratios().len(), 2);
+        assert!((root.ratios()[0] - (1.0 / 3.0)).abs() < f32::EPSILON);
+        assert!((root.ratios()[1] - (2.0 / 3.0)).abs() < f32::EPSILON);
+
+        let sum: f32 = root.ratios().iter().sum();
+        assert!((sum - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_insert_ratio_first_child() {
+        let root = new_container();
+        root.add_window(new_window());
+
+        assert_eq!(root.ratios().len(), 1);
+        assert_eq!(root.ratios()[0], 1.0);
+    }
+
+    #[test]
+    fn test_insert_ratio_second_child() {
+        let root = new_container();
+        root.add_window(new_window());
+        root.add_window(new_window());
+
+        assert_eq!(root.ratios().len(), 2);
+        let sum: f32 = root.ratios().iter().sum();
+        assert!((sum - 1.0).abs() < f32::EPSILON);
+    }
+
+    // === Resize Tests ===
+
+    #[test]
+    fn test_resize_child_horizontal_spread() {
+        let root = new_container_with_bounds(Bounds::new(0, 0, 1000, 500));
+        root.add_window(new_window());
+        let window_b = root.add_window(new_window());
+        root.add_window(new_window());
+
+        // Make window_b larger using spread distribution
+        let new_bounds = Bounds::new(250, 0, 500, 500); // Takes up 50% of container
+        root.resize_child(
+            &ContainerChildRef::Window(window_b.clone()),
+            &new_bounds,
+            ResizeDirection::Right,
+            ResizeDistribution::Spread,
+        );
+
+        // Check that ratios still sum to ~1.0
+        let sum: f32 = root.ratios().iter().sum();
+        assert!((sum - 1.0).abs() < 0.01);
+
+        // Window B should have a larger ratio than the others
+        let ratios = root.ratios();
+        assert!(ratios[1] > ratios[0]);
+        assert!(ratios[1] > ratios[2]);
+    }
+
+    #[test]
+    fn test_resize_child_vertical_symmetric() {
+        let root = new_container_with_bounds(Bounds::new(0, 0, 500, 1000));
+        root.set_ratios(vec![0.25, 0.5, 0.25]); // Start with equal distribution around middle
+
+        root.add_window(new_window());
+        root.add_window(new_window());
+        root.add_window(new_window());
+
+        // Change direction to vertical for this test
+        let vertical_container = new_container_with_direction(Direction::Vertical);
+        vertical_container.set_bounds(Bounds::new(0, 0, 500, 1000));
+        vertical_container.add_window(new_window());
+        let window_b = vertical_container.add_window(new_window());
+        vertical_container.add_window(new_window());
+
+        // Make middle window larger using symmetric distribution
+        let new_bounds = Bounds::new(0, 200, 500, 600); // Takes up 60% of container
+        vertical_container.resize_child(
+            &ContainerChildRef::Window(window_b.clone()),
+            &new_bounds,
+            ResizeDirection::Bottom,
+            ResizeDistribution::Symmetric,
+        );
+
+        // Check that ratios still sum to ~1.0
+        let sum: f32 = vertical_container.ratios().iter().sum();
+        assert!((sum - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_resize_child_single_child() {
+        let root = new_container();
+        let window = root.add_window(new_window());
+
+        // Resizing with only one child should not change ratios
+        let original_ratios = root.ratios().clone();
+        root.resize_child(
+            &ContainerChildRef::Window(window),
+            &Bounds::new(0, 0, 300, 300),
+            ResizeDirection::Right,
+            ResizeDistribution::Spread,
+        );
+
+        assert_eq!(*root.ratios(), original_ratios);
+    }
+
+    #[test]
+    fn test_resize_child_nonexistent() {
+        let root = new_container();
+        root.add_window(new_window());
+        let window_b = new_window(); // Not added to root
+
+        let original_ratios = root.ratios().clone();
+        root.resize_child(
+            &ContainerChildRef::Window(window_b),
+            &Bounds::new(0, 0, 300, 300),
+            ResizeDirection::Right,
+            ResizeDistribution::Spread,
+        );
+
+        // Should not change ratios if child doesn't exist
+        assert_eq!(*root.ratios(), original_ratios);
+    }
+
+    // === Resize Between Tests ===
+
+    #[test]
+    fn test_resize_between_horizontal() {
+        let root = new_container_with_bounds(Bounds::new(0, 0, 1000, 500));
+        root.add_window(new_window());
+        root.add_window(new_window());
+        root.add_window(new_window());
+
+        // Move split between first and second window to 30% position
+        let success = root.resize_between(1, 300);
+
+        assert!(success);
+        let ratios = root.ratios();
+
+        // Left side (first child) should have ~30% ratio
+        assert!((ratios[0] - 0.3).abs() < 0.01);
+
+        // Right side (remaining children) should have ~70% ratio combined
+        let right_ratio: f32 = ratios[1..].iter().sum();
+        assert!((right_ratio - 0.7).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_resize_between_vertical() {
+        let vertical_container = new_container_with_direction(Direction::Vertical);
+        vertical_container.set_bounds(Bounds::new(0, 0, 500, 1000));
+        vertical_container.add_window(new_window());
+        vertical_container.add_window(new_window());
+
+        // Move split between windows to 60% position (y=600)
+        let success = vertical_container.resize_between(1, 600);
+
+        assert!(success);
+        let ratios = vertical_container.ratios();
+
+        // First child should have ~60% ratio
+        assert!((ratios[0] - 0.6).abs() < 0.01);
+        // Second child should have ~40% ratio
+        assert!((ratios[1] - 0.4).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_resize_between_invalid_index() {
+        let root = new_container();
+        root.add_window(new_window());
+        root.add_window(new_window());
+
+        // Invalid indices should fail
+        assert!(!root.resize_between(0, 100)); // Can't split before first child
+        assert!(!root.resize_between(2, 100)); // Index out of bounds
+        assert!(!root.resize_between(3, 100)); // Index way out of bounds
+    }
+
+    #[test]
+    fn test_resize_between_single_child() {
+        let root = new_container();
+        root.add_window(new_window());
+
+        // Can't resize between children when there's only one
+        assert!(!root.resize_between(1, 100));
+    }
+
+    #[test]
+    fn test_resize_between_minimum_ratios() {
+        let root = new_container_with_bounds(Bounds::new(0, 0, 1000, 500));
+        root.add_window(new_window());
+        root.add_window(new_window());
+
+        // Try to make left side extremely small (should be clamped to minimum)
+        let success = root.resize_between(1, 50); // 5% position
+
+        assert!(success);
+        let ratios = root.ratios();
+
+        // Left side should be clamped to minimum ratio (0.1)
+        assert!((ratios[0] - 0.1).abs() < 0.01);
+        // Right side should get the remainder
+        assert!((ratios[1] - 0.9).abs() < 0.01);
+    }
+
+    // === Calculate Bounds Tests ===
+
+    #[test]
+    fn test_calculate_bounds_empty_container() {
+        let root = new_container_with_bounds(Bounds::new(100, 100, 800, 600));
+        root.calculate_bounds(); // Should not crash
+    }
+
+    #[test]
+    fn test_calculate_bounds_single_window() {
+        let root = new_container_with_bounds(Bounds::new(100, 100, 800, 600));
+        let window = root.add_window(new_window());
+        root.calculate_bounds();
+
+        // Single window should get the full container bounds
+        assert_eq!(window.bounds(), Bounds::new(100, 100, 800, 600));
+    }
+
+    #[test]
+    fn test_calculate_bounds_horizontal_split() {
+        let root = new_container_with_bounds(Bounds::new(0, 0, 1000, 500));
+        let window_a = root.add_window(new_window());
+        let window_b = root.add_window(new_window());
+
+        // Set specific ratios
+        root.set_ratios(vec![0.6, 0.4]);
+        root.calculate_bounds();
+
+        // First window should get 60% width
+        assert_eq!(window_a.bounds(), Bounds::new(0, 0, 600, 500));
+        // Second window should get 40% width
+        assert_eq!(window_b.bounds(), Bounds::new(600, 0, 400, 500));
+    }
+
+    #[test]
+    fn test_calculate_bounds_vertical_split() {
+        let vertical_container = new_container_with_direction(Direction::Vertical);
+        vertical_container.set_bounds(Bounds::new(0, 0, 500, 1000));
+        let window_a = vertical_container.add_window(new_window());
+        let window_b = vertical_container.add_window(new_window());
+
+        // Set specific ratios
+        vertical_container.set_ratios(vec![0.3, 0.7]);
+        vertical_container.calculate_bounds();
+
+        // First window should get 30% height
+        assert_eq!(window_a.bounds(), Bounds::new(0, 0, 500, 300));
+        // Second window should get 70% height
+        assert_eq!(window_b.bounds(), Bounds::new(0, 300, 500, 700));
+    }
+
+    #[test]
+    fn test_calculate_bounds_nested_containers() {
+        let root = new_container_with_bounds(Bounds::new(0, 0, 1000, 500));
+        let window_a = root.add_window(new_window());
+        let nested_container = root.split_window(&window_a, new_window(), InsertOrder::After);
+        let window_b = assert_is_window(&nested_container.children()[1]);
+
+        root.calculate_bounds();
+
+        // Root should have one child (the nested container)
+        assert_eq!(root.children().len(), 1);
+
+        // Nested container should occupy full root bounds
+        assert_eq!(nested_container.bounds(), Bounds::new(0, 0, 1000, 500));
+
+        // Windows in nested container should split the space
+        // Since nested container has opposite direction (vertical), they should stack vertically
+        assert_eq!(window_a.bounds().size.width, 1000);
+        assert_eq!(window_b.bounds().size.width, 1000);
+        assert_eq!(
+            window_a.bounds().size.height + window_b.bounds().size.height,
+            500
+        );
+    }
+
+    #[test]
+    fn test_calculate_bounds_rounding_errors() {
+        let root = new_container_with_bounds(Bounds::new(0, 0, 333, 500)); // Odd width
+        let window_a = root.add_window(new_window());
+        let window_b = root.add_window(new_window());
+        let window_c = root.add_window(new_window());
+
+        // Equal ratios should handle rounding
+        root.equalize_ratios();
+        root.calculate_bounds();
+
+        // All windows should have reasonable sizes
+        assert!(window_a.bounds().size.width > 0);
+        assert!(window_b.bounds().size.width > 0);
+        assert!(window_c.bounds().size.width > 0);
+
+        // Total width should equal container width
+        let total_width = window_a.bounds().size.width
+            + window_b.bounds().size.width
+            + window_c.bounds().size.width;
+        assert_eq!(total_width, 333);
+    }
+
+    // === Split Self Tests ===
+
+    #[test]
+    fn test_split_self_before() {
+        let root = new_container();
+        let existing_window = root.add_window(new_window());
+        let new_window = new_window();
+
+        let split_container = root.split_self(new_window.clone(), InsertOrder::Before);
+
+        // Root should now have one child (the split container)
+        assert_eq!(root.children().len(), 1);
+        assert_is_container(&root.children()[0]);
+
+        // Split container should have two children
+        assert_eq!(split_container.children().len(), 2);
+        assert_window(&split_container.children()[0], &new_window);
+
+        // The second child should be a container with the existing window
+        let nested_container = assert_is_container(&split_container.children()[1]);
+        assert_eq!(nested_container.children().len(), 1);
+        assert_window(&nested_container.children()[0], &existing_window);
+    }
+
+    #[test]
+    fn test_split_self_after() {
+        let root = new_container();
+        let existing_window = root.add_window(new_window());
+        let new_window = new_window();
+
+        let split_container = root.split_self(new_window.clone(), InsertOrder::After);
+
+        // Root should now have one child (the split container)
+        assert_eq!(root.children().len(), 1);
+        assert_is_container(&root.children()[0]);
+
+        // Split container should have two children
+        assert_eq!(split_container.children().len(), 2);
+
+        // The first child should be a container with the existing window
+        let nested_container = assert_is_container(&split_container.children()[0]);
+        assert_eq!(nested_container.children().len(), 1);
+        assert_window(&nested_container.children()[0], &existing_window);
+
+        // The second child should be the new window
+        assert_window(&split_container.children()[1], &new_window);
+    }
+
+    #[test]
+    fn test_split_self_multiple_windows() {
+        let root = new_container();
+        let window_a = root.add_window(new_window());
+        let window_b = root.add_window(new_window());
+        let window_c = root.add_window(new_window());
+        let new_window = new_window();
+
+        let split_container = root.split_self(new_window.clone(), InsertOrder::After);
+
+        // Root should now have one child (the split container)
+        assert_eq!(root.children().len(), 1);
+
+        // Split container should have two children
+        assert_eq!(split_container.children().len(), 2);
+
+        // First child should be a container with all existing windows
+        let nested_container = assert_is_container(&split_container.children()[0]);
+        assert_eq!(nested_container.children().len(), 3);
+        assert_window(&nested_container.children()[0], &window_a);
+        assert_window(&nested_container.children()[1], &window_b);
+        assert_window(&nested_container.children()[2], &window_c);
+
+        // Second child should be the new window
+        assert_window(&split_container.children()[1], &new_window);
+    }
+
+    // === Edge Cases and Error Handling ===
+
+    #[test]
+    fn test_replace_child_nonexistent() {
+        let root = new_container();
+        let window_a = root.add_window(new_window());
+        let window_b = new_window(); // Not in container
+        let window_c = new_window();
+
+        // Should not crash when trying to replace non-existent child
+        root.replace_child(
+            &ContainerChildRef::Window(window_b),
+            ContainerChildRef::Window(window_c),
+        );
+
+        // Original structure should be unchanged
+        assert_eq!(root.children().len(), 1);
+        assert_window(&root.children()[0], &window_a);
+    }
+
+    #[test]
+    fn test_remove_child_nonexistent() {
+        let root = new_container();
+        let window_a = root.add_window(new_window());
+        let window_b = new_window(); // Not in container
+
+        // Should not crash when trying to remove non-existent child
+        root.remove_child(&ContainerChildRef::Window(window_b));
+
+        // Original structure should be unchanged
+        assert_eq!(root.children().len(), 1);
+        assert_window(&root.children()[0], &window_a);
+    }
+
+    #[test]
+    fn test_index_of_child_nonexistent() {
+        let root = new_container();
+        root.add_window(new_window());
+        let window_b = new_window(); // Not in container
+
+        assert_eq!(
+            root.index_of_child(&ContainerChildRef::Window(window_b)),
+            None
+        );
+    }
+
+    #[test]
+    fn test_self_ref_consistency() {
+        let root = new_container();
+        let self_ref = root.self_ref();
+
+        // Self reference should be valid and point to the same container
+        assert!(self_ref.upgrade().is_some());
+        let upgraded = self_ref.upgrade().unwrap();
+        assert_eq!(upgraded.id(), root.id());
+    }
+
+    #[test]
+    fn test_container_ids_unique() {
+        let container_a = new_container();
+        let container_b = new_container();
+        let container_c = new_container();
+
+        // All containers should have unique IDs
+        assert_ne!(container_a.id(), container_b.id());
+        assert_ne!(container_b.id(), container_c.id());
+        assert_ne!(container_a.id(), container_c.id());
+    }
+
+    #[test]
+    fn test_ratios_empty_container() {
+        let root = new_container();
+        assert_eq!(root.ratios().len(), 0);
+    }
+
+    #[test]
+    fn test_bounds_operations() {
+        let bounds = Bounds::new(100, 200, 300, 400);
+        let root = new_container_with_bounds(bounds.clone());
+
+        assert_eq!(root.bounds(), bounds);
+
+        let new_bounds = Bounds::new(150, 250, 350, 450);
+        root.set_bounds(new_bounds.clone());
+        assert_eq!(root.bounds(), new_bounds);
+    }
+
+    // === Complex Scenarios ===
+
+    #[test]
+    fn test_complex_nested_structure() {
+        let root = new_container_with_bounds(Bounds::new(0, 0, 1000, 1000));
+
+        // Create a complex nested structure
+        let window_a = root.add_window(new_window());
+        let window_b = root.add_window(new_window());
+
+        // Split window_a with window_c
+        let window_c = new_window();
+        let container_ac = root.split_window(&window_a, window_c.clone(), InsertOrder::After);
+
+        // Split window_c with window_d
+        let window_d = new_window();
+        let container_cd =
+            container_ac.split_window(&window_c, window_d.clone(), InsertOrder::After);
+
+        // Verify structure
+        assert_eq!(root.children().len(), 2);
+        assert_is_container(&root.children()[0]); // container_ac
+        assert_window(&root.children()[1], &window_b);
+
+        assert_eq!(container_ac.children().len(), 2);
+        assert_window(&container_ac.children()[0], &window_a);
+        assert_is_container(&container_ac.children()[1]); // container_cd
+
+        assert_eq!(container_cd.children().len(), 2);
+        assert_window(&container_cd.children()[0], &window_c);
+        assert_window(&container_cd.children()[1], &window_d);
+
+        // Test bounds calculation
+        root.calculate_bounds();
+
+        // All windows should have valid bounds
+        assert!(window_a.bounds().size.width > 0);
+        assert!(window_a.bounds().size.height > 0);
+        assert!(window_b.bounds().size.width > 0);
+        assert!(window_b.bounds().size.height > 0);
+        assert!(window_c.bounds().size.width > 0);
+        assert!(window_c.bounds().size.height > 0);
+        assert!(window_d.bounds().size.width > 0);
+        assert!(window_d.bounds().size.height > 0);
+    }
+
+    #[test]
+    fn test_swap_complex_scenario() {
+        let root_a = new_container();
+        let root_b = new_container();
+
+        let window_a1 = root_a.add_window(new_window());
+        let window_a2 = root_a.add_window(new_window());
+        let window_b1 = root_b.add_window(new_window());
+        let window_b2 = root_b.add_window(new_window());
+
+        Container::swap(
+            &ContainerChildRef::Window(window_a1.clone()),
+            &ContainerChildRef::Window(window_b2.clone()),
+        );
+
+        // Verify the swap
+        assert_eq!(root_a.children().len(), 2);
+        assert_window(&root_a.children()[0], &window_b2);
+        assert_window(&root_a.children()[1], &window_a2);
+
+        assert_eq!(root_b.children().len(), 2);
+        assert_window(&root_b.children()[0], &window_b1);
+        assert_window(&root_b.children()[1], &window_a1);
+
+        // Verify parents
+        assert_eq!(window_a1.parent(), root_b);
+        assert_eq!(window_a2.parent(), root_a);
+        assert_eq!(window_b1.parent(), root_b);
+        assert_eq!(window_b2.parent(), root_a);
     }
 }
