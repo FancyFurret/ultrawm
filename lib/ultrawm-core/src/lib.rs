@@ -29,6 +29,10 @@ mod window_resize_handler;
 mod wm;
 mod workspace;
 
+pub fn version() -> &'static str {
+    option_env!("VERSION").unwrap_or("v0.0.0-dev")
+}
+
 #[derive(Debug)]
 pub enum UltraWMFatalError {
     Error(String),
