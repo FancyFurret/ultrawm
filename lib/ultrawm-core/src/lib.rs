@@ -36,7 +36,7 @@ pub fn version() -> &'static str {
 }
 
 pub fn reset_layout() -> UltraWMResult<()> {
-    serialization::reset_layout().map_err(|e| "Failed to reset layout".into())
+    serialization::reset_layout().map_err(|_| "Failed to reset layout".into())
 }
 
 pub fn start_with_config(shutdown: Arc<AtomicBool>, config: Config) -> UltraWMResult<()> {

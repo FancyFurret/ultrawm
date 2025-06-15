@@ -51,7 +51,7 @@ pub struct Container {
     id: ContainerId,
     bounds: RefCell<Bounds>,
     direction: Direction,
-    parent: Option<RefCell<ParentContainerRef>>,
+    parent: RefCell<Option<ParentContainerRef>>,
     children: RefCell<Vec<ContainerChildRef>>,
     ratios: RefCell<Vec<f32>>,
     self_ref: RefCell<ParentContainerRef>,
@@ -78,7 +78,7 @@ impl Container {
             id,
             bounds: RefCell::new(bounds),
             direction,
-            parent: parent.map(RefCell::new),
+            parent: RefCell::new(parent),
             children: RefCell::new(Vec::new()),
             ratios: RefCell::new(Vec::new()),
             self_ref: RefCell::new(Weak::new()),
@@ -115,14 +115,13 @@ impl Container {
 
     pub fn parent(&self) -> Option<ContainerRef> {
         self.parent
+            .borrow()
             .as_ref()
-            .map(|parent| parent.borrow().upgrade().unwrap())
+            .map(|parent| parent.upgrade().unwrap())
     }
 
     fn set_parent(&self, parent: ParentContainerRef) {
-        if let Some(parent_ref) = &self.parent {
-            parent_ref.replace(parent.clone());
-        }
+        self.parent.replace(Some(parent));
     }
 
     pub fn children(&self) -> Ref<Vec<ContainerChildRef>> {
@@ -741,7 +740,7 @@ mod tests {
     }
 
     #[test]
-    fn test_insert_existing_windowollapsing_container() {
+    fn test_insert_existing_window_collapsing_container() {
         let root = new_container();
         let ref_a = root.add_window(new_window());
         let ref_b = root.add_window(new_window());
