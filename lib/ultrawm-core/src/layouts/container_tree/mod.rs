@@ -1,11 +1,12 @@
 pub use container_tree::*;
 
 use crate::layouts::container_tree::container::{ContainerChildRef, ContainerWindowRef};
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicUsize;
 
 mod container;
 mod container_tree;
-mod serialize;
+mod serialization;
 
 pub type ContainerId = usize;
 
@@ -18,7 +19,7 @@ const MOUSE_ADD_TO_PARENT_THRESHOLD: f32 = 0.2;
 const MOUSE_SPLIT_PREVIEW_RATIO: f32 = 0.5;
 const MOUSE_ADD_TO_PARENT_PREVIEW_RATIO: f32 = 0.25;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum Direction {
     Horizontal,
     Vertical,

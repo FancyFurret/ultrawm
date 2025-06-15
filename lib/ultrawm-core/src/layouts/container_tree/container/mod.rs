@@ -68,7 +68,7 @@ impl Container {
         Self::new(bounds, Direction::Horizontal, None)
     }
 
-    fn new(
+    pub fn new(
         bounds: Bounds,
         direction: Direction,
         parent: Option<ParentContainerRef>,
@@ -102,6 +102,15 @@ impl Container {
 
     pub fn direction(&self) -> Direction {
         self.direction
+    }
+
+    pub fn ratios(&self) -> Ref<Vec<f32>> {
+        self.ratios.borrow()
+    }
+
+    pub fn set_ratios(&self, ratios: Vec<f32>) {
+        self.ratios.replace(ratios);
+        self.normalize_ratios();
     }
 
     pub fn parent(&self) -> Option<ContainerRef> {
@@ -390,7 +399,7 @@ impl Container {
         self.ratios.replace(vec![ratio; children.len()]);
     }
 
-    pub fn balance(&self) {
+    pub fn calculate_bounds(&self) {
         // Early exit if no children
         let children = self.children();
         if children.is_empty() {
@@ -447,7 +456,7 @@ impl Container {
 
             // Only recurse if it's a container
             if let ContainerChildRef::Container(c) = child {
-                c.balance();
+                c.calculate_bounds();
             }
         }
     }

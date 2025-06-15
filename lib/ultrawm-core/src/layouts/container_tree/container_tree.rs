@@ -7,7 +7,9 @@ use crate::layouts::container_tree::container::{
     Container, ContainerChildRef, ContainerRef, ContainerWindow, ContainerWindowRef,
     ResizeDistribution,
 };
-use crate::layouts::container_tree::serialize::serialize_tree;
+use crate::layouts::container_tree::serialization::{
+    deserialize_container, serialize_container, SerializedContainerTree,
+};
 use crate::layouts::container_tree::{
     Direction, TileAction, MOUSE_ADD_TO_PARENT_PREVIEW_RATIO, MOUSE_ADD_TO_PARENT_THRESHOLD,
     MOUSE_SPLIT_PREVIEW_RATIO, MOUSE_SPLIT_THRESHOLD, MOUSE_SWAP_THRESHOLD,
@@ -31,6 +33,51 @@ impl ContainerTree {
 
     pub fn root(&self) -> ContainerRef {
         self.root.clone()
+    }
+
+    fn serialize(&self) -> serde_yaml::Value {
+        let serialized = SerializedContainerTree {
+            root: serialize_container(&self.root()),
+            bounds: self.bounds(),
+        };
+
+        serde_yaml::to_value(serialized).unwrap()
+    }
+
+    fn deserialize(
+        bounds: Bounds,
+        windows: &Vec<WindowRef>,
+        saved_layout: &serde_yaml::Value,
+    ) -> Option<Self> {
+        // Try to deserialize the saved layout
+        let serialized: SerializedContainerTree =
+            serde_yaml::from_value(saved_layout.clone()).ok()?;
+
+        // Create a map of available windows by ID
+        let available_windows: HashMap<WindowId, WindowRef> =
+            windows.iter().map(|w| (w.id(), w.clone())).collect();
+
+        let mut windows_map = HashMap::new();
+        let root = deserialize_container(
+            &serialized.root,
+            Self::get_root_bounds(&bounds),
+            &available_windows,
+            &mut windows_map,
+            None,
+        )?;
+
+        println!(
+            "Successfully reconstructed layout with {} windows placed",
+            windows_map.len()
+        );
+
+        root.calculate_bounds();
+
+        Some(Self {
+            bounds,
+            root,
+            windows: windows_map,
+        })
     }
 
     /// Formats the container tree structure for debugging purposes
@@ -100,7 +147,7 @@ impl ContainerTree {
                 }
             }
         }
-        return None;
+        None
     }
 
     fn get_closest_distance_from_side(bounds: &Bounds, position: &Position) -> (i32, Side) {
@@ -171,7 +218,7 @@ impl ContainerTree {
             return None;
         };
 
-        return match action {
+        match action {
             MouseAction::Swap => {
                 if is_same_window {
                     return None;
@@ -239,7 +286,7 @@ impl ContainerTree {
                     ))
                 }
             }
-        };
+        }
     }
 
     fn get_preview_for_side(bounds: &Bounds, side: Side, size_ratio: f32) -> Bounds {
@@ -350,6 +397,18 @@ impl ContainerTree {
             }
         }
     }
+
+    fn get_root_bounds(bounds: &Bounds) -> Bounds {
+        let config = Config::current();
+
+        // Apply partition gap and invert the window gap so that the outer gap is 0
+        Bounds::new(
+            bounds.position.x + config.partition_gap as i32 - config.window_gap as i32 / 2,
+            bounds.position.y + config.partition_gap as i32 - config.window_gap as i32 / 2,
+            bounds.size.width - config.partition_gap * 2 + config.window_gap,
+            bounds.size.height - config.partition_gap * 2 + config.window_gap,
+        )
+    }
 }
 
 impl WindowLayout for ContainerTree {
@@ -357,20 +416,26 @@ impl WindowLayout for ContainerTree {
     where
         Self: Sized,
     {
-        // For now, just add each window to the root container.
-        // Later, we should try to keep the windows in similar positions to how they were before
-        // as to not mess up the user's layout.
+        Self::new_from_saved(bounds, windows, None)
+    }
 
-        let config = Config::current();
+    fn new_from_saved(
+        bounds: Bounds,
+        windows: &Vec<WindowRef>,
+        saved_layout: Option<&serde_yaml::Value>,
+    ) -> Self
+    where
+        Self: Sized,
+    {
+        if let Some(saved_layout) = saved_layout {
+            if let Some(tree) = Self::deserialize(bounds.clone(), windows, saved_layout) {
+                return tree;
+            }
 
-        // Apply partition gap and invert the window gap so that the outer gap is 0
-        let root_bounds = Bounds::new(
-            bounds.position.x + config.partition_gap as i32 - config.window_gap as i32 / 2,
-            bounds.position.y + config.partition_gap as i32 - config.window_gap as i32 / 2,
-            bounds.size.width - config.partition_gap * 2 + config.window_gap,
-            bounds.size.height - config.partition_gap * 2 + config.window_gap,
-        );
+            println!("Failed to deserialize saved layout, starting from scratch");
+        }
 
+        let root_bounds = Self::get_root_bounds(&bounds);
         let root = Container::new_root(root_bounds);
 
         // Sort by x position so that they stay in somewhat the same order
@@ -387,7 +452,7 @@ impl WindowLayout for ContainerTree {
         }
 
         root.equalize_ratios();
-        root.balance();
+        root.calculate_bounds();
 
         Self {
             bounds,
@@ -397,7 +462,7 @@ impl WindowLayout for ContainerTree {
     }
 
     fn serialize(&self) -> serde_yaml::Value {
-        serialize_tree(self)
+        self.serialize()
     }
 
     fn get_preview_bounds(&self, window: &WindowRef, position: &Position) -> Option<Bounds> {
@@ -470,7 +535,7 @@ impl WindowLayout for ContainerTree {
             }
         }
 
-        self.root().balance();
+        self.root().calculate_bounds();
 
         Ok(InsertResult::None)
     }
@@ -543,7 +608,7 @@ impl WindowLayout for ContainerTree {
             }
         }
 
-        self.root.balance();
+        self.root.calculate_bounds();
     }
 
     fn drag_handles(&self) -> Vec<DragHandle> {
@@ -569,7 +634,7 @@ impl WindowLayout for ContainerTree {
         let success = container.resize_between(handle.index, new_position);
 
         if success {
-            self.root.balance();
+            self.root.calculate_bounds();
         }
 
         success

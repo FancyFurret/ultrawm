@@ -12,6 +12,14 @@ pub trait WindowLayout: Debug {
     where
         Self: Sized;
 
+    fn new_from_saved(
+        bounds: Bounds,
+        windows: &Vec<WindowRef>,
+        saved_layout: Option<&serde_yaml::Value>,
+    ) -> Self
+    where
+        Self: Sized;
+
     fn serialize(&self) -> serde_yaml::Value;
 
     fn get_preview_bounds(&self, window: &WindowRef, position: &Position) -> Option<Bounds>;

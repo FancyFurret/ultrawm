@@ -14,7 +14,7 @@ fn main() -> UltraWMResult<()> {
     println!("Starting UltraWM");
 
     // Handle config loading
-    let config = if args.use_defaults {
+    let mut config = if args.use_defaults {
         Default::default()
     } else {
         let config_path = args.config_path.as_ref().map(|p| p.to_str().unwrap());
@@ -27,7 +27,7 @@ fn main() -> UltraWMResult<()> {
             }
             Err(e) => {
                 eprintln!("Failed to load config: {}", e);
-                if args.dry_run {
+                if args.validate {
                     return Err(format!("Config loading failed: {}", e).into());
                 } else {
                     eprintln!("Falling back to default configuration");
@@ -38,7 +38,7 @@ fn main() -> UltraWMResult<()> {
     };
 
     // Handle dry-run mode
-    if args.dry_run {
+    if args.validate {
         let config_path = args.config_path.as_ref().map(|p| p.to_str().unwrap());
         match Config::load(config_path) {
             Ok(_) => println!("Config file is valid"),
@@ -47,6 +47,21 @@ fn main() -> UltraWMResult<()> {
             }
         }
         return Ok(());
+    }
+
+    if args.reset_layout {
+        match ultrawm_core::reset_layout() {
+            Ok(_) => println!("Successfully reset layout"),
+            Err(_) => {
+                return Err("Could not reset layout".into());
+            }
+        }
+        return Ok(());
+    }
+
+    if args.no_persistence {
+        println!("Starting with no persistence");
+        config.persistence = false;
     }
 
     let shutdown = Arc::new(AtomicBool::new(false));

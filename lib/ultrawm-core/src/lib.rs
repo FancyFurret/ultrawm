@@ -20,7 +20,7 @@ mod layouts;
 mod overlay_window;
 mod partition;
 pub mod platform;
-mod serialize;
+mod serialization;
 mod thread_lock;
 mod tile_result;
 mod window;
@@ -35,29 +35,13 @@ pub fn version() -> &'static str {
     option_env!("VERSION").unwrap_or("v0.0.0-dev")
 }
 
-#[derive(Debug)]
-pub enum UltraWMFatalError {
-    Error(String),
-    PlatformError(PlatformError),
+pub fn reset_layout() -> UltraWMResult<()> {
+    serialization::reset_layout().map_err(|e| "Failed to reset layout".into())
 }
 
-pub type UltraWMResult<T> = Result<T, UltraWMFatalError>;
-
-impl From<PlatformError> for UltraWMFatalError {
-    fn from(error: PlatformError) -> Self {
-        UltraWMFatalError::PlatformError(error)
-    }
-}
-
-impl From<&str> for UltraWMFatalError {
-    fn from(value: &str) -> Self {
-        UltraWMFatalError::Error(value.to_owned())
-    }
-}
-impl From<String> for UltraWMFatalError {
-    fn from(error: String) -> Self {
-        UltraWMFatalError::Error(error)
-    }
+pub fn start_with_config(shutdown: Arc<AtomicBool>, config: Config) -> UltraWMResult<()> {
+    Config::set_config(config);
+    start(shutdown)
 }
 
 pub fn start(shutdown: Arc<AtomicBool>) -> UltraWMResult<()> {
@@ -105,7 +89,27 @@ pub fn start(shutdown: Arc<AtomicBool>) -> UltraWMResult<()> {
     Ok(())
 }
 
-pub fn start_with_config(shutdown: Arc<AtomicBool>, config: Config) -> UltraWMResult<()> {
-    Config::set_config(config);
-    start(shutdown)
+#[derive(Debug)]
+pub enum UltraWMFatalError {
+    Error(String),
+    PlatformError(PlatformError),
+}
+
+pub type UltraWMResult<T> = Result<T, UltraWMFatalError>;
+
+impl From<PlatformError> for UltraWMFatalError {
+    fn from(error: PlatformError) -> Self {
+        UltraWMFatalError::PlatformError(error)
+    }
+}
+
+impl From<&str> for UltraWMFatalError {
+    fn from(value: &str) -> Self {
+        UltraWMFatalError::Error(value.to_owned())
+    }
+}
+impl From<String> for UltraWMFatalError {
+    fn from(error: String) -> Self {
+        UltraWMFatalError::Error(error)
+    }
 }

@@ -6,7 +6,7 @@ use crate::platform::{
     Bounds, Platform, PlatformImpl, PlatformResult, PlatformWindow, PlatformWindowImpl, Position,
     WindowId,
 };
-use crate::serialize::serialize_wm;
+use crate::serialization::{extract_workspace_layout, load_layout, save_layout};
 use crate::window::{Window, WindowRef};
 use crate::workspace::{Workspace, WorkspaceId};
 use std::collections::HashMap;
@@ -21,7 +21,6 @@ pub struct WindowManager {
 
 impl WindowManager {
     pub fn new() -> PlatformResult<Self> {
-        // TODO: Load from file
         let _config = Config::current();
 
         let displays = Platform::list_all_displays()?;
@@ -44,15 +43,33 @@ impl WindowManager {
         let windows_map: HashMap<WindowId, WindowRef> =
             windows.iter().map(|w| (w.id(), w.clone())).collect();
 
+        // Try to load saved layout
+        let saved_layout = match load_layout() {
+            Ok(Some(layout)) => Some(layout),
+            Ok(None) => None,
+            Err(e) => {
+                println!("Failed to load saved layout: {}, creating new layout", e);
+                None
+            }
+        };
+
         // Also for now, just make 1 workspace per partition. Will be configurable later.
         let mut workspaces: HashMap<WorkspaceId, Workspace> = partitions
             .values_mut()
             .map(|partition| {
-                let windows = Self::get_windows_for_partition(&mut windows, partition.bounds());
-                let workspace = Workspace::new::<ContainerTree>(
+                let windows_for_partition =
+                    Self::get_windows_for_partition(&mut windows, partition.bounds());
+
+                // Extract the specific layout data for this workspace
+                let workspace_layout = saved_layout.as_ref().and_then(|layout| {
+                    extract_workspace_layout(layout, partition.name(), "Default")
+                });
+
+                let workspace = Workspace::new_with_saved_layout::<ContainerTree>(
                     partition.bounds().clone(),
-                    &windows,
+                    &windows_for_partition,
                     "Default".to_string(),
+                    workspace_layout.as_ref(),
                 );
                 partition.assign_workspace(workspace.id());
                 (workspace.id(), workspace)
@@ -99,7 +116,14 @@ impl WindowManager {
         workspace.tile_window(&window, position)?;
 
         println!("tiled window");
-        workspace.flush_windows()
+        workspace.flush_windows()?;
+
+        // Save layout after tiling
+        if let Err(e) = save_layout(self) {
+            println!("Warning: Failed to save layout: {}", e);
+        }
+
+        Ok(())
     }
 
     pub fn remove_window(&mut self, id: WindowId) -> Result<(), ()> {
@@ -109,6 +133,12 @@ impl WindowManager {
             if workspace.remove_window(&window).is_ok() {
                 self.windows.remove(&id);
                 workspace.flush_windows()?;
+
+                // Save layout after removing window
+                if let Err(e) = save_layout(self) {
+                    println!("Warning: Failed to save layout: {}", e);
+                }
+
                 return Ok(());
             }
         }
@@ -126,6 +156,12 @@ impl WindowManager {
             if workspace.has_window(window.id()) {
                 workspace.resize_window(window, bounds, direction);
                 workspace.flush_windows()?;
+
+                // Save layout after resizing
+                if let Err(e) = save_layout(self) {
+                    println!("Warning: Failed to save layout: {}", e);
+                }
+
                 return Ok(());
             }
         }
@@ -141,10 +177,6 @@ impl WindowManager {
         let workspace = self.get_workspace_at_position(position)?;
         let window = self.get_window(id)?;
         workspace.get_tile_bounds(&window, position)
-    }
-
-    pub fn serialize(&self) -> serde_yaml::Value {
-        serialize_wm(self)
     }
 
     fn get_workspace_at_position(&self, position: &Position) -> Option<&Workspace> {
@@ -249,6 +281,11 @@ impl WindowManager {
         if let Some(workspace) = self.get_workspace_at_position_mut(position) {
             if workspace.drag_handle_moved(handle, position) {
                 workspace.flush_windows()?;
+
+                // Save layout after drag handle moved
+                if let Err(e) = save_layout(self) {
+                    println!("Warning: Failed to save layout: {}", e);
+                }
             }
         }
         Ok(())

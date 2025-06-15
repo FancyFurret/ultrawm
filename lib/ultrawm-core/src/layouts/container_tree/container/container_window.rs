@@ -51,7 +51,7 @@ impl ContainerWindow {
         self.window.bounds().clone()
     }
 
-    pub(super) fn set_bounds(&self, bounds: Bounds) {
+    pub fn set_bounds(&self, bounds: Bounds) {
         self.window.set_bounds(bounds);
     }
 

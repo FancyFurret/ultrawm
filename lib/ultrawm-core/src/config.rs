@@ -6,7 +6,10 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Config {
+    /// Whether to save your layout and load it on startup
+    pub persistence: bool,
     /// The number of pixels between windows
     pub window_gap: u32,
     /// The number of pixels between the edge of the partition and the windows
@@ -60,6 +63,14 @@ impl Config {
         let config: Config = serde_yaml::from_str(&contents)
             .map_err(|e| format!("Failed to parse config file '{}': {}", path.display(), e))?;
 
+        // Save the config back to ensure all fields are present (fills in any missing fields with defaults)
+        if let Err(e) = config.save_to_file(&path) {
+            eprintln!(
+                "Warning: Failed to update config file with missing fields: {}",
+                e
+            );
+        }
+
         Ok(config)
     }
 
@@ -69,12 +80,7 @@ impl Config {
         }
 
         let default_config = Config::default();
-
-        let header = "# UltraWM Configuration File\n# This file was automatically generated with default values.\n\n";
-        let serialized_config = serde_yaml::to_string(&default_config)?;
-        let config_content = format!("{}{}", header, serialized_config);
-
-        fs::write(path, config_content)?;
+        default_config.save_to_file(path)?;
         Ok(())
     }
 
@@ -101,6 +107,10 @@ impl Config {
         if let Ok(mut config) = CURRENT_CONFIG.write() {
             *config = Config::default();
         }
+    }
+
+    pub fn persistence() -> bool {
+        Self::current().persistence
     }
 
     pub fn window_gap() -> u32 {
@@ -150,11 +160,27 @@ impl Config {
     pub fn live_window_resize() -> bool {
         Self::current().live_window_resize
     }
+
+    /// Save the current config to a file
+    pub fn save_to_file(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let header =
+            "# UltraWM Configuration File\n# This file contains your UltraWM settings.\n\n";
+        let serialized_config = serde_yaml::to_string(self)?;
+        let config_content = format!("{}{}", header, serialized_config);
+
+        fs::write(path, config_content)?;
+        Ok(())
+    }
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
+            persistence: true,
             window_gap: 20,
             partition_gap: 40,
             float_new_windows: true,

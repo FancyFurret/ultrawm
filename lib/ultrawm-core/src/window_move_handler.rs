@@ -107,13 +107,6 @@ impl WindowMoveHandler {
                 wm.tile_window(id, &position).unwrap_or_else(|_| {
                     println!("Could not tile window at position");
                 });
-
-                let new_layout = wm.serialize();
-                std::fs::write(
-                    "current_layout.yaml",
-                    serde_yaml::to_string(&new_layout).unwrap(),
-                )
-                .unwrap();
             } else {
                 // Move the window back to its original position
                 let window = wm.get_window(id).unwrap();

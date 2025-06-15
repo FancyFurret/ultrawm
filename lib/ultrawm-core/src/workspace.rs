@@ -25,8 +25,17 @@ impl Workspace {
         windows: &Vec<WindowRef>,
         name: String,
     ) -> Self {
+        Self::new_with_saved_layout::<TLayout>(bounds, windows, name, None)
+    }
+
+    pub fn new_with_saved_layout<TLayout: WindowLayout + 'static>(
+        bounds: Bounds,
+        windows: &Vec<WindowRef>,
+        name: String,
+        saved_layout: Option<&serde_yaml::Value>,
+    ) -> Self {
         let id = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let layout = Box::new(TLayout::new(bounds, windows));
+        let layout = Box::new(TLayout::new_from_saved(bounds, windows, saved_layout));
         let windows = windows.iter().map(|w| (w.id(), w.clone())).collect();
         Self {
             id,

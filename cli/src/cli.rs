@@ -8,7 +8,6 @@ use std::path::PathBuf;
     about = "UltraWM - A next-generation, cross-platform tiling window manager",
 )]
 pub struct Args {
-    /// Specify custom configuration file path
     #[arg(
         short = 'c',
         long = "config",
@@ -17,27 +16,36 @@ pub struct Args {
     )]
     pub config_path: Option<PathBuf>,
 
-    /// Validate configuration and exit without starting
     #[arg(
-        long = "dry-run",
+        long = "validate",
         help = "Validate configuration and exit without starting"
     )]
-    pub dry_run: bool,
+    pub validate: bool,
 
-    /// Use default configuration and ignore config files
     #[arg(
         long = "defaults",
         help = "Use default configuration and ignore config files"
     )]
     pub use_defaults: bool,
+
+    #[arg(long = "no-persistence", help = "Disable saving and loading of layout")]
+    pub no_persistence: bool,
+
+    #[arg(
+        long = "reset-layout",
+        help = "Deletes your current layout in case it has issues"
+    )]
+    pub reset_layout: bool,
 }
 
 impl Default for Args {
     fn default() -> Self {
         Self {
             config_path: None,
-            dry_run: false,
+            validate: false,
             use_defaults: false,
+            no_persistence: false,
+            reset_layout: false,
         }
     }
 }
