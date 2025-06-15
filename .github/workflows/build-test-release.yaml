@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  VERSION: v0.0.0-dev.${{ github.run_number }}
 
 jobs:
   build:
@@ -27,6 +28,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -47,3 +50,44 @@ jobs:
           path: |
             target/release/${{ matrix.binary }}
           if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Prepare artifacts for release
+        run: |
+          mkdir -p release
+          cd artifacts
+          for dir in */; do
+            cd "$dir"
+            zip -r "../../release/$(basename "$dir")-${{ env.VERSION }}.zip" .
+            cd ..
+          done
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          echo "## Commits in this release" > RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          git log $(git describe --tags --abbrev=0 2>/dev/null || echo HEAD~20)..HEAD --pretty=format:"* %s (%h)" >> RELEASE_NOTES.md
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ env.VERSION }}
+          tag_name: ${{ env.VERSION }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            release/ultrawm-windows-x64-${{ env.VERSION }}.zip
+            release/ultrawm-macos-arm64-${{ env.VERSION }}.zip
+          fail_on_unmatched_files: true
