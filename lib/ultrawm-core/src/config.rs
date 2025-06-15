@@ -1,8 +1,11 @@
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::RwLock;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// The number of pixels between windows
     pub window_gap: u32,
@@ -34,6 +37,53 @@ static CURRENT_CONFIG: Lazy<Arc<RwLock<Config>>> =
     Lazy::new(|| Arc::new(RwLock::new(Config::default())));
 
 impl Config {
+    pub fn default_config_path() -> Option<PathBuf> {
+        dirs::config_dir().map(|dir| dir.join("UltraWM").join("config.yaml"))
+    }
+
+    pub fn load(config_path: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
+        let path = match config_path {
+            Some(p) => PathBuf::from(p),
+            None => {
+                Self::default_config_path().ok_or("Could not determine default config directory")?
+            }
+        };
+
+        if !path.exists() {
+            Self::create_default_config_file(&path)?;
+            println!("Created default config file at: {}", path.display());
+        }
+
+        let contents = fs::read_to_string(&path)
+            .map_err(|e| format!("Failed to read config file '{}': {}", path.display(), e))?;
+
+        let config: Config = serde_yaml::from_str(&contents)
+            .map_err(|e| format!("Failed to parse config file '{}': {}", path.display(), e))?;
+
+        Ok(config)
+    }
+
+    fn create_default_config_file(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let default_config = Config::default();
+
+        let header = "# UltraWM Configuration File\n# This file was automatically generated with default values.\n\n";
+        let serialized_config = serde_yaml::to_string(&default_config)?;
+        let config_content = format!("{}{}", header, serialized_config);
+
+        fs::write(path, config_content)?;
+        Ok(())
+    }
+
+    pub fn set_config(config: Config) {
+        if let Ok(mut global_config) = CURRENT_CONFIG.write() {
+            *global_config = config;
+        }
+    }
+
     pub fn current() -> std::sync::RwLockReadGuard<'static, Config> {
         CURRENT_CONFIG.read().unwrap()
     }

@@ -12,3 +12,4 @@ ultrawm-core = { path = "../lib/ultrawm-core" }
 ctrlc = "3.4"
 tray-icon = "0.14"
 resvg = "0.37"
+clap = { version = "4.5.40", features = ["derive"] }

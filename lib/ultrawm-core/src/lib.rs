@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::{process, thread};
 
 mod animation;
-mod config;
+pub mod config;
 mod drag_handle;
 mod drag_tracker;
 mod event_loop_main;
@@ -28,6 +28,8 @@ mod window_move_handler;
 mod window_resize_handler;
 mod wm;
 mod workspace;
+
+pub use config::Config;
 
 pub fn version() -> &'static str {
     option_env!("VERSION").unwrap_or("v0.0.0-dev")
@@ -101,4 +103,9 @@ pub fn start(shutdown: Arc<AtomicBool>) -> UltraWMResult<()> {
     EventLoopMain::run()?;
 
     Ok(())
+}
+
+pub fn start_with_config(shutdown: Arc<AtomicBool>, config: Config) -> UltraWMResult<()> {
+    Config::set_config(config);
+    start(shutdown)
 }
