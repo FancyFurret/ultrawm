@@ -9,14 +9,15 @@ use crate::{
     },
 };
 
-/// # Safety
-/// These functions should only be called from the main thread. They are not thread safe.
 pub unsafe trait PlatformEventsImpl
 where
     Self: Sized,
 {
     /// Initializes the platform. This should be called once at the start of the program.
+    /// This function should only be called from the main thread. It is not thread safe.
     unsafe fn initialize(dispatcher: EventDispatcher) -> PlatformResult<()>;
+
+    fn set_intercept_clicks(intercept: bool) -> PlatformResult<()>;
 }
 
 pub trait PlatformImpl
@@ -32,6 +33,15 @@ where
 
     /// Returns the current mouse position.
     fn get_mouse_position() -> PlatformResult<Position>;
+
+    /// Hides the resize cursor and replaces it with a pointer if the current cursor is a resize cursor.
+    fn hide_resize_cursor() -> PlatformResult<()>;
+
+    /// Resets the cursor to the system default.
+    fn reset_cursor() -> PlatformResult<()>;
+
+    fn start_window_bounds_batch(window_count: u32) -> PlatformResult<()>;
+    fn end_window_bounds_batch() -> PlatformResult<()>;
 }
 
 pub trait PlatformOverlayImpl {

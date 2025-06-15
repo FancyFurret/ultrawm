@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use crate::animation::{ease_in_out_cubic, Animator};
 use crate::event_loop_main::run_on_main_thread_blocking;
 use crate::platform::{Bounds, PlatformOverlay, PlatformOverlayImpl, PlatformResult, WindowId};
-use crate::UltraWMResult;
+use crate::{UltraWMFatalError, UltraWMResult};
 use skia_safe::{surfaces, Color, Paint, PaintStyle, RRect, Rect, Surface};
 use winit::dpi::{LogicalSize, PhysicalPosition};
 use winit::window::{Window, WindowAttributes, WindowLevel};
@@ -45,6 +45,7 @@ pub struct OverlayWindow {
     config: OverlayWindowConfig,
     command_sender: Sender<OverlayWindowCommand>,
     animator_thread: Option<thread::JoinHandle<()>>,
+    shown: bool,
 }
 
 pub struct OverlayWindowAnimator {
@@ -106,27 +107,51 @@ impl OverlayWindow {
 
         Ok(Self {
             config,
+            shown: false,
             command_sender: tx,
             animator_thread: Some(animator_thread),
         })
     }
+    pub fn shown(&self) -> bool {
+        self.shown
+    }
 
-    pub fn show(&self) -> UltraWMResult<()> {
+    pub fn show(&mut self) -> UltraWMResult<()> {
+        if self.shown {
+            return Ok(());
+        }
+
         self.command_sender
             .send(OverlayWindowCommand::Show)
-            .map_err(|e| format!("Failed to send show command: {}", e).into())
+            .map_err(|e| -> UltraWMFatalError {
+                format!("Failed to send show command: {}", e).into()
+            })?;
+
+        self.shown = true;
+        Ok(())
     }
 
-    pub fn hide(&self) -> UltraWMResult<()> {
+    pub fn hide(&mut self) -> UltraWMResult<()> {
+        if !self.shown {
+            return Ok(());
+        }
+
         self.command_sender
             .send(OverlayWindowCommand::Hide)
-            .map_err(|e| format!("Failed to send hide command: {}", e).into())
+            .map_err(|e| -> UltraWMFatalError {
+                format!("Failed to send hide command: {}", e).into()
+            })?;
+
+        self.shown = false;
+        Ok(())
     }
 
-    pub fn move_to(&self, bounds: &Bounds) -> UltraWMResult<()> {
+    pub fn move_to(&mut self, bounds: &Bounds) -> UltraWMResult<()> {
         self.command_sender
             .send(OverlayWindowCommand::MoveTo(bounds.clone()))
-            .map_err(|e| format!("Failed to send move command: {}", e).into())
+            .map_err(|e| -> UltraWMFatalError {
+                format!("Failed to send move command: {}", e).into()
+            })
     }
 }
 

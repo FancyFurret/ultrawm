@@ -5,7 +5,7 @@ use crate::window::WindowRef;
 pub use container_tree::*;
 use std::fmt::Debug;
 
-mod container_tree;
+pub mod container_tree;
 
 pub trait WindowLayout: Debug {
     fn new(bounds: Bounds, windows: &Vec<WindowRef>) -> Self
@@ -28,9 +28,12 @@ pub trait WindowLayout: Debug {
 
     fn resize_window(&mut self, window: &WindowRef, bounds: &Bounds, direction: ResizeDirection);
 
-    /// Returns a list of drag handles for this layout (empty by default)
     fn drag_handles(&self) -> Vec<DragHandle> {
         Vec::new()
+    }
+
+    fn drag_handle_moved(&mut self, _handle: &DragHandle, _position: &Position) -> bool {
+        false
     }
 
     fn debug_layout(&self) -> String;

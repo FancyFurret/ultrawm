@@ -28,7 +28,7 @@ fn tidy() -> ExitCode {
 
     // Run cargo fix
     let fix_status = ProcessCommand::new("cargo")
-        .args(["fix", "--allow-dirty"])
+        .args(["fix", "--allow-dirty", "--all-features", "--workspace"])
         .status()
         .expect("Failed to run cargo fix");
 

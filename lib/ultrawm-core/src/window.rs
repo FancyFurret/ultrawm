@@ -55,20 +55,31 @@ impl Window {
         bounds.position.x += config.window_gap as i32 / 2;
         bounds.position.y += config.window_gap as i32 / 2;
 
-        bounds.size.width = bounds.size.width.saturating_sub(config.window_gap as u32);
-        bounds.size.height = bounds.size.height.saturating_sub(config.window_gap as u32);
+        bounds.size.width = bounds.size.width.saturating_sub(config.window_gap);
+        bounds.size.height = bounds.size.height.saturating_sub(config.window_gap);
 
         self.platform_window.borrow().set_bounds(&bounds)?;
 
         Ok(())
     }
 
+    pub fn window_bounds(&self) -> Bounds {
+        let config = Config::current();
+
+        let mut bounds = self.bounds.borrow().clone();
+        bounds.position.x += config.window_gap as i32 / 2;
+        bounds.position.y += config.window_gap as i32 / 2;
+        bounds.size.width -= config.window_gap;
+        bounds.size.height -= config.window_gap;
+        bounds
+    }
+
     pub fn platform_bounds(&self) -> Bounds {
         let config = Config::current();
 
         let mut bounds = self.platform_window().size().clone();
-        bounds.width += config.window_gap as u32;
-        bounds.height += config.window_gap as u32;
+        bounds.width += config.window_gap;
+        bounds.height += config.window_gap;
 
         let mut position = self.platform_window().position().clone();
         position.x -= config.window_gap as i32 / 2;

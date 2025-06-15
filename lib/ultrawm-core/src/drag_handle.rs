@@ -20,6 +20,10 @@ pub struct DragHandle {
     pub min: i32,
     /// Maximum coordinate along the drag axis that the handle is allowed to move to.
     pub max: i32,
+    /// ID of the container that owns this handle
+    pub id: usize,
+    /// Index of the child after this handle in the container's children list
+    pub index: usize,
 }
 
 impl DragHandle {
@@ -29,6 +33,8 @@ impl DragHandle {
         orientation: HandleOrientation,
         min: i32,
         max: i32,
+        id: usize,
+        index: usize,
     ) -> Self {
         Self {
             center,
@@ -36,6 +42,8 @@ impl DragHandle {
             orientation,
             min,
             max,
+            id,
+            index,
         }
     }
 
@@ -61,10 +69,4 @@ impl DragHandle {
             ),
         }
     }
-}
-
-/// Layouts that wish to expose custom drag handles should implement this trait.
-/// The window manager will query visible handles each time the workspace changes or the mouse moves.
-pub trait DragHandleProvider {
-    fn drag_handles(&self) -> Vec<DragHandle>;
 }

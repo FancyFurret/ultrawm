@@ -1,6 +1,7 @@
 use crate::drag_handle::DragHandle;
 use crate::layouts::{ResizeDirection, WindowLayout};
-use crate::platform::{Bounds, Position, WindowId};
+use crate::platform::traits::PlatformImpl;
+use crate::platform::{Bounds, Platform, Position, WindowId};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
 use std::collections::HashMap;
@@ -78,9 +79,12 @@ impl Workspace {
     }
 
     pub fn flush_windows(&mut self) -> Result<(), ()> {
+        let window_count = self.windows.len() as u32;
+        Platform::start_window_bounds_batch(window_count).unwrap();
         for window in self.windows.values_mut() {
             window.flush().map_err(|_| ())?;
         }
+        Platform::end_window_bounds_batch().unwrap();
         Ok(())
     }
 
@@ -90,5 +94,9 @@ impl Workspace {
 
     pub fn drag_handles(&self) -> Vec<DragHandle> {
         self.layout.drag_handles()
+    }
+
+    pub fn drag_handle_moved(&mut self, handle: &DragHandle, position: &Position) -> bool {
+        self.layout.drag_handle_moved(handle, position)
     }
 }

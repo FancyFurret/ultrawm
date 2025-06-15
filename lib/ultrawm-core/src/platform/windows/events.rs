@@ -4,6 +4,7 @@ use crate::platform::{
     PlatformWindowImpl, Position, WindowId,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
@@ -19,6 +20,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 static EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
 static mut MOUSE_HOOK: Option<HHOOK> = None;
+static INTERCEPT_CLICKS: AtomicBool = AtomicBool::new(false);
 
 pub struct WindowsPlatformEvents;
 
@@ -72,6 +74,11 @@ unsafe impl PlatformEventsImpl for WindowsPlatformEvents {
             .map_err(|e| format!("Could not set mouse hook: {:?}", e))?;
         MOUSE_HOOK = Some(mouse_hook);
 
+        Ok(())
+    }
+
+    fn set_intercept_clicks(intercept: bool) -> PlatformResult<()> {
+        INTERCEPT_CLICKS.store(intercept, Ordering::SeqCst);
         Ok(())
     }
 }
@@ -133,6 +140,16 @@ unsafe extern "system" fn mouse_hook_proc(
         };
 
         EVENT_DISPATCHER.get().unwrap().send(event);
+
+        if INTERCEPT_CLICKS.load(Ordering::SeqCst) {
+            match w_param.0 as u32 {
+                WM_LBUTTONDOWN | WM_LBUTTONUP | WM_RBUTTONDOWN | WM_RBUTTONUP | WM_MBUTTONDOWN
+                | WM_MBUTTONUP => {
+                    return LRESULT(1);
+                }
+                _ => {}
+            }
+        }
     }
 
     unsafe { CallNextHookEx(None, n_code, w_param, l_param) }

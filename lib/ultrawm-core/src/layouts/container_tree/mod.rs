@@ -1,10 +1,15 @@
 pub use container_tree::*;
 
 use crate::layouts::container_tree::container::{ContainerChildRef, ContainerWindowRef};
+use std::sync::atomic::AtomicUsize;
 
 mod container;
 mod container_tree;
 mod serialize;
+
+pub type ContainerId = usize;
+
+static CONTAINER_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 // Percentage of half the container size that the mouse must be within
 const MOUSE_SWAP_THRESHOLD: f32 = 1.0;
@@ -102,7 +107,6 @@ enum TileAction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Config, ConfigRef};
     use crate::layouts::container_tree::container::{Container, ContainerRef, ContainerWindow};
     use crate::platform::mock::MockPlatformWindow;
     use crate::platform::Bounds;
@@ -146,28 +150,26 @@ mod tests {
         Bounds::new(0, 0, 500, 500)
     }
 
-    pub fn new_config() -> ConfigRef {
-        Rc::new(Config::default())
-    }
-
     pub fn new_container() -> ContainerRef {
-        Container::new_root(new_config(), new_bounds())
+        Container::new_root(new_bounds())
     }
 
     pub fn new_window() -> ContainerWindowRef {
         let bounds = new_bounds();
-        let window = Rc::new(Window::new(
-            MockPlatformWindow::new(bounds.position, bounds.size, "Mock Window".to_owned()),
-            new_config(),
-        ));
+        let window = Rc::new(Window::new(MockPlatformWindow::new(
+            bounds.position,
+            bounds.size,
+            "Mock Window".to_owned(),
+        )));
         ContainerWindow::new(window)
     }
 
     pub fn new_window_with_bounds(bounds: Bounds) -> ContainerWindowRef {
-        let window = Rc::new(Window::new(
-            MockPlatformWindow::new(bounds.position, bounds.size, "Mock Window".to_owned()),
-            new_config(),
-        ));
+        let window = Rc::new(Window::new(MockPlatformWindow::new(
+            bounds.position,
+            bounds.size,
+            "Mock Window".to_owned(),
+        )));
         ContainerWindow::new(window)
     }
 }

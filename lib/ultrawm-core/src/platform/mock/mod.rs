@@ -12,6 +12,9 @@ unsafe impl PlatformEventsImpl for MockPlatformEvents {
     unsafe fn initialize(_dispatcher: EventDispatcher) -> PlatformResult<()> {
         Ok(())
     }
+    fn set_intercept_clicks(_intercept: bool) -> PlatformResult<()> {
+        Ok(())
+    }
 }
 
 pub struct MockPlatform;
@@ -26,6 +29,22 @@ impl PlatformImpl for MockPlatform {
 
     fn get_mouse_position() -> PlatformResult<Position> {
         Ok(Position { x: 0, y: 0 })
+    }
+
+    fn hide_resize_cursor() -> PlatformResult<()> {
+        Ok(())
+    }
+
+    fn reset_cursor() -> PlatformResult<()> {
+        Ok(())
+    }
+
+    fn start_window_bounds_batch(_window_count: u32) -> PlatformResult<()> {
+        Ok(())
+    }
+
+    fn end_window_bounds_batch() -> PlatformResult<()> {
+        Ok(())
     }
 }
 

@@ -24,6 +24,8 @@ mod serialize;
 mod thread_lock;
 mod tile_result;
 mod window;
+mod window_move_handler;
+mod window_resize_handler;
 mod wm;
 mod workspace;
 
@@ -67,6 +69,8 @@ pub fn start(shutdown: Arc<AtomicBool>) -> UltraWMResult<()> {
             println!("Failed to receive main thread ready signal");
             process::exit(1);
         }
+
+        thread::sleep(std::time::Duration::from_millis(1000));
 
         let tk = tokio::runtime::Builder::new_multi_thread()
             .enable_all()

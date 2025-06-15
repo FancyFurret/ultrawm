@@ -48,7 +48,7 @@ impl WindowManager {
         let mut workspaces: HashMap<WorkspaceId, Workspace> = partitions
             .values_mut()
             .map(|partition| {
-                let windows = Self::get_windows_in_bounds(&mut windows, partition.bounds());
+                let windows = Self::get_windows_for_partition(&mut windows, partition.bounds());
                 let workspace = Workspace::new::<ContainerTree>(
                     partition.bounds().clone(),
                     &windows,
@@ -97,6 +97,8 @@ impl WindowManager {
         let window = self.get_window(id).ok_or(())?;
         let workspace = self.get_workspace_at_position_mut(position).ok_or(())?;
         workspace.tile_window(&window, position)?;
+
+        println!("tiled window");
         workspace.flush_windows()
     }
 
@@ -167,7 +169,7 @@ impl WindowManager {
         self.workspaces.get_mut(&partition.current_workspace()?)
     }
 
-    fn get_windows_in_bounds(windows: &mut Vec<WindowRef>, bounds: &Bounds) -> Vec<WindowRef> {
+    fn get_windows_for_partition(windows: &mut Vec<WindowRef>, bounds: &Bounds) -> Vec<WindowRef> {
         let mut windows_in_partition = Vec::new();
         let mut i = 0;
         while i < windows.len() {
@@ -181,6 +183,34 @@ impl WindowManager {
         }
 
         windows_in_partition
+    }
+
+    /// If the position is on the edge a window, that window is returned.
+    pub fn find_window_at_resize_edge(&self, position: &Position) -> Option<WindowRef> {
+        let thickness = 15;
+        for window in self.windows.values() {
+            let bounds = window.window_bounds();
+
+            let on_left_edge = (position.x - bounds.position.x).abs() <= thickness;
+            let on_right_edge =
+                (position.x - (bounds.position.x + bounds.size.width as i32)).abs() <= thickness;
+            let on_top_edge = (position.y - bounds.position.y).abs() <= thickness;
+            let on_bottom_edge =
+                (position.y - (bounds.position.y + bounds.size.height as i32)).abs() <= thickness;
+
+            // Position must be within the window's bounds on the axis perpendicular to the edge
+            let within_vertical_bounds = position.y >= bounds.position.y
+                && position.y <= bounds.position.y + bounds.size.height as i32;
+            let within_horizontal_bounds = position.x >= bounds.position.x
+                && position.x <= bounds.position.x + bounds.size.width as i32;
+
+            if ((on_left_edge || on_right_edge) && within_vertical_bounds)
+                || ((on_top_edge || on_bottom_edge) && within_horizontal_bounds)
+            {
+                return Some(window.clone());
+            }
+        }
+        None
     }
 
     /// Returns a list of drag handles for the workspace that covers the given position.
@@ -209,6 +239,19 @@ impl WindowManager {
                     dy <= thickness / 2 && dx <= h.length as i32 / 2
                 }
             })
+    }
+
+    pub fn drag_handle_moved(
+        &mut self,
+        handle: &DragHandle,
+        position: &Position,
+    ) -> PlatformResult<()> {
+        if let Some(workspace) = self.get_workspace_at_position_mut(position) {
+            if workspace.drag_handle_moved(handle, position) {
+                workspace.flush_windows()?;
+            }
+        }
+        Ok(())
     }
 
     pub fn cleanup(&mut self) -> PlatformResult<()> {

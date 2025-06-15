@@ -5,8 +5,10 @@ use crate::layouts::{Direction, ResizeDirection};
 use crate::platform::Bounds;
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::{Rc, Weak};
+use std::sync::atomic::Ordering;
 
 use super::Side;
+use crate::layouts::container_tree::{ContainerId, CONTAINER_ID_COUNTER};
 
 pub mod container_ref;
 mod container_window;
@@ -33,7 +35,7 @@ impl Default for InsertOrder {
     }
 }
 
-/// Behaviour for distributing size changes when a child is resized.
+/// Behavior for distributing size changes when a child is resized.
 ///
 /// * `Spread` ‒ the delta is spread equally across all other siblings (current default).
 /// * `Symmetric` ‒ the delta is applied equally to the *two* groups on either side of the
@@ -46,6 +48,7 @@ pub enum ResizeDistribution {
 
 #[derive(Debug)]
 pub struct Container {
+    id: ContainerId,
     bounds: RefCell<Bounds>,
     direction: Direction,
     parent: Option<RefCell<ParentContainerRef>>,
@@ -70,7 +73,9 @@ impl Container {
         direction: Direction,
         parent: Option<ParentContainerRef>,
     ) -> ContainerRef {
+        let id = CONTAINER_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
         let self_rc = Rc::new(Self {
+            id,
             bounds: RefCell::new(bounds),
             direction,
             parent: parent.map(RefCell::new),
@@ -83,15 +88,16 @@ impl Container {
         self_rc
     }
 
+    pub fn id(&self) -> ContainerId {
+        self.id
+    }
+
     pub fn bounds(&self) -> Bounds {
         self.bounds.borrow().clone()
     }
 
     fn set_bounds(&self, bounds: Bounds) {
         self.bounds.replace(bounds);
-
-        // TODO: Shouldnt need to balance?
-        self.balance();
     }
 
     pub fn direction(&self) -> Direction {
@@ -146,10 +152,14 @@ impl Container {
             }
 
             self.children_mut().remove(current_index);
+            self.ratios.borrow_mut().remove(current_index);
         }
 
         // Insert the window into this container
         self.children_mut().insert(index, child.clone());
+
+        // Handle ratios for the new insertion
+        self.insert_ratio_at_index(index);
 
         // If the window has a different parent, remove it from its old parent
         if self.self_ref.as_ptr() != window_ref.parent().self_ref.as_ptr() {
@@ -159,10 +169,8 @@ impl Container {
 
             // Do this very last, since it can potentially remove self, if self is now the only child
             parent.remove_child(&child);
-            parent.balance();
         }
 
-        window_ref.parent().balance();
         window_ref
     }
 
@@ -175,19 +183,72 @@ impl Container {
         let child = ContainerChildRef::Container(container.clone());
         self.children_mut().insert(index, child.clone());
 
+        // Handle ratios for the new insertion
+        self.insert_ratio_at_index(index);
+
         // If the container has a different parent, remove it from its old parent
         if let Some(parent) = container.parent() {
             if self.self_ref.as_ptr() != parent.self_ref.as_ptr() {
                 // Remove the container from its current parent
                 container.set_parent(self.self_ref());
                 parent.remove_child(&child);
-                parent.balance();
             }
         } else {
             container.set_parent(self.self_ref());
         }
 
         container
+    }
+
+    /// Insert a new ratio at the given index, making the new item get 1/N of the space
+    /// while existing items maintain their relative ratios
+    fn insert_ratio_at_index(&self, index: usize) {
+        let children_count = self.children().len();
+        if children_count == 0 {
+            return;
+        }
+
+        if children_count == 1 {
+            // First child gets ratio of 1.0
+            self.ratios.replace(vec![1.0]);
+            return;
+        }
+
+        let new_ratio = 1.0 / (children_count - 1) as f32;
+        self.ratios.borrow_mut().insert(index, new_ratio);
+        self.normalize_ratios();
+    }
+
+    /// Normalize ratios so they sum to the target total (usually 1.0)
+    fn normalize_ratios(&self) {
+        let mut ratios = self.ratios.borrow_mut();
+        let current_total: f32 = ratios.iter().sum();
+
+        if current_total > 0.0 && (current_total - 1.0).abs() > f32::EPSILON {
+            let scale_factor = 1.0 / current_total;
+            for ratio in ratios.iter_mut() {
+                *ratio *= scale_factor;
+            }
+        }
+    }
+
+    /// Distribute a delta across specified indices
+    fn distribute_delta_across_indices(&self, indices: &[usize], delta: f32, min_weight: f32) {
+        if indices.is_empty() {
+            return;
+        }
+
+        let mut ratios = self.ratios.borrow_mut();
+        let per_delta = delta / indices.len() as f32;
+
+        for &idx in indices {
+            if idx < ratios.len() {
+                ratios[idx] += per_delta;
+                if ratios[idx] < min_weight {
+                    ratios[idx] = min_weight;
+                }
+            }
+        }
     }
 
     pub fn split_window(
@@ -224,37 +285,28 @@ impl Container {
     }
 
     pub fn split_self(&self, new_window: ContainerWindowRef, order: InsertOrder) -> ContainerRef {
-        let split_container = Container::new(
-            self.bounds().clone(),
-            self.direction.opposite(),
-            Some(self.self_ref()),
-        );
+        let split_container =
+            Container::new(self.bounds().clone(), self.direction.opposite(), None);
 
-        let new_container = Container::new(
-            self.bounds().clone(),
-            self.direction,
-            Some(split_container.self_ref()),
-        );
+        let new_container = Container::new(self.bounds().clone(), self.direction, None);
 
         for child in self.children().iter() {
             new_container.children_mut().push(child.clone());
+            new_container.ratios.replace(self.ratios.borrow().clone());
             child.set_parent(new_container.self_ref());
         }
 
         self.children_mut().clear();
+        self.ratios.borrow_mut().clear();
         let split_container = self.add_container(split_container);
 
         match order {
             InsertOrder::Before => {
                 split_container.add_window(new_window.clone());
-                split_container
-                    .children_mut()
-                    .push(ContainerChildRef::Container(new_container.clone()));
+                split_container.add_container(new_container.clone());
             }
             InsertOrder::After => {
-                split_container
-                    .children_mut()
-                    .push(ContainerChildRef::Container(new_container.clone()));
+                split_container.add_container(new_container.clone());
                 split_container.add_window(new_window.clone());
             }
         }
@@ -266,14 +318,12 @@ impl Container {
         // Ensure the new child has the correct parent
         let index = self.index_of_child(old_child);
         if index.is_none() {
-            println!("Child not found");
             return;
         }
 
         let index = index.unwrap();
         new_child.set_parent(self.self_ref());
         self.children_mut()[index] = new_child.clone();
-        self.balance();
     }
 
     pub fn swap(a: &ContainerChildRef, b: &ContainerChildRef) {
@@ -285,8 +335,6 @@ impl Container {
         b_parent.children_mut()[b_index] = a.clone();
         a.set_parent(b_parent.self_ref());
         b.set_parent(a_parent.self_ref());
-        a_parent.balance();
-        b_parent.balance();
     }
 
     pub fn remove_child(&self, child: &ContainerChildRef) {
@@ -295,6 +343,7 @@ impl Container {
             self.children_mut().remove(index);
             if index < self.ratios.borrow().len() {
                 self.ratios.borrow_mut().remove(index);
+                self.normalize_ratios();
             }
         }
 
@@ -315,6 +364,7 @@ impl Container {
                         let grandchild = child.clone();
                         grandchild.set_parent(parent.self_ref());
                         parent.children_mut().insert(self_index, grandchild);
+                        parent.insert_ratio_at_index(self_index);
                     }
                     parent.remove_child(&ContainerChildRef::Container(self_ref));
                 }
@@ -328,74 +378,77 @@ impl Container {
                 }
             };
         }
-
-        self.balance();
     }
 
-    pub fn balance(&self) {
-        // Ensure ratio vector matches children len
-        self.ensure_ratio_len();
-
+    pub fn equalize_ratios(&self) {
         let children = self.children();
         if children.is_empty() {
             return;
         }
 
+        let ratio = 1.0 / children.len() as f32;
+        self.ratios.replace(vec![ratio; children.len()]);
+    }
+
+    pub fn balance(&self) {
+        // Early exit if no children
+        let children = self.children();
+        if children.is_empty() {
+            return;
+        }
+
+        // Get all data we need upfront to minimize borrows
         let ratios = self.ratios.borrow();
         let total_weight: f32 = ratios.iter().sum::<f32>().max(1.0);
-
         let container_size: u32 = match self.direction {
             Direction::Horizontal => self.bounds().size.width,
             Direction::Vertical => self.bounds().size.height,
         };
-
-        let mut current_position: i32 = match self.direction {
+        let start_position: i32 = match self.direction {
             Direction::Horizontal => self.bounds().position.x,
             Direction::Vertical => self.bounds().position.y,
         };
 
+        // Pre-calculate all sizes to avoid floating point errors accumulating
+        let mut sizes: Vec<u32> = Vec::with_capacity(children.len());
         let mut remaining_size = container_size as i32;
 
-        for (idx, (child, weight)) in children.iter().zip(ratios.iter()).enumerate() {
+        for (idx, weight) in ratios.iter().enumerate() {
             let is_last = idx == children.len() - 1;
-            let allocated_size: u32 = if is_last {
+            let size = if is_last {
                 remaining_size.max(0) as u32
             } else {
                 let size = ((container_size as f32 * *weight) / total_weight).round() as u32;
                 remaining_size -= size as i32;
                 size
             };
+            sizes.push(size);
+        }
 
+        // Apply all sizes in a single pass
+        let mut current_position = start_position;
+        for (child, &size) in children.iter().zip(sizes.iter()) {
             let new_bounds = match self.direction {
                 Direction::Horizontal => Bounds::new(
                     current_position,
                     self.bounds().position.y,
-                    allocated_size,
+                    size,
                     self.bounds().size.height,
                 ),
                 Direction::Vertical => Bounds::new(
                     self.bounds().position.x,
                     current_position,
                     self.bounds().size.width,
-                    allocated_size,
+                    size,
                 ),
             };
             child.set_bounds(new_bounds);
+            current_position += size as i32;
 
-            current_position += allocated_size as i32;
-
+            // Only recurse if it's a container
             if let ContainerChildRef::Container(c) = child {
                 c.balance();
             }
-        }
-    }
-
-    fn ensure_ratio_len(&self) {
-        let child_len = self.children().len();
-        let mut ratios = self.ratios.borrow_mut();
-        if ratios.len() != child_len {
-            ratios.clear();
-            ratios.resize(child_len, 1.0);
         }
     }
 
@@ -408,15 +461,13 @@ impl Container {
     ) {
         let index = match self.index_of_child(child) {
             Some(i) => i,
-            None => return, // child not found in this container
+            None => return,
         };
 
         // Can't adjust ratios meaningfully with only one child.
         if self.children().len() < 2 {
             return;
         }
-
-        self.ensure_ratio_len();
 
         let container_size = match self.direction {
             Direction::Horizontal => self.bounds().size.width as f32,
@@ -448,19 +499,11 @@ impl Container {
         }
         let delta = new_weight - old_weight;
 
-        let mut ratios = self.ratios.borrow_mut();
-        let distribute_delta = |ratios: &mut Vec<f32>, indices: &[usize], delta: f32| {
-            if indices.is_empty() {
-                return;
-            }
-            let per_delta = delta / indices.len() as f32;
-            for &idx in indices {
-                ratios[idx] += per_delta;
-                if ratios[idx] < min_weight {
-                    ratios[idx] = min_weight;
-                }
-            }
-        };
+        // Update the ratio for the resized child
+        {
+            let mut ratios = self.ratios.borrow_mut();
+            ratios[index] = new_weight;
+        }
 
         match mode {
             ResizeDistribution::Spread => {
@@ -475,11 +518,9 @@ impl Container {
                 };
                 if indices.is_empty() {
                     let all_indices: Vec<usize> = (0..ratios_len).filter(|&i| i != index).collect();
-                    ratios[index] = new_weight;
-                    distribute_delta(&mut ratios, &all_indices, -delta);
+                    self.distribute_delta_across_indices(&all_indices, -delta, min_weight);
                 } else {
-                    ratios[index] = new_weight;
-                    distribute_delta(&mut ratios, &indices, -delta);
+                    self.distribute_delta_across_indices(&indices, -delta, min_weight);
                 }
             }
             ResizeDistribution::Symmetric => {
@@ -488,26 +529,91 @@ impl Container {
                 if left_count == 0 || right_count == 0 {
                     // Fallback to Spread logic: distribute among all siblings except the resized one
                     let all_indices: Vec<usize> = (0..ratios_len).filter(|&i| i != index).collect();
-                    ratios[index] = new_weight;
-                    distribute_delta(&mut ratios, &all_indices, -delta);
+                    self.distribute_delta_across_indices(&all_indices, -delta, min_weight);
                 } else {
                     let left_indices: Vec<usize> = (0..index).collect();
                     let right_indices: Vec<usize> = (index + 1..ratios_len).collect();
-                    ratios[index] = new_weight;
-                    distribute_delta(&mut ratios, &left_indices, -delta / 2.0);
-                    distribute_delta(&mut ratios, &right_indices, -delta / 2.0);
+                    self.distribute_delta_across_indices(&left_indices, -delta / 2.0, min_weight);
+                    self.distribute_delta_across_indices(&right_indices, -delta / 2.0, min_weight);
                 }
             }
         }
 
-        // Re-normalize weights so their sum equals original total_weight.
-        let new_total: f32 = ratios.iter().sum();
-        if new_total != 0.0 {
-            let factor = total_weight / new_total;
-            for w in ratios.iter_mut() {
-                *w *= factor;
+        // Re-normalize weights so their sum equals original total_weight
+        self.normalize_ratios();
+    }
+
+    /// Resize the split between children at the given index based on a new position
+    /// The index represents the first child of the right group (children at index and after)
+    pub fn resize_between(&self, split_index: usize, new_position: i32) -> bool {
+        let children = self.children();
+        if children.len() <= 1 || split_index >= children.len() || split_index == 0 {
+            return false;
+        }
+
+        let container_bounds = self.bounds();
+
+        // Calculate the new split position based on handle movement
+        let (container_start, container_size) = match self.direction {
+            Direction::Horizontal => {
+                // Horizontal layout - split position is vertical (x coordinate)
+                let start = container_bounds.position.x;
+                (start, container_bounds.size.width as f32)
+            }
+            Direction::Vertical => {
+                // Vertical layout - split position is horizontal (y coordinate)
+                let start = container_bounds.position.y;
+                (start, container_bounds.size.height as f32)
+            }
+        };
+
+        // Calculate the ratio for the left side based on the new split position
+        let left_ratio = (new_position - container_start) as f32 / container_size;
+        let right_ratio = 1.0 - left_ratio;
+
+        // Ensure minimum ratios
+        let min_ratio = 0.1;
+        let (left_ratio, right_ratio) = if left_ratio < min_ratio {
+            (min_ratio, 1.0 - min_ratio)
+        } else if right_ratio < min_ratio {
+            (1.0 - min_ratio, min_ratio)
+        } else {
+            (left_ratio, right_ratio)
+        };
+
+        // Get current ratios and calculate scaling factors
+        {
+            let mut ratios = self.ratios.borrow_mut();
+            let total_weight: f32 = ratios.iter().sum();
+
+            // Calculate current left and right weights
+            let current_left_weight: f32 = ratios[0..split_index].iter().sum();
+            let current_right_weight: f32 = ratios[split_index..].iter().sum();
+
+            // Calculate new total weights for left and right sides
+            let new_left_weight = left_ratio * total_weight;
+            let new_right_weight = right_ratio * total_weight;
+
+            // Scale left side ratios
+            if current_left_weight > 0.0 {
+                let left_scale = new_left_weight / current_left_weight;
+                for i in 0..split_index {
+                    ratios[i] *= left_scale;
+                }
+            }
+
+            // Scale right side ratios
+            if current_right_weight > 0.0 {
+                let right_scale = new_right_weight / current_right_weight;
+                for i in split_index..ratios.len() {
+                    ratios[i] *= right_scale;
+                }
             }
         }
+
+        self.normalize_ratios();
+
+        true
     }
 }
 
@@ -515,25 +621,19 @@ impl Container {
 mod tests {
     use super::*;
     use crate::layouts::container_tree::tests::{
-        assert_is_container, assert_is_window, assert_window, new_bounds, new_config,
-        new_container, new_window,
+        assert_is_container, assert_is_window, assert_window, new_bounds, new_container, new_window,
     };
 
     pub(super) fn new_container_with_bounds(bounds: Bounds) -> ContainerRef {
-        Container::new(new_config(), bounds.clone(), Direction::Horizontal, None)
+        Container::new(bounds.clone(), Direction::Horizontal, None)
     }
 
     pub(super) fn new_container_with_direction(direction: Direction) -> ContainerRef {
-        Container::new(new_config(), new_bounds(), direction, None)
+        Container::new(new_bounds(), direction, None)
     }
 
     pub(super) fn new_container_with_parent(parent: ContainerRef) -> ContainerRef {
-        Container::new(
-            new_config(),
-            new_bounds(),
-            Direction::Horizontal,
-            Some(parent.self_ref()),
-        )
+        Container::new(new_bounds(), Direction::Horizontal, Some(parent.self_ref()))
     }
 
     #[test]

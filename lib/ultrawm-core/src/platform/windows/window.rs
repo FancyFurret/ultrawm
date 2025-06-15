@@ -1,25 +1,37 @@
+use crate::platform::windows::WINDOW_BATCH;
 use crate::platform::{
     Bounds, PlatformResult, PlatformWindowImpl, Position, ProcessId, Size, WindowId,
 };
 use std::mem;
-use tokio::task;
-use tokio::time::{sleep, Duration, Instant};
+use std::sync::atomic::Ordering;
 use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
-use windows::Win32::Graphics::Gdi::UpdateWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsIconic, SetWindowPos, ShowWindow,
-    SWP_FRAMECHANGED, SWP_NOZORDER, SW_RESTORE,
+    DeferWindowPos, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsIconic,
+    SetWindowPos, HDWP, SWP_NOACTIVATE, SWP_NOZORDER,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct WindowsPlatformWindow {
     hwnd: HWND,
+    cached_border_offsets: std::sync::RwLock<Option<(i32, i32, i32, i32)>>,
+}
+
+impl Clone for WindowsPlatformWindow {
+    fn clone(&self) -> Self {
+        Self {
+            hwnd: self.hwnd,
+            cached_border_offsets: std::sync::RwLock::new(None), // Reset cache on clone
+        }
+    }
 }
 
 impl WindowsPlatformWindow {
     pub fn new(hwnd: HWND) -> PlatformResult<Self> {
-        Ok(Self { hwnd })
+        Ok(Self {
+            hwnd,
+            cached_border_offsets: std::sync::RwLock::new(None),
+        })
     }
 
     pub fn hwnd(&self) -> HWND {
@@ -52,9 +64,29 @@ impl WindowsPlatformWindow {
         Ok(rect)
     }
 
-    /// Calculates the border offsets between GetWindowRect and DwmGetWindowAttribute
+    /// Calculates and caches the border offsets between GetWindowRect and DwmGetWindowAttribute
     /// Returns (left_offset, top_offset, right_offset, bottom_offset)
     fn get_border_offsets(&self) -> (i32, i32, i32, i32) {
+        // Check if we have cached offsets
+        if let Ok(cache) = self.cached_border_offsets.read() {
+            if let Some(offsets) = *cache {
+                return offsets;
+            }
+        }
+
+        // Calculate offsets if not cached
+        let offsets = self.calculate_border_offsets();
+
+        // Cache the result
+        if let Ok(mut cache) = self.cached_border_offsets.write() {
+            *cache = Some(offsets);
+        }
+
+        offsets
+    }
+
+    /// Actually calculates the border offsets (separated for clarity)
+    fn calculate_border_offsets(&self) -> (i32, i32, i32, i32) {
         let mut window_rect = RECT::default();
         let mut extended_rect = RECT::default();
 
@@ -84,6 +116,13 @@ impl WindowsPlatformWindow {
         let bottom_offset = window_rect.bottom - extended_rect.bottom;
 
         (left_offset, top_offset, right_offset, bottom_offset)
+    }
+
+    /// Invalidates the cached border offsets (call when window state might have changed)
+    pub fn invalidate_border_cache(&self) {
+        if let Ok(mut cache) = self.cached_border_offsets.write() {
+            *cache = None;
+        }
     }
 
     fn bounds_match(&self, bounds: &Bounds) -> bool {
@@ -141,50 +180,50 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
     }
 
     fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()> {
-        unsafe {
-            // Disable native resizing by removing WS_THICKFRAME (WS_SIZEBOX)
-            // let style = GetWindowLongW(self.hwnd, GWL_STYLE) as u32;
-            // // Remove both WS_THICKFRAME and WS_SIZEBOX if present
-            // let new_style = style & !(WS_THICKFRAME.0 | WS_SIZEBOX.0);
-            // SetWindowLongW(self.hwnd, GWL_STYLE, new_style as i32);
-
-            ShowWindow(self.hwnd, SW_RESTORE);
-
-            let (left_offset, top_offset, right_offset, bottom_offset) = self.get_border_offsets();
-            let adjusted_x = bounds.position.x - left_offset;
-            let adjusted_y = bounds.position.y - top_offset;
-            let adjusted_width = bounds.size.width as i32 + left_offset + right_offset;
-            let adjusted_height = bounds.size.height as i32 + top_offset + bottom_offset;
-
-            SetWindowPos(
-                self.hwnd,
-                None,
-                adjusted_x,
-                adjusted_y,
-                adjusted_width,
-                adjusted_height,
-                SWP_NOZORDER | SWP_FRAMECHANGED,
-            )
-            .map_err(|_| "Could not set window bounds")?;
-
-            UpdateWindow(self.hwnd);
+        // Skip if bounds haven't changed to avoid unnecessary operations
+        if self.bounds_match(bounds) {
+            return Ok(());
         }
 
-        // Clone for async task
-        let bounds = bounds.clone();
-        let window = self.clone();
+        let hdswp = WINDOW_BATCH.load(Ordering::Relaxed);
 
-        // Spawn a tokio task to retry for up to 1 second
-        task::spawn(async move {
-            let start = Instant::now();
-            while start.elapsed() < Duration::from_millis(100) {
-                sleep(Duration::from_millis(25)).await;
-                if window.bounds_match(&bounds) {
-                    break;
-                }
-                let _ = window.set_bounds(&bounds);
+        let (left_offset, top_offset, right_offset, bottom_offset) = self.get_border_offsets();
+        let adjusted_x = bounds.position.x - left_offset;
+        let adjusted_y = bounds.position.y - top_offset;
+        let adjusted_width = bounds.size.width as i32 + left_offset + right_offset;
+        let adjusted_height = bounds.size.height as i32 + top_offset + bottom_offset;
+
+        let flags = SWP_NOZORDER | SWP_NOACTIVATE;
+        if hdswp > 0 {
+            // flags |= SWP_NOCOPYBITS;
+        }
+
+        unsafe {
+            if hdswp > 0 {
+                DeferWindowPos(
+                    HDWP(hdswp),
+                    self.hwnd,
+                    None,
+                    adjusted_x,
+                    adjusted_y,
+                    adjusted_width,
+                    adjusted_height,
+                    flags,
+                )
+                .unwrap();
+            } else {
+                SetWindowPos(
+                    self.hwnd,
+                    None,
+                    adjusted_x,
+                    adjusted_y,
+                    adjusted_width,
+                    adjusted_height,
+                    flags,
+                )
+                .unwrap();
             }
-        });
+        }
 
         Ok(())
     }

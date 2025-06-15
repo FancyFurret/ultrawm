@@ -144,3 +144,20 @@ pub struct Display {
     pub bounds: Bounds,
     pub work_area: Bounds,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CursorType {
+    Normal,
+    ResizeNorth,
+    ResizeSouth,
+    ResizeEast,
+    ResizeWest,
+    ResizeNorthEast,
+    ResizeNorthWest,
+    ResizeSouthEast,
+    ResizeSouthWest,
+    Move,
+    IBeam,
+    Wait,
+    NotAllowed,
+}

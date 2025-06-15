@@ -1,10 +1,14 @@
 #[cfg(feature = "platform-tests")]
 mod platform_tests {
-    use ultrawm_core::platform::{Platform, PlatformEvents, PlatformEventsImpl, PlatformImpl};
+    use ultrawm_core::platform::{
+        EventBridge, Platform, PlatformEvents, PlatformEventsImpl, PlatformImpl,
+    };
 
     fn init() {
         unsafe {
-            PlatformEvents::initialize().expect("Error initializing platform");
+            let bridge = EventBridge::new();
+            let dispatcher = bridge.dispatcher();
+            PlatformEvents::initialize(dispatcher).expect("Error initializing platform");
         }
     }
 

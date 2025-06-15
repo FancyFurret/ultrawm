@@ -132,10 +132,7 @@ impl WindowDragTracker {
         None
     }
 
-    fn calculate_resize_direction(
-        old: &crate::platform::Bounds,
-        new: &crate::platform::Bounds,
-    ) -> crate::layouts::ResizeDirection {
+    fn calculate_resize_direction(old: &Bounds, new: &Bounds) -> ResizeDirection {
         let left_changed = new.position.x != old.position.x;
         let right_changed =
             (new.position.x + new.size.width as i32) != (old.position.x + old.size.width as i32);
@@ -144,16 +141,16 @@ impl WindowDragTracker {
             (new.position.y + new.size.height as i32) != (old.position.y + old.size.height as i32);
 
         match (left_changed, right_changed, top_changed, bottom_changed) {
-            (true, false, false, false) => crate::layouts::ResizeDirection::Left,
-            (false, true, false, false) => crate::layouts::ResizeDirection::Right,
-            (false, false, true, false) => crate::layouts::ResizeDirection::Top,
-            (false, false, false, true) => crate::layouts::ResizeDirection::Bottom,
-            (true, false, true, false) => crate::layouts::ResizeDirection::TopLeft,
-            (false, true, true, false) => crate::layouts::ResizeDirection::TopRight,
-            (true, false, false, true) => crate::layouts::ResizeDirection::BottomLeft,
-            (false, true, false, true) => crate::layouts::ResizeDirection::BottomRight,
+            (true, false, false, false) => ResizeDirection::Left,
+            (false, true, false, false) => ResizeDirection::Right,
+            (false, false, true, false) => ResizeDirection::Top,
+            (false, false, false, true) => ResizeDirection::Bottom,
+            (true, false, true, false) => ResizeDirection::TopLeft,
+            (false, true, true, false) => ResizeDirection::TopRight,
+            (true, false, false, true) => ResizeDirection::BottomLeft,
+            (false, true, false, true) => ResizeDirection::BottomRight,
             // Default/fallback
-            _ => crate::layouts::ResizeDirection::Right,
+            _ => ResizeDirection::Right,
         }
     }
 }
