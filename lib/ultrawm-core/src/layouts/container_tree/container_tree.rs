@@ -492,16 +492,26 @@ impl WindowLayout for ContainerTree {
 
         // Then, check if this window is already in the tree
         let existing_window = self.windows.get(&window.id()).map(|w| w.clone());
+        let is_new_window = existing_window.is_none();
 
         // Perform the action
         match action {
             TileAction::FillRoot => {
-                self.root.add_window(ContainerWindow::new(window.clone()));
+                let container_window = ContainerWindow::new(window.clone());
+                self.root.add_window(container_window.clone());
+                // Update windows map if this is a new window
+                if is_new_window {
+                    self.windows.insert(window.id(), container_window);
+                }
             }
             TileAction::Swap(target_window) => {
                 if let Some(existing_window) = existing_window {
                     let target_child = ContainerChildRef::Window(target_window.clone());
                     let existing_child = ContainerChildRef::Window(existing_window.clone());
+                    if is_new_window {
+                        self.windows.insert(window.id(), existing_window.clone());
+                        self.windows.remove(&existing_window.id());
+                    }
                     Container::swap(&target_child, &existing_child);
                 } else {
                     self.replace_window(&target_window.window(), window)?;
@@ -517,21 +527,33 @@ impl WindowLayout for ContainerTree {
                     }
 
                     let parent = child.parent().ok_or(())?;
-                    let window = existing_window
-                        .unwrap_or_else(|| ContainerWindow::new(window.clone()).clone());
-                    parent.insert_window(index, window.clone());
+                    let container_window =
+                        existing_window.unwrap_or_else(|| ContainerWindow::new(window.clone()));
+                    parent.insert_window(index, container_window.clone());
+                    // Update windows map if this is a new window
+                    if is_new_window {
+                        self.windows.insert(window.id(), container_window);
+                    }
                 } else {
                     // Otherwise, split the root container
-                    let window =
+                    let container_window =
                         existing_window.unwrap_or_else(|| ContainerWindow::new(window.clone()));
-                    self.root.split_self(window.clone(), side.into());
+                    self.root.split_self(container_window.clone(), side.into());
+                    // Update windows map if this is a new window
+                    if is_new_window {
+                        self.windows.insert(window.id(), container_window);
+                    }
                 }
             }
             TileAction::Split(target_window, side) => {
                 let parent = target_window.parent();
-                let window =
+                let container_window =
                     existing_window.unwrap_or_else(|| ContainerWindow::new(window.clone()));
-                parent.split_window(&target_window, window.clone(), side.into());
+                parent.split_window(&target_window, container_window.clone(), side.into());
+                // Update windows map if this is a new window
+                if is_new_window {
+                    self.windows.insert(window.id(), container_window);
+                }
             }
         }
 
@@ -541,21 +563,32 @@ impl WindowLayout for ContainerTree {
     }
 
     fn replace_window(&mut self, old_window: &WindowRef, new_window: &WindowRef) -> Result<(), ()> {
-        let window = self.windows.get(&old_window.id()).ok_or(())?;
-        let parent = window.parent();
-        let new_window = ContainerWindow::new(new_window.clone());
+        let old_window_id = old_window.id();
+        let old_container_window = self.windows.get(&old_window_id).ok_or(())?.clone();
+        let parent = old_container_window.parent();
+        let new_container_window = ContainerWindow::new(new_window.clone());
+
         parent.replace_child(
-            &ContainerChildRef::Window(window.clone()),
-            ContainerChildRef::Window(new_window.clone()),
+            &ContainerChildRef::Window(old_container_window),
+            ContainerChildRef::Window(new_container_window.clone()),
         );
+
+        // Update windows map: remove old window and add new window
+        self.windows.remove(&old_window_id);
+        self.windows.insert(new_window.id(), new_container_window);
 
         Ok(())
     }
 
     fn remove_window(&mut self, window: &WindowRef) -> Result<(), ()> {
-        let window = self.windows.get(&window.id()).ok_or(())?;
-        let parent = window.parent();
-        parent.remove_child(&ContainerChildRef::Window(window.clone()));
+        let window_id = window.id();
+        let container_window = self.windows.get(&window_id).ok_or(())?.clone();
+        let parent = container_window.parent();
+        parent.remove_child(&ContainerChildRef::Window(container_window));
+
+        // Remove from windows map
+        self.windows.remove(&window_id);
+
         Ok(())
     }
 
@@ -657,5 +690,165 @@ impl WindowLayout for ContainerTree {
         }
 
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::platform::mock::MockPlatformWindow;
+    use crate::platform::{Bounds, Position, Size};
+    use crate::window::Window;
+    use std::rc::Rc;
+
+    fn create_mock_window(id: u64) -> WindowRef {
+        let mut platform_window = MockPlatformWindow::new(
+            Position { x: 0, y: 0 },
+            Size {
+                width: 800,
+                height: 600,
+            },
+            format!("Test Window {}", id),
+        );
+        platform_window.id = id;
+        Rc::new(Window::new(platform_window))
+    }
+
+    fn create_test_bounds() -> Bounds {
+        Bounds::new(0, 0, 1920, 1080)
+    }
+
+    #[test]
+    fn test_windows_map_updated_on_swap() {
+        let bounds = create_test_bounds();
+        let initial_windows = vec![create_mock_window(1)];
+        let mut tree = ContainerTree::new(bounds, &initial_windows);
+
+        // Initial window should be in the map
+        assert_eq!(tree.windows.len(), 1);
+        assert!(tree.windows.contains_key(&1));
+
+        // Insert a new window
+        let new_window = create_mock_window(2);
+        let position = Position { x: 500, y: 500 };
+
+        let result = tree.insert_window(&new_window, &position);
+        assert!(result.is_ok());
+
+        assert_eq!(tree.windows.len(), 1,);
+        assert!(tree.windows.contains_key(&2),);
+    }
+
+    #[test]
+    fn test_windows_map_updated_on_remove() {
+        let bounds = create_test_bounds();
+        let initial_windows = vec![create_mock_window(1), create_mock_window(2)];
+        let mut tree = ContainerTree::new(bounds, &initial_windows);
+
+        // Both windows should be in the map initially
+        assert_eq!(tree.windows.len(), 2);
+        assert!(tree.windows.contains_key(&1));
+        assert!(tree.windows.contains_key(&2));
+
+        // Remove a window
+        let window_to_remove = &initial_windows[0];
+        let result = tree.remove_window(window_to_remove);
+        assert!(result.is_ok());
+
+        assert_eq!(tree.windows.len(), 1,);
+        assert!(!tree.windows.contains_key(&1),);
+        assert!(tree.windows.contains_key(&2),);
+    }
+
+    #[test]
+    fn test_windows_map_updated_on_replace() {
+        let bounds = create_test_bounds();
+        let initial_windows = vec![create_mock_window(1)];
+        let mut tree = ContainerTree::new(bounds, &initial_windows);
+
+        // Initial window should be in the map
+        assert_eq!(tree.windows.len(), 1);
+        assert!(tree.windows.contains_key(&1));
+
+        // Replace the window with a new one
+        let old_window = &initial_windows[0];
+        let new_window = create_mock_window(2);
+        let result = tree.replace_window(old_window, &new_window);
+        assert!(result.is_ok());
+
+        assert_eq!(tree.windows.len(), 1,);
+        assert!(!tree.windows.contains_key(&1),);
+        assert!(tree.windows.contains_key(&2),);
+    }
+
+    #[test]
+    fn test_windows_map_updated_on_split() {
+        let bounds = create_test_bounds();
+        let initial_windows = vec![create_mock_window(1)];
+        let mut tree = ContainerTree::new(bounds, &initial_windows);
+
+        // Initial window should be in the map
+        assert_eq!(tree.windows.len(), 1);
+        assert!(tree.windows.contains_key(&1));
+
+        // Insert a window that will trigger a split action
+        // Position it near the edge of the first window to trigger a split
+        let new_window = create_mock_window(2);
+        let position = Position { x: 400, y: 300 }; // Close to left edge to trigger split
+
+        let result = tree.insert_window(&new_window, &position);
+        assert!(result.is_ok());
+
+        // Windows map should now contain both windows
+        assert_eq!(tree.windows.len(), 2,);
+        assert!(tree.windows.contains_key(&1),);
+        assert!(tree.windows.contains_key(&2),);
+    }
+
+    #[test]
+    fn test_windows_map_updated_on_add_to_parent() {
+        let bounds = create_test_bounds();
+        let initial_windows = vec![create_mock_window(1), create_mock_window(2)];
+        let mut tree = ContainerTree::new(bounds, &initial_windows);
+
+        // Both windows should be in the map initially
+        assert_eq!(tree.windows.len(), 2);
+        assert!(tree.windows.contains_key(&1));
+        assert!(tree.windows.contains_key(&2));
+
+        // Insert a third window that will trigger AddToParent action
+        // Position it at the far edge to trigger adding to parent container
+        let new_window = create_mock_window(3);
+        let position = Position { x: 100, y: 300 }; // Far left to trigger add to parent
+
+        let result = tree.insert_window(&new_window, &position);
+        assert!(result.is_ok());
+
+        // Windows map should now contain all three windows
+        assert_eq!(tree.windows.len(), 3,);
+        assert!(tree.windows.contains_key(&1),);
+        assert!(tree.windows.contains_key(&2),);
+        assert!(tree.windows.contains_key(&3),);
+    }
+
+    #[test]
+    fn test_windows_map_updated_on_fill_root() {
+        let bounds = create_test_bounds();
+        let initial_windows = vec![];
+        let mut tree = ContainerTree::new(bounds, &initial_windows);
+
+        // Initially no windows
+        assert_eq!(tree.windows.len(), 0);
+
+        // Insert first window into empty tree (should trigger FillRoot)
+        let new_window = create_mock_window(1);
+        let position = Position { x: 500, y: 500 };
+
+        let result = tree.insert_window(&new_window, &position);
+        assert!(result.is_ok());
+
+        // Windows map should now contain the window
+        assert_eq!(tree.windows.len(), 1,);
+        assert!(tree.windows.contains_key(&1),);
     }
 }
