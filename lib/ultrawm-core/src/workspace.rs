@@ -36,7 +36,11 @@ impl Workspace {
     ) -> Self {
         let id = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
         let layout = Box::new(TLayout::new_from_saved(bounds, windows, saved_layout));
-        let windows = windows.iter().map(|w| (w.id(), w.clone())).collect();
+        let windows = layout
+            .windows()
+            .iter()
+            .map(|w| (w.id(), w.clone()))
+            .collect();
         Self {
             id,
             name,

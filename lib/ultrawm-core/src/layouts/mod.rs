@@ -24,6 +24,8 @@ pub trait WindowLayout: Debug {
 
     fn get_preview_bounds(&self, window: &WindowRef, position: &Position) -> Option<Bounds>;
 
+    fn windows(&self) -> Vec<WindowRef>;
+
     fn insert_window(
         &mut self,
         window: &WindowRef,

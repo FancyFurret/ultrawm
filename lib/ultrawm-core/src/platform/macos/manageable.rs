@@ -23,6 +23,10 @@ pub fn window_is_manageable(window: &AXUIElementExt) -> ObserveResult {
         Err("Window subrole is AXUnknown")?
     }
 
+    if subrole == "AXDialog" {
+        Err("Window subrole is AXDialog")?
+    }
+
     Ok(())
 }
 

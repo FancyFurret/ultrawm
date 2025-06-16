@@ -57,9 +57,6 @@ impl WindowManager {
         let mut workspaces: HashMap<WorkspaceId, Workspace> = partitions
             .values_mut()
             .map(|partition| {
-                let windows_for_partition =
-                    Self::get_windows_for_partition(&mut windows, partition.bounds());
-
                 // Extract the specific layout data for this workspace
                 let workspace_layout = saved_layout.as_ref().and_then(|layout| {
                     extract_workspace_layout(layout, partition.name(), "Default")
@@ -67,10 +64,11 @@ impl WindowManager {
 
                 let workspace = Workspace::new_with_saved_layout::<ContainerTree>(
                     partition.bounds().clone(),
-                    &windows_for_partition,
+                    &windows,
                     "Default".to_string(),
                     workspace_layout.as_ref(),
                 );
+
                 partition.assign_workspace(workspace.id());
                 (workspace.id(), workspace)
             })

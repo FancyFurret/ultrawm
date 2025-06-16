@@ -437,27 +437,13 @@ impl WindowLayout for ContainerTree {
 
         let root_bounds = Self::get_root_bounds(&bounds);
         let root = Container::new_root(root_bounds);
-
-        // Sort by x position so that they stay in somewhat the same order
-        let mut windows = windows
-            .iter()
-            .map(|w| w.clone())
-            .collect::<Vec<WindowRef>>();
-        windows.sort_by_key(|w| w.platform_window().position().x);
-        let mut windows_map = HashMap::new();
-
-        for window in windows {
-            let new_window = root.add_window(ContainerWindow::new(window.clone()));
-            windows_map.insert(new_window.id(), new_window);
-        }
-
         root.equalize_ratios();
         root.recalculate();
 
         Self {
             bounds,
             root,
-            windows: windows_map,
+            windows: HashMap::new()
         }
     }
 
@@ -480,6 +466,10 @@ impl WindowLayout for ContainerTree {
                 MOUSE_SPLIT_PREVIEW_RATIO,
             )),
         }
+    }
+
+    fn windows(&self) -> Vec<WindowRef> {
+        self.windows.values().map(|w| w.window()).collect()
     }
 
     fn insert_window(
