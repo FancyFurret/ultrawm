@@ -92,10 +92,10 @@ impl WindowResizeHandler {
         // Prevent normal window resizing
         if let Some(_) = wm.find_window_at_resize_edge(pos) {
             Platform::hide_resize_cursor()?;
-            PlatformEvents::set_intercept_clicks(true)?;
+            // PlatformEvents::set_intercept_clicks(true)?;
         } else {
             Platform::reset_cursor().unwrap();
-            PlatformEvents::set_intercept_clicks(false)?;
+            // PlatformEvents::set_intercept_clicks(false)?;
         }
 
         let tiling = move_handler.overlay_shown();
