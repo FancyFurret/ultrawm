@@ -71,7 +71,7 @@ impl ContainerTree {
             windows_map.len()
         );
 
-        root.calculate_bounds();
+        root.recalculate();
 
         Some(Self {
             bounds,
@@ -452,7 +452,7 @@ impl WindowLayout for ContainerTree {
         }
 
         root.equalize_ratios();
-        root.calculate_bounds();
+        root.recalculate();
 
         Self {
             bounds,
@@ -557,7 +557,7 @@ impl WindowLayout for ContainerTree {
             }
         }
 
-        self.root().calculate_bounds();
+        self.root().recalculate();
 
         Ok(InsertResult::None)
     }
@@ -588,6 +588,7 @@ impl WindowLayout for ContainerTree {
 
         // Remove from windows map
         self.windows.remove(&window_id);
+        self.root.recalculate();
 
         Ok(())
     }
@@ -641,7 +642,7 @@ impl WindowLayout for ContainerTree {
             }
         }
 
-        self.root.calculate_bounds();
+        self.root.recalculate();
     }
 
     fn drag_handles(&self) -> Vec<DragHandle> {
@@ -667,7 +668,7 @@ impl WindowLayout for ContainerTree {
         let success = container.resize_between(handle.index, new_position);
 
         if success {
-            self.root.calculate_bounds();
+            self.root.recalculate();
         }
 
         success

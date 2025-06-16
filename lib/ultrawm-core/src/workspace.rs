@@ -62,8 +62,9 @@ impl Workspace {
     }
 
     pub fn remove_window(&mut self, window: &WindowRef) -> Result<(), ()> {
-        self.layout.remove_window(window)?;
         self.windows.remove(&window.id());
+        self.layout.remove_window(window)?;
+        self.flush_windows()?;
         Ok(())
     }
 

@@ -115,7 +115,6 @@ impl WindowManager {
         let workspace = self.get_workspace_at_position_mut(position).ok_or(())?;
         workspace.tile_window(&window, position)?;
 
-        println!("tiled window");
         workspace.flush_windows()?;
 
         // Save layout after tiling
@@ -131,7 +130,6 @@ impl WindowManager {
 
         for workspace in self.workspaces.values_mut() {
             if workspace.remove_window(&window).is_ok() {
-                self.windows.remove(&id);
                 workspace.flush_windows()?;
 
                 // Save layout after removing window

@@ -388,7 +388,7 @@ impl Container {
         self.ratios.replace(vec![ratio; children.len()]);
     }
 
-    pub fn calculate_bounds(&self) {
+    pub fn recalculate(&self) {
         // Early exit if no children
         let children = self.children();
         if children.is_empty() {
@@ -445,7 +445,7 @@ impl Container {
 
             // Only recurse if it's a container
             if let ContainerChildRef::Container(c) = child {
-                c.calculate_bounds();
+                c.recalculate();
             }
         }
     }
@@ -1266,14 +1266,14 @@ mod tests {
     #[test]
     fn test_calculate_bounds_empty_container() {
         let root = new_container_with_bounds(Bounds::new(100, 100, 800, 600));
-        root.calculate_bounds(); // Should not crash
+        root.recalculate(); // Should not crash
     }
 
     #[test]
     fn test_calculate_bounds_single_window() {
         let root = new_container_with_bounds(Bounds::new(100, 100, 800, 600));
         let window = root.add_window(new_window());
-        root.calculate_bounds();
+        root.recalculate();
 
         // Single window should get the full container bounds
         assert_eq!(window.bounds(), Bounds::new(100, 100, 800, 600));
@@ -1287,7 +1287,7 @@ mod tests {
 
         // Set specific ratios
         root.set_ratios(vec![0.6, 0.4]);
-        root.calculate_bounds();
+        root.recalculate();
 
         // First window should get 60% width
         assert_eq!(window_a.bounds(), Bounds::new(0, 0, 600, 500));
@@ -1304,7 +1304,7 @@ mod tests {
 
         // Set specific ratios
         vertical_container.set_ratios(vec![0.3, 0.7]);
-        vertical_container.calculate_bounds();
+        vertical_container.recalculate();
 
         // First window should get 30% height
         assert_eq!(window_a.bounds(), Bounds::new(0, 0, 500, 300));
@@ -1319,7 +1319,7 @@ mod tests {
         let nested_container = root.split_window(&window_a, new_window(), InsertOrder::After);
         let window_b = assert_is_window(&nested_container.children()[1]);
 
-        root.calculate_bounds();
+        root.recalculate();
 
         // Root should have one child (the nested container)
         assert_eq!(root.children().len(), 1);
@@ -1346,7 +1346,7 @@ mod tests {
 
         // Equal ratios should handle rounding
         root.equalize_ratios();
-        root.calculate_bounds();
+        root.recalculate();
 
         // All windows should have reasonable sizes
         assert!(window_a.bounds().size.width > 0);
@@ -1555,7 +1555,7 @@ mod tests {
         assert_window(&container_cd.children()[1], &window_d);
 
         // Test bounds calculation
-        root.calculate_bounds();
+        root.recalculate();
 
         // All windows should have valid bounds
         assert!(window_a.bounds().size.width > 0);
