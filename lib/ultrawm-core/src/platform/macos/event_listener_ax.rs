@@ -4,13 +4,14 @@ use crate::platform::macos::{
     ObserveResult, ObserveResultExt,
 };
 use crate::platform::{
-    EventDispatcher, PlatformError, PlatformErrorType, PlatformEvent, PlatformResult,
-    PlatformWindowImpl, ProcessId, WindowId,
+    EventDispatcher, PlatformError, PlatformEvent, PlatformResult, PlatformWindowImpl, ProcessId,
+    WindowId,
 };
 use application_services::accessibility_ui::{AXNotification, AXObserver, AXUIElement};
 use application_services::{pid_t, AXError};
 use core_foundation::runloop::CFRunLoop;
 use core_foundation::string::CFString;
+use log::warn;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
@@ -191,7 +192,7 @@ impl EventListenerAX {
         } else if notification == notification::element_destroyed() {
             PlatformEvent::WindowClosed(window.id())
         } else {
-            println!("Unknown notification: {:?}", notification);
+            warn!("Unknown notification: {:?}", notification);
             return Ok(());
         };
 
@@ -268,6 +269,6 @@ impl EventListenerAX {
 
 impl From<AXError> for PlatformError {
     fn from(error: AXError) -> Self {
-        PlatformErrorType::Error(format!("AXError: {:?}", error)).into()
+        PlatformError::Error(format!("AXError: {:?}", error)).into()
     }
 }

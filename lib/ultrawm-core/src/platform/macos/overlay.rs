@@ -1,17 +1,14 @@
-use crate::event_loop_main::{run_on_main_thread, run_on_main_thread_blocking};
+use crate::event_loop_main::run_on_main_thread_blocking;
 use crate::overlay_window::OverlayWindowConfig;
 use crate::platform::{Bounds, PlatformOverlayImpl, PlatformResult, WindowId};
-use core_foundation::base::ToVoid;
-use core_graphics::color::CGColor;
 use icrate::AppKit::{
-    NSApplication, NSView, NSViewHeightSizable, NSViewWidthSizable,
-    NSVisualEffectBlendingModeBehindWindow, NSVisualEffectMaterialHUDWindow,
-    NSVisualEffectStateActive, NSVisualEffectView, NSWindow,
+    NSView, NSViewHeightSizable, NSViewWidthSizable, NSVisualEffectBlendingModeBehindWindow,
+    NSVisualEffectMaterialHUDWindow, NSVisualEffectStateActive, NSVisualEffectView, NSWindow,
 };
 use icrate::CoreAnimation::CALayer;
-use icrate::Foundation::{CGFloat, CGPoint, CGRect, CGSize, NSRect};
+use icrate::Foundation::{CGPoint, CGRect, CGSize, NSRect};
 use objc2::rc::Id;
-use objc2::{msg_send, msg_send_id, ClassType};
+use objc2::{msg_send_id, ClassType};
 use skia_safe::Image;
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::Window;
@@ -80,7 +77,7 @@ impl PlatformOverlayImpl for MacOSPlatformOverlay {
         Ok(())
     }
 
-    fn render_to_window(image: &Image, window_id: WindowId) -> PlatformResult<()> {
+    fn render_to_window(_image: &Image, _window_id: WindowId) -> PlatformResult<()> {
         Ok(())
     }
 

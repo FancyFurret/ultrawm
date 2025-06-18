@@ -1,19 +1,15 @@
 use crate::platform::macos::ffi::{window_info, AXUIElementExt, CFArrayExt, CFDictionaryExt};
 use crate::platform::macos::ObserveError::NotManageable;
 use crate::platform::macos::{app_is_manageable, window_is_manageable, MacOSPlatformWindow};
-use crate::platform::{
-    Bounds, CursorType, Display, DisplayId, PlatformImpl, PlatformResult, Position, ProcessId,
-};
+use crate::platform::{Bounds, Display, PlatformImpl, PlatformResult, Position, ProcessId};
 use application_services::accessibility_ui::AXUIElement;
 use application_services::pid_t;
 use core_graphics::display::{kCGNullWindowID, kCGWindowListOptionAll};
 use core_graphics::window::copy_window_info;
-use icrate::AppKit::{NSCursor, NSDeviceDescriptionKey, NSEvent, NSScreen};
+use icrate::AppKit::{NSDeviceDescriptionKey, NSEvent, NSScreen};
 use icrate::Foundation::{CGPoint, CGRect, CGSize, NSNumber, NSRect};
 use objc2::rc::Id;
 use std::collections::HashSet;
-use std::str::FromStr;
-use winit::window::Window;
 
 pub struct MacOSPlatform;
 
@@ -116,7 +112,7 @@ impl PlatformImpl for MacOSPlatform {
         Ok(())
     }
 
-    fn start_window_bounds_batch(window_count: u32) -> PlatformResult<()> {
+    fn start_window_bounds_batch(_window_count: u32) -> PlatformResult<()> {
         // Not supported on macOS for now
         Ok(())
     }

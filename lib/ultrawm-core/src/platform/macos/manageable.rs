@@ -1,5 +1,5 @@
 use crate::platform::macos::ffi::{get_window_id, AXUIElementExt};
-use crate::platform::{PlatformError, PlatformErrorType, PlatformResult};
+use crate::platform::{PlatformError, PlatformResult};
 use application_services::AXError;
 
 pub fn app_is_manageable(app: &AXUIElementExt) -> ObserveResult {
@@ -65,7 +65,7 @@ impl From<&str> for ObserveError {
 
 impl From<()> for ObserveError {
     fn from(_: ()) -> Self {
-        ObserveError::PlatformError(PlatformErrorType::Unknown.into())
+        ObserveError::PlatformError(PlatformError::Unknown.into())
     }
 }
 
@@ -78,7 +78,7 @@ impl From<AXError> for ObserveError {
 impl Into<PlatformError> for ObserveError {
     fn into(self) -> PlatformError {
         match self {
-            ObserveError::NotManageable(e) => PlatformErrorType::Error(e).into(),
+            ObserveError::NotManageable(e) => PlatformError::Error(e).into(),
             ObserveError::PlatformError(e) => e,
         }
     }

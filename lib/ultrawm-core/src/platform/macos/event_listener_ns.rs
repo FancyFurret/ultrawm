@@ -8,6 +8,7 @@ use icrate::AppKit::{
     NSWorkspaceDidLaunchApplicationNotification, NSWorkspaceDidTerminateApplicationNotification,
 };
 use icrate::Foundation::{NSNotification, NSNotificationName, NSObject, NSOperationQueue};
+use log::{error, warn};
 use std::cell::RefCell;
 use std::ptr::NonNull;
 use std::rc::Rc;
@@ -32,7 +33,7 @@ impl EventListenerNS {
             let state = listener.clone();
             let block = ConcreteBlock::new(move |notification: NonNull<NSNotification>| {
                 if let Err(e) = state.borrow().handle_event(notification) {
-                    println!("Error handling NS event: {:?}", e);
+                    error!("Error handling NS event: {:?}", e);
                 }
             });
 
@@ -71,7 +72,7 @@ impl EventListenerNS {
                     .borrow_mut()
                     .app_terminated(pid as ProcessId)?;
             } else {
-                println!("Unknown notification: {:?}", notification);
+                warn!("Unknown notification: {:?}", notification);
             }
         }
 

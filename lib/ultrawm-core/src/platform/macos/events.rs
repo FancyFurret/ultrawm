@@ -23,7 +23,7 @@ unsafe impl PlatformEventsImpl for MacOSPlatformEvents {
         Ok(())
     }
 
-    fn set_intercept_clicks(intercept: bool) -> PlatformResult<()> {
+    fn set_intercept_clicks(_intercept: bool) -> PlatformResult<()> {
         // TODO
         Ok(())
     }
