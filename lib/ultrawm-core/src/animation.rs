@@ -1,3 +1,4 @@
+use log::trace;
 use std::collections::VecDeque;
 use std::time::Instant;
 
@@ -166,7 +167,7 @@ where
 
         let total_duration = *self.frame_times.back().unwrap() - *self.frame_times.front().unwrap();
         let fps = (self.frame_times.len() as f64 - 1.0) / total_duration.as_secs_f64();
-        println!("Animation completed with average FPS: {:.1}", fps);
+        trace!("Animation completed with average FPS: {fps:.1}");
     }
 
     pub fn is_animating(&self) -> bool {

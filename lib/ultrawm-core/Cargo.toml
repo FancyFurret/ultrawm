@@ -13,6 +13,8 @@ winit = "0.30.11"
 skia-safe = { version = "0.86.1", features = ["gl"] }
 once_cell = "1.21.3"
 dirs = "5.0"
+log = "0.4.27"
+thiserror = "2.0.12"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.9.3"

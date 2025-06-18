@@ -1,16 +1,15 @@
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::thread;
-use std::time::{Duration, Instant};
-
 use crate::animation::{ease_in_out_cubic, Animator};
 use crate::event_loop_main::run_on_main_thread_blocking;
 use crate::platform::{Bounds, PlatformOverlay, PlatformOverlayImpl, PlatformResult, WindowId};
-use crate::{UltraWMFatalError, UltraWMResult};
+use log::{error, warn};
 use skia_safe::{surfaces, Color, Paint, PaintStyle, RRect, Rect, Surface};
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread;
+use std::time::{Duration, Instant};
 use winit::dpi::{LogicalSize, PhysicalPosition};
 use winit::window::{Window, WindowAttributes, WindowLevel};
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct OverlayWindowConfig {
     pub fade_animation_ms: u32,
     pub move_animation_ms: u32,
@@ -21,13 +20,13 @@ pub struct OverlayWindowConfig {
     pub animation_fps: u32,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct OverlayWindowBackgroundStyle {
     pub opacity: f32,
     pub color: Color,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct OverlayWindowBorderStyle {
     pub(crate) color: Color,
     pub(crate) width: u32,
@@ -61,12 +60,19 @@ pub struct OverlayWindowAnimator {
 }
 
 impl OverlayWindow {
-    pub async fn new(config: OverlayWindowConfig) -> UltraWMResult<Self> {
+    pub async fn new(config: OverlayWindowConfig) -> Self {
         let (tx, rx) = channel();
 
         let config_clone = config.clone();
         let animator_thread = thread::spawn(move || {
-            let surface = surfaces::raster_n32_premul(skia_safe::ISize::new(100, 100)).unwrap();
+            let surface = match surfaces::raster_n32_premul(skia_safe::ISize::new(100, 100)) {
+                Some(s) => s,
+                None => {
+                    error!("Could not create surface");
+                    return;
+                }
+            };
+
             let attributes = WindowAttributes::default()
                 .with_position(PhysicalPosition::new(0, 0))
                 .with_inner_size(LogicalSize::new(0, 0))
@@ -79,79 +85,92 @@ impl OverlayWindow {
                 .with_resizable(false);
 
             let config_clone_2 = config_clone.clone();
-            let (window, handle) = run_on_main_thread_blocking(move |event_loop| {
-                let window = event_loop.create_window(attributes).unwrap();
-                PlatformOverlay::initialize_overlay_window(&window, &config_clone_2).unwrap();
-                let handle = PlatformOverlay::get_window_id(&window).unwrap();
-                (window, handle)
+            let window = run_on_main_thread_blocking(move |event_loop| {
+                let window = match event_loop.create_window(attributes) {
+                    Ok(w) => w,
+                    Err(e) => {
+                        error!("Failed to create overlay window: {e}");
+                        return None;
+                    }
+                };
+
+                if let Err(e) = PlatformOverlay::initialize_overlay_window(&window, &config_clone_2)
+                {
+                    error!("Failed to initialize overlay window: {e}");
+                    return None;
+                }
+
+                let handle = match PlatformOverlay::get_window_id(&window) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        error!("Failed to get overlay window handle: {e}");
+                        return None;
+                    }
+                };
+
+                Some((window, handle))
             });
 
-            let mut animator = OverlayWindowAnimator {
-                window,
-                handle,
-                fade_animator: Animator::new(0.0, 0.0, ease_in_out_cubic),
-                move_animator: Animator::new(
-                    Bounds::default(),
-                    Bounds::default(),
-                    ease_in_out_cubic,
-                ),
-                surface,
-                last_size: (0, 0),
-                config: config_clone,
-                visible: false,
-                command_receiver: rx,
-            };
+            if let Some((window, handle)) = window {
+                let mut animator = OverlayWindowAnimator {
+                    window,
+                    handle,
+                    fade_animator: Animator::new(0.0, 0.0, ease_in_out_cubic),
+                    move_animator: Animator::new(
+                        Bounds::default(),
+                        Bounds::default(),
+                        ease_in_out_cubic,
+                    ),
+                    surface,
+                    last_size: (0, 0),
+                    config: config_clone,
+                    visible: false,
+                    command_receiver: rx,
+                };
 
-            animator.run_loop();
+                animator.run_loop();
+            }
         });
 
-        Ok(Self {
+        Self {
             config,
             shown: false,
             command_sender: tx,
             animator_thread: Some(animator_thread),
-        })
+        }
     }
     pub fn shown(&self) -> bool {
         self.shown
     }
 
-    pub fn show(&mut self) -> UltraWMResult<()> {
+    pub fn show(&mut self) {
         if self.shown {
-            return Ok(());
+            return;
         }
 
         self.command_sender
             .send(OverlayWindowCommand::Show)
-            .map_err(|e| -> UltraWMFatalError {
-                format!("Failed to send show command: {}", e).into()
-            })?;
+            .unwrap_or_else(|e| error!("Failed to send show command to the overlay window: {e}"));
 
         self.shown = true;
-        Ok(())
     }
 
-    pub fn hide(&mut self) -> UltraWMResult<()> {
+    pub fn hide(&mut self) {
         if !self.shown {
-            return Ok(());
+            return;
         }
 
         self.command_sender
             .send(OverlayWindowCommand::Hide)
-            .map_err(|e| -> UltraWMFatalError {
-                format!("Failed to send hide command: {}", e).into()
-            })?;
+            .unwrap_or_else(|e| warn!("Failed to send hide command: {e}"));
 
         self.shown = false;
-        Ok(())
     }
 
-    pub fn move_to(&mut self, bounds: &Bounds) -> UltraWMResult<()> {
+    pub fn move_to(&mut self, bounds: &Bounds) {
         self.command_sender
             .send(OverlayWindowCommand::MoveTo(bounds.clone()))
-            .map_err(|e| -> UltraWMFatalError {
-                format!("Failed to send move command: {}", e).into()
-            })
+            .unwrap_or_else(|e| warn!("Failed to send move command: {e}"));
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::drag_handle::DragHandle;
-use crate::layouts::{ResizeDirection, WindowLayout};
+use crate::layouts::{LayoutResult, ResizeDirection, WindowLayout};
 use crate::platform::traits::PlatformImpl;
-use crate::platform::{Bounds, Platform, Position, WindowId};
+use crate::platform::{Bounds, Platform, PlatformResult, Position, WindowId};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
 use std::collections::HashMap;
@@ -57,18 +57,17 @@ impl Workspace {
         &self.name
     }
 
-    pub fn has_window(&self, id: WindowId) -> bool {
-        self.windows.contains_key(&id)
+    pub fn has_window(&self, id: &WindowId) -> bool {
+        self.windows.contains_key(id)
     }
 
     pub fn get_tile_bounds(&self, window: &WindowRef, position: &Position) -> Option<Bounds> {
         self.layout.get_preview_bounds(window, position)
     }
 
-    pub fn remove_window(&mut self, window: &WindowRef) -> Result<(), ()> {
+    pub fn remove_window(&mut self, window: &WindowRef) -> LayoutResult<()> {
         self.windows.remove(&window.id());
         self.layout.remove_window(window)?;
-        self.flush_windows()?;
         Ok(())
     }
 
@@ -76,10 +75,9 @@ impl Workspace {
         &mut self,
         window: &WindowRef,
         position: &Position,
-    ) -> Result<InsertResult, ()> {
+    ) -> LayoutResult<InsertResult> {
         let action = self.layout.insert_window(window, position)?;
         self.windows.insert(window.id(), window.clone());
-        // TODO: If the layout requested a swap, replace the window
         Ok(action)
     }
 
@@ -88,15 +86,15 @@ impl Workspace {
         window: &WindowRef,
         bounds: &Bounds,
         direction: ResizeDirection,
-    ) {
-        self.layout.resize_window(window, bounds, direction);
+    ) -> LayoutResult<()> {
+        self.layout.resize_window(window, bounds, direction)
     }
 
-    pub fn flush_windows(&mut self) -> Result<(), ()> {
+    pub fn flush_windows(&mut self) -> PlatformResult<()> {
         let window_count = self.windows.len() as u32;
         Platform::start_window_bounds_batch(window_count).unwrap();
         for window in self.windows.values_mut() {
-            window.flush().map_err(|_| ())?;
+            window.flush()?;
         }
         Platform::end_window_bounds_batch().unwrap();
         Ok(())

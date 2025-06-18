@@ -36,6 +36,12 @@ pub struct Args {
         help = "Deletes your current layout in case it has issues"
     )]
     pub reset_layout: bool,
+
+    #[arg(
+        long = "verbose",
+        help = "Enable verbose logging (includes trace and info levels)"
+    )]
+    pub verbose: bool,
 }
 
 impl Default for Args {
@@ -46,6 +52,7 @@ impl Default for Args {
             use_defaults: false,
             no_persistence: false,
             reset_layout: false,
+            verbose: false,
         }
     }
 }

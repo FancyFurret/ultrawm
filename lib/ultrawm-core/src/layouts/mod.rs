@@ -1,11 +1,26 @@
 use crate::drag_handle::DragHandle;
-use crate::platform::{Bounds, Position};
+use crate::platform::{Bounds, Position, WindowId};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
 pub use container_tree::*;
 use std::fmt::Debug;
+use thiserror::Error;
 
 pub mod container_tree;
+
+#[derive(Debug, Error)]
+pub enum LayoutError {
+    #[error("{0}")]
+    Error(String),
+
+    #[error("Window not found: {0}")]
+    WindowNotFound(WindowId),
+
+    #[error("Position not valid for insertion: {0:?}")]
+    InvalidInsertPosition(Position),
+}
+
+pub type LayoutResult<T> = Result<T, LayoutError>;
 
 pub trait WindowLayout: Debug {
     fn new(bounds: Bounds, windows: &Vec<WindowRef>) -> Self
@@ -30,13 +45,22 @@ pub trait WindowLayout: Debug {
         &mut self,
         window: &WindowRef,
         position: &Position,
-    ) -> Result<InsertResult, ()>;
+    ) -> LayoutResult<InsertResult>;
 
-    fn replace_window(&mut self, old_window: &WindowRef, new_window: &WindowRef) -> Result<(), ()>;
+    fn replace_window(
+        &mut self,
+        old_window: &WindowRef,
+        new_window: &WindowRef,
+    ) -> LayoutResult<()>;
 
-    fn remove_window(&mut self, window: &WindowRef) -> Result<(), ()>;
+    fn remove_window(&mut self, window: &WindowRef) -> LayoutResult<()>;
 
-    fn resize_window(&mut self, window: &WindowRef, bounds: &Bounds, direction: ResizeDirection);
+    fn resize_window(
+        &mut self,
+        window: &WindowRef,
+        bounds: &Bounds,
+        direction: ResizeDirection,
+    ) -> LayoutResult<()>;
 
     fn drag_handles(&self) -> Vec<DragHandle> {
         Vec::new()

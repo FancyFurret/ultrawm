@@ -1,15 +1,14 @@
 use crate::config::Config;
 use crate::drag_handle::DragHandle;
+use crate::event_loop_wm::{WMOperationError, WMOperationResult};
 use crate::handle_tracker::{HandleDragEvent, HandleDragTracker};
 use crate::overlay_window::{
     OverlayWindow, OverlayWindowBackgroundStyle, OverlayWindowBorderStyle, OverlayWindowConfig,
 };
-use crate::platform::traits::PlatformEventsImpl;
 use crate::platform::traits::PlatformImpl;
-use crate::platform::{Bounds, Platform, PlatformEvent, PlatformEvents, Position};
+use crate::platform::{Bounds, Platform, PlatformEvent, Position};
 use crate::window_move_handler::WindowMoveHandler;
 use crate::wm::WindowManager;
-use crate::UltraWMResult;
 use skia_safe::Color;
 
 pub struct WindowResizeHandler {
@@ -24,7 +23,7 @@ pub struct WindowResizeHandler {
 }
 
 impl WindowResizeHandler {
-    pub async fn new() -> UltraWMResult<Self> {
+    pub async fn new() -> Self {
         let config = Config::current();
 
         let overlay = OverlayWindow::new(OverlayWindowConfig {
@@ -46,9 +45,9 @@ impl WindowResizeHandler {
                 color: Color::from_rgb(30, 30, 30),
             }),
         })
-        .await?;
+        .await;
 
-        Ok(Self {
+        Self {
             overlay,
             last_preview_bounds: None,
             handle_tracker: HandleDragTracker::new(),
@@ -57,15 +56,15 @@ impl WindowResizeHandler {
             hover_drag_handle: None,
             handles_enabled: config.drag_handles,
             handle_width: config.drag_handle_width,
-        })
+        }
     }
 
-    pub fn handle(
+    pub fn handle_event(
         &mut self,
         event: &PlatformEvent,
         move_handler: &WindowMoveHandler,
         wm: &mut WindowManager,
-    ) -> UltraWMResult<()> {
+    ) -> WMOperationResult<()> {
         if !self.handles_enabled {
             return Ok(());
         }
@@ -88,13 +87,13 @@ impl WindowResizeHandler {
         pos: &Position,
         move_handler: &WindowMoveHandler,
         wm: &WindowManager,
-    ) -> UltraWMResult<()> {
+    ) -> WMOperationResult<()> {
         // Prevent normal window resizing
         if let Some(_) = wm.find_window_at_resize_edge(pos) {
-            Platform::hide_resize_cursor()?;
+            Platform::hide_resize_cursor().map_err(|e| WMOperationError::Error(e.into()))?;
             // PlatformEvents::set_intercept_clicks(true)?;
         } else {
-            Platform::reset_cursor().unwrap();
+            Platform::reset_cursor().map_err(|e| WMOperationError::Error(e.into()))?;
             // PlatformEvents::set_intercept_clicks(false)?;
         }
 
@@ -108,13 +107,13 @@ impl WindowResizeHandler {
                 .unwrap()
                 .preview_bounds(self.handle_width);
 
-            self.overlay.show()?;
-            self.overlay.move_to(&preview_bounds)?;
+            self.overlay.show();
+            self.overlay.move_to(&preview_bounds);
             self.last_preview_bounds = Some(preview_bounds);
         } else if (handle_under_cursor.is_none() || tiling) && self.hover_drag_handle.is_some() {
             self.hover_drag_handle = None;
             if !self.handle_drag_active {
-                self.overlay.hide()?;
+                self.overlay.hide();
                 self.last_preview_bounds = None;
             }
         }
@@ -122,13 +121,13 @@ impl WindowResizeHandler {
         Ok(())
     }
 
-    fn start(&mut self, handle: DragHandle, _pos: Position) -> UltraWMResult<()> {
+    fn start(&mut self, handle: DragHandle, _pos: Position) -> WMOperationResult<()> {
         self.handle_drag_active = true;
         self.active_drag_handle = Some(handle.clone());
 
         let preview_bounds = handle.preview_bounds(self.handle_width);
-        self.overlay.show()?;
-        self.overlay.move_to(&preview_bounds)?;
+        self.overlay.show();
+        self.overlay.move_to(&preview_bounds);
         self.last_preview_bounds = Some(preview_bounds);
 
         Ok(())
@@ -139,7 +138,7 @@ impl WindowResizeHandler {
         handle: DragHandle,
         pos: Position,
         wm: &mut WindowManager,
-    ) -> UltraWMResult<()> {
+    ) -> WMOperationResult<()> {
         if self.handle_drag_active {
             let mut preview_bounds = handle.preview_bounds(self.handle_width);
             if handle.orientation == crate::drag_handle::HandleOrientation::Vertical {
@@ -151,8 +150,8 @@ impl WindowResizeHandler {
             }
 
             if Some(&preview_bounds) != self.last_preview_bounds.as_ref() {
-                self.overlay.show()?;
-                self.overlay.move_to(&preview_bounds)?;
+                self.overlay.show();
+                self.overlay.move_to(&preview_bounds);
                 self.last_preview_bounds = Some(preview_bounds);
             }
 
@@ -169,9 +168,9 @@ impl WindowResizeHandler {
         handle: DragHandle,
         pos: Position,
         wm: &mut WindowManager,
-    ) -> UltraWMResult<()> {
+    ) -> WMOperationResult<()> {
         if self.handle_drag_active {
-            self.overlay.hide()?;
+            self.overlay.hide();
             self.last_preview_bounds = None;
             self.handle_drag_active = false;
             wm.drag_handle_moved(&handle, &pos)?;

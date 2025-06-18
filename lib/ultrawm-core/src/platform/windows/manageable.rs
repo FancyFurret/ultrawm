@@ -1,5 +1,5 @@
 use crate::platform::windows::WindowsPlatformWindow;
-use crate::platform::{PlatformError, PlatformErrorType};
+use crate::platform::PlatformError;
 use std::mem::size_of;
 use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -72,6 +72,6 @@ impl From<&str> for ObserveError {
 
 impl From<()> for ObserveError {
     fn from(_: ()) -> Self {
-        ObserveError::PlatformError(PlatformErrorType::Unknown.into())
+        ObserveError::PlatformError(().into())
     }
 }

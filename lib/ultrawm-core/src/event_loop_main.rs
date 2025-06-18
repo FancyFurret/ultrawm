@@ -1,4 +1,5 @@
 use crate::UltraWMResult;
+use log::trace;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
@@ -117,7 +118,7 @@ impl ApplicationHandler<MainThreadMessage> for App {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
-                println!("The close button was pressed; stopping");
+                trace!("The close button was pressed; stopping");
                 event_loop.exit();
             }
             _ => (),

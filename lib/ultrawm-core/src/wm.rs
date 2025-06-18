@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::drag_handle::DragHandle;
-use crate::layouts::{ContainerTree, ResizeDirection};
+use crate::layouts::{ContainerTree, LayoutError, ResizeDirection};
 use crate::partition::{Partition, PartitionId};
 use crate::platform::{
     Bounds, Platform, PlatformImpl, PlatformResult, PlatformWindow, PlatformWindowImpl, Position,
@@ -9,8 +9,31 @@ use crate::platform::{
 use crate::serialization::{extract_workspace_layout, load_layout, save_layout};
 use crate::window::{Window, WindowRef};
 use crate::workspace::{Workspace, WorkspaceId};
+use crate::PlatformError;
+use log::warn;
 use std::collections::HashMap;
 use std::rc::Rc;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum WMError {
+    #[error("Window not found: {0}")]
+    WindowNotFound(WindowId),
+
+    #[error("No workspace found for window: {0:?}")]
+    WorkspaceNotFound(WindowId),
+
+    #[error("No workspace found at position: {0:?}")]
+    NoWorkspaceAtPosition(Position),
+
+    #[error(transparent)]
+    LayoutError(#[from] LayoutError),
+
+    #[error(transparent)]
+    Platform(#[from] PlatformError),
+}
+
+pub type WMResult<T> = Result<T, WMError>;
 
 #[derive(Debug)]
 pub struct WindowManager {
@@ -93,7 +116,7 @@ impl WindowManager {
         &self.workspaces
     }
 
-    pub fn track_window(&mut self, window: PlatformWindow) -> Result<(), ()> {
+    pub fn track_window(&mut self, window: PlatformWindow) -> WMResult<()> {
         if self.windows.contains_key(&window.id()) {
             return Ok(());
         }
@@ -108,93 +131,92 @@ impl WindowManager {
         Ok(())
     }
 
-    pub fn tile_window(&mut self, id: WindowId, position: &Position) -> Result<(), ()> {
-        let window = self.get_window(id).ok_or(())?;
-        let workspace = self.get_workspace_at_position_mut(position).ok_or(())?;
+    pub fn tile_window(&mut self, id: WindowId, position: &Position) -> WMResult<()> {
+        let window = self.get_window(id)?;
+        let workspace = self.get_workspace_at_position_mut(position)?;
+
         workspace.tile_window(&window, position)?;
-
         workspace.flush_windows()?;
-
-        // Save layout after tiling
-        if let Err(e) = save_layout(self) {
-            println!("Warning: Failed to save layout: {}", e);
-        }
+        self.try_save_layout();
 
         Ok(())
     }
 
-    pub fn remove_window(&mut self, id: WindowId) -> Result<(), ()> {
-        let window = self.get_window(id).ok_or(())?;
+    pub fn remove_window(&mut self, id: WindowId) -> WMResult<()> {
+        let window = self.get_window(id)?;
+        let workspace = self.get_workspace_for_window_mut(&id)?;
 
-        for workspace in self.workspaces.values_mut() {
-            if workspace.remove_window(&window).is_ok() {
-                workspace.flush_windows()?;
-
-                // Save layout after removing window
-                if let Err(e) = save_layout(self) {
-                    println!("Warning: Failed to save layout: {}", e);
-                }
-
-                return Ok(());
-            }
-        }
-
-        Err(())
+        workspace.remove_window(&window)?;
+        workspace.flush_windows()?;
+        self.try_save_layout();
+        Ok(())
     }
 
     pub fn resize_window(
         &mut self,
-        window: &WindowRef,
+        id: WindowId,
         bounds: &Bounds,
         direction: ResizeDirection,
-    ) -> Result<(), ()> {
-        for workspace in self.workspaces.values_mut() {
-            if workspace.has_window(window.id()) {
-                workspace.resize_window(window, bounds, direction);
-                workspace.flush_windows()?;
+    ) -> WMResult<()> {
+        let window = self.get_window(id)?;
+        let workspace = self.get_workspace_for_window_mut(&id)?;
 
-                // Save layout after resizing
-                if let Err(e) = save_layout(self) {
-                    println!("Warning: Failed to save layout: {}", e);
-                }
-
-                return Ok(());
-            }
-        }
-
-        Err(())
+        workspace.resize_window(&window, bounds, direction)?;
+        workspace.flush_windows()?;
+        self.try_save_layout();
+        Ok(())
     }
 
-    pub fn get_window(&self, id: WindowId) -> Option<WindowRef> {
-        self.windows.get(&id).cloned()
+    pub fn get_window(&self, id: WindowId) -> WMResult<WindowRef> {
+        self.windows
+            .get(&id)
+            .cloned()
+            .ok_or(WMError::WindowNotFound(id))
     }
 
     pub fn get_tile_bounds(&self, id: WindowId, position: &Position) -> Option<Bounds> {
-        let workspace = self.get_workspace_at_position(position)?;
-        let window = self.get_window(id)?;
+        let workspace = self.get_workspace_at_position(position).ok()?;
+        let window = self.get_window(id).ok()?;
         workspace.get_tile_bounds(&window, position)
     }
 
-    fn get_workspace_at_position(&self, position: &Position) -> Option<&Workspace> {
+    fn get_workspace_at_position(&self, position: &Position) -> WMResult<&Workspace> {
         // First, determine which partition the position is in
         let partition = self
             .partitions
             .values()
-            .find(|p| p.bounds().contains(&position))?;
+            .find(|p| p.bounds().contains(&position))
+            .ok_or(WMError::NoWorkspaceAtPosition(position.clone()))?;
 
         // Then, get the workspace for that partition
-        self.workspaces.get(&partition.current_workspace()?)
+        self.workspaces
+            .get(&partition.current_workspace().unwrap())
+            .ok_or(WMError::NoWorkspaceAtPosition(position.clone()))
     }
 
-    fn get_workspace_at_position_mut(&mut self, position: &Position) -> Option<&mut Workspace> {
+    fn get_workspace_at_position_mut(&mut self, position: &Position) -> WMResult<&mut Workspace> {
         // First, determine which partition the position is in
         let partition = self
             .partitions
             .values()
-            .find(|p| p.bounds().contains(&position))?;
+            .find(|p| p.bounds().contains(&position))
+            .ok_or(WMError::NoWorkspaceAtPosition(position.clone()))?;
 
         // Then, get the workspace for that partition
-        self.workspaces.get_mut(&partition.current_workspace()?)
+        Ok(self
+            .workspaces
+            .get_mut(&partition.current_workspace().unwrap())
+            .unwrap())
+    }
+
+    fn get_workspace_for_window_mut(&mut self, window_id: &WindowId) -> WMResult<&mut Workspace> {
+        for workspace in self.workspaces.values_mut() {
+            if workspace.has_window(window_id) {
+                return Ok(workspace);
+            }
+        }
+
+        Err(WMError::WorkspaceNotFound(*window_id))
     }
 
     fn get_windows_for_partition(windows: &mut Vec<WindowRef>, bounds: &Bounds) -> Vec<WindowRef> {
@@ -243,7 +265,7 @@ impl WindowManager {
 
     /// Returns a list of drag handles for the workspace that covers the given position.
     pub fn drag_handles(&self, position: &Position) -> Vec<DragHandle> {
-        if let Some(workspace) = self.get_workspace_at_position(position) {
+        if let Ok(workspace) = self.get_workspace_at_position(position) {
             workspace.drag_handles()
         } else {
             Vec::new()
@@ -269,19 +291,11 @@ impl WindowManager {
             })
     }
 
-    pub fn drag_handle_moved(
-        &mut self,
-        handle: &DragHandle,
-        position: &Position,
-    ) -> PlatformResult<()> {
-        if let Some(workspace) = self.get_workspace_at_position_mut(position) {
+    pub fn drag_handle_moved(&mut self, handle: &DragHandle, position: &Position) -> WMResult<()> {
+        if let Ok(workspace) = self.get_workspace_at_position_mut(position) {
             if workspace.drag_handle_moved(handle, position) {
                 workspace.flush_windows()?;
-
-                // Save layout after drag handle moved
-                if let Err(e) = save_layout(self) {
-                    println!("Warning: Failed to save layout: {}", e);
-                }
+                self.try_save_layout();
             }
         }
         Ok(())
@@ -289,5 +303,11 @@ impl WindowManager {
 
     pub fn cleanup(&mut self) -> PlatformResult<()> {
         Ok(())
+    }
+
+    fn try_save_layout(&self) {
+        if let Err(e) = save_layout(self) {
+            warn!("Failed to save layout: {e}");
+        }
     }
 }

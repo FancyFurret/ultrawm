@@ -1,3 +1,4 @@
+use log::{trace, warn};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -54,7 +55,7 @@ impl Config {
 
         if !path.exists() {
             Self::create_default_config_file(&path)?;
-            println!("Created default config file at: {}", path.display());
+            trace!("Created default config file at: {}", path.display());
         }
 
         let contents = fs::read_to_string(&path)
@@ -65,10 +66,7 @@ impl Config {
 
         // Save the config back to ensure all fields are present (fills in any missing fields with defaults)
         if let Err(e) = config.save_to_file(&path) {
-            eprintln!(
-                "Warning: Failed to update config file with missing fields: {}",
-                e
-            );
+            warn!("Failed to update config file with missing fields: {e}");
         }
 
         Ok(config)

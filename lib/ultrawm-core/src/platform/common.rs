@@ -1,44 +1,31 @@
 use crate::platform::PlatformWindow;
 use serde::{Deserialize, Serialize};
-use std::backtrace::Backtrace;
-use std::fmt::Debug;
+use thiserror::Error;
 
-#[derive(Debug)]
-pub struct PlatformError {
-    pub error_type: PlatformErrorType,
-    pub backtrace: Backtrace,
-}
-
-#[derive(Debug)]
-pub enum PlatformErrorType {
+#[derive(Debug, Error)]
+pub enum PlatformError {
+    #[error("Unknown platform error")]
     Unknown,
-    Error(String),
-}
 
-impl From<PlatformErrorType> for PlatformError {
-    fn from(error_type: PlatformErrorType) -> Self {
-        Self {
-            error_type,
-            backtrace: Backtrace::capture(),
-        }
-    }
+    #[error("{0}")]
+    Error(String),
 }
 
 impl From<&str> for PlatformError {
     fn from(error: &str) -> Self {
-        PlatformErrorType::Error(error.to_string()).into()
+        PlatformError::Error(error.to_string()).into()
     }
 }
 
 impl From<String> for PlatformError {
     fn from(error: String) -> Self {
-        PlatformErrorType::Error(error).into()
+        PlatformError::Error(error).into()
     }
 }
 
 impl From<()> for PlatformError {
     fn from(_: ()) -> Self {
-        PlatformErrorType::Unknown.into()
+        PlatformError::Unknown.into()
     }
 }
 

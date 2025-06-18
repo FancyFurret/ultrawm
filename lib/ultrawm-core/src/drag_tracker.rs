@@ -54,7 +54,7 @@ impl WindowDragTracker {
                     return None;
                 }
 
-                let window = wm.get_window(*id)?;
+                let window = wm.get_window(*id).ok()?;
                 self.current_drag = Some(DragContext {
                     window: window.clone(),
                     drag_type: None,

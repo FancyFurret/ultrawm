@@ -1,6 +1,3 @@
-use std::cmp;
-use std::collections::HashMap;
-
 use crate::config::Config;
 use crate::drag_handle::{DragHandle, HandleOrientation};
 use crate::layouts::container_tree::container::{
@@ -14,10 +11,13 @@ use crate::layouts::container_tree::{
     Direction, TileAction, MOUSE_ADD_TO_PARENT_PREVIEW_RATIO, MOUSE_ADD_TO_PARENT_THRESHOLD,
     MOUSE_SPLIT_PREVIEW_RATIO, MOUSE_SPLIT_THRESHOLD, MOUSE_SWAP_THRESHOLD,
 };
-use crate::layouts::{ContainerId, ResizeDirection, Side, WindowLayout};
+use crate::layouts::{ContainerId, LayoutError, LayoutResult, ResizeDirection, Side, WindowLayout};
 use crate::platform::{Bounds, PlatformWindowImpl, Position, WindowId};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
+use log::info;
+use std::cmp;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct ContainerTree {
@@ -66,7 +66,7 @@ impl ContainerTree {
             None,
         )?;
 
-        println!(
+        info!(
             "Successfully reconstructed layout with {} windows placed",
             windows_map.len()
         );
@@ -127,6 +127,13 @@ impl ContainerTree {
         }
 
         result
+    }
+
+    fn get_window(&self, id: &WindowId) -> LayoutResult<ContainerWindowRef> {
+        self.windows
+            .get(&id)
+            .ok_or(LayoutError::WindowNotFound(*id))
+            .cloned()
     }
 
     fn find_window_at_position(&self, position: &Position) -> Option<ContainerWindowRef> {
@@ -416,7 +423,7 @@ impl WindowLayout for ContainerTree {
     where
         Self: Sized,
     {
-        Self::new_from_saved(bounds, windows, None)
+        WindowLayout::new_from_saved(bounds, windows, None)
     }
 
     fn new_from_saved(
@@ -443,7 +450,7 @@ impl WindowLayout for ContainerTree {
         Self {
             bounds,
             root,
-            windows: HashMap::new()
+            windows: HashMap::new(),
         }
     }
 
@@ -476,9 +483,11 @@ impl WindowLayout for ContainerTree {
         &mut self,
         window: &WindowRef,
         position: &Position,
-    ) -> Result<InsertResult, ()> {
+    ) -> LayoutResult<InsertResult> {
         // First, check if the drop position is valid
-        let action = self.get_tile_action(window, position).ok_or(())?;
+        let action = self
+            .get_tile_action(window, position)
+            .ok_or(LayoutError::InvalidInsertPosition(position.clone()))?;
 
         // Then, check if this window is already in the tree
         let existing_window = self.windows.get(&window.id()).map(|w| w.clone());
@@ -511,12 +520,16 @@ impl WindowLayout for ContainerTree {
             TileAction::AddToParent(child, side) => {
                 if let Some(parent) = child.parent() {
                     // If there is a parent, insert into the parent
-                    let mut index = parent.index_of_child(&child).ok_or(())?;
+                    let mut index = parent
+                        .index_of_child(&child)
+                        .ok_or(LayoutError::Error("Could not find child in parent".into()))?;
                     if side == Side::Right || side == Side::Bottom {
                         index += 1;
                     }
 
-                    let parent = child.parent().ok_or(())?;
+                    let parent = child
+                        .parent()
+                        .ok_or(LayoutError::Error("Could not find parent for child".into()))?;
                     let container_window =
                         existing_window.unwrap_or_else(|| ContainerWindow::new(window.clone()));
                     parent.insert_window(index, container_window.clone());
@@ -552,9 +565,13 @@ impl WindowLayout for ContainerTree {
         Ok(InsertResult::None)
     }
 
-    fn replace_window(&mut self, old_window: &WindowRef, new_window: &WindowRef) -> Result<(), ()> {
+    fn replace_window(
+        &mut self,
+        old_window: &WindowRef,
+        new_window: &WindowRef,
+    ) -> LayoutResult<()> {
         let old_window_id = old_window.id();
-        let old_container_window = self.windows.get(&old_window_id).ok_or(())?.clone();
+        let old_container_window = self.get_window(&old_window_id)?.clone();
         let parent = old_container_window.parent();
         let new_container_window = ContainerWindow::new(new_window.clone());
 
@@ -570,9 +587,9 @@ impl WindowLayout for ContainerTree {
         Ok(())
     }
 
-    fn remove_window(&mut self, window: &WindowRef) -> Result<(), ()> {
+    fn remove_window(&mut self, window: &WindowRef) -> LayoutResult<()> {
         let window_id = window.id();
-        let container_window = self.windows.get(&window_id).ok_or(())?.clone();
+        let container_window = self.get_window(&window_id)?.clone();
         let parent = container_window.parent();
         parent.remove_child(&ContainerChildRef::Window(container_window));
 
@@ -583,11 +600,16 @@ impl WindowLayout for ContainerTree {
         Ok(())
     }
 
-    fn resize_window(&mut self, window: &WindowRef, bounds: &Bounds, direction: ResizeDirection) {
+    fn resize_window(
+        &mut self,
+        window: &WindowRef,
+        bounds: &Bounds,
+        direction: ResizeDirection,
+    ) -> LayoutResult<()> {
         let container_window = if let Some(w) = self.windows.get(&window.id()) {
             w.clone()
         } else {
-            return; // Not managed by this layout
+            return Ok(()); // Not managed by this layout
         };
 
         let mut parent = container_window.parent();
@@ -633,6 +655,7 @@ impl WindowLayout for ContainerTree {
         }
 
         self.root.recalculate();
+        Ok(())
     }
 
     fn drag_handles(&self) -> Vec<DragHandle> {
@@ -709,11 +732,25 @@ mod tests {
         Bounds::new(0, 0, 1920, 1080)
     }
 
+    fn create_tree_with_initial_windows(initial_windows: &Vec<WindowRef>) -> ContainerTree {
+        let bounds = create_test_bounds();
+        let mut tree = ContainerTree::new(bounds, initial_windows);
+
+        // Insert initial windows into the tree
+        for (_, window) in initial_windows.iter().enumerate() {
+            tree.root.add_window(ContainerWindow::new(window.clone()));
+            tree.windows
+                .insert(window.id(), ContainerWindow::new(window.clone()));
+        }
+
+        tree.root.recalculate();
+        tree
+    }
+
     #[test]
     fn test_windows_map_updated_on_swap() {
-        let bounds = create_test_bounds();
         let initial_windows = vec![create_mock_window(1)];
-        let mut tree = ContainerTree::new(bounds, &initial_windows);
+        let mut tree = create_tree_with_initial_windows(&initial_windows);
 
         // Initial window should be in the map
         assert_eq!(tree.windows.len(), 1);
@@ -721,7 +758,7 @@ mod tests {
 
         // Insert a new window
         let new_window = create_mock_window(2);
-        let position = Position { x: 500, y: 500 };
+        let position = Position { x: 1000, y: 500 };
 
         let result = tree.insert_window(&new_window, &position);
         assert!(result.is_ok());
@@ -732,9 +769,8 @@ mod tests {
 
     #[test]
     fn test_windows_map_updated_on_remove() {
-        let bounds = create_test_bounds();
         let initial_windows = vec![create_mock_window(1), create_mock_window(2)];
-        let mut tree = ContainerTree::new(bounds, &initial_windows);
+        let mut tree = create_tree_with_initial_windows(&initial_windows);
 
         // Both windows should be in the map initially
         assert_eq!(tree.windows.len(), 2);
@@ -753,9 +789,8 @@ mod tests {
 
     #[test]
     fn test_windows_map_updated_on_replace() {
-        let bounds = create_test_bounds();
         let initial_windows = vec![create_mock_window(1)];
-        let mut tree = ContainerTree::new(bounds, &initial_windows);
+        let mut tree = create_tree_with_initial_windows(&initial_windows);
 
         // Initial window should be in the map
         assert_eq!(tree.windows.len(), 1);
@@ -774,9 +809,8 @@ mod tests {
 
     #[test]
     fn test_windows_map_updated_on_split() {
-        let bounds = create_test_bounds();
         let initial_windows = vec![create_mock_window(1)];
-        let mut tree = ContainerTree::new(bounds, &initial_windows);
+        let mut tree = create_tree_with_initial_windows(&initial_windows);
 
         // Initial window should be in the map
         assert_eq!(tree.windows.len(), 1);
@@ -798,9 +832,8 @@ mod tests {
 
     #[test]
     fn test_windows_map_updated_on_add_to_parent() {
-        let bounds = create_test_bounds();
         let initial_windows = vec![create_mock_window(1), create_mock_window(2)];
-        let mut tree = ContainerTree::new(bounds, &initial_windows);
+        let mut tree = create_tree_with_initial_windows(&initial_windows);
 
         // Both windows should be in the map initially
         assert_eq!(tree.windows.len(), 2);
