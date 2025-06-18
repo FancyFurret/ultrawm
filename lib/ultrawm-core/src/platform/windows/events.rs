@@ -112,8 +112,6 @@ unsafe extern "system" fn win_event_hook_proc(
         }
     }
 
-    // println!("Dispatching event: {:?}", event);
-
     EVENT_DISPATCHER.get().unwrap().send(event);
 }
 

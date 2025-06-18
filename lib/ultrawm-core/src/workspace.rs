@@ -71,6 +71,17 @@ impl Workspace {
         Ok(())
     }
 
+    pub fn replace_window(
+        &mut self,
+        old_window: &WindowRef,
+        new_window: &WindowRef,
+    ) -> LayoutResult<()> {
+        self.windows.remove(&old_window.id());
+        self.windows.insert(new_window.id(), new_window.clone());
+        self.layout.replace_window(old_window, new_window)?;
+        Ok(())
+    }
+
     pub fn tile_window(
         &mut self,
         window: &WindowRef,

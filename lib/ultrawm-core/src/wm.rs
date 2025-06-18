@@ -7,10 +7,11 @@ use crate::platform::{
     WindowId,
 };
 use crate::serialization::{extract_workspace_layout, load_layout, save_layout};
+use crate::tile_result::InsertResult;
 use crate::window::{Window, WindowRef};
 use crate::workspace::{Workspace, WorkspaceId};
 use crate::PlatformError;
-use log::warn;
+use log::{error, warn};
 use std::collections::HashMap;
 use std::rc::Rc;
 use thiserror::Error;
@@ -71,7 +72,7 @@ impl WindowManager {
             Ok(Some(layout)) => Some(layout),
             Ok(None) => None,
             Err(e) => {
-                println!("Failed to load saved layout: {}, creating new layout", e);
+                error!("Failed to load saved layout: {}, creating new layout", e);
                 None
             }
         };
@@ -133,11 +134,33 @@ impl WindowManager {
 
     pub fn tile_window(&mut self, id: WindowId, position: &Position) -> WMResult<()> {
         let window = self.get_window(id)?;
-        let workspace = self.get_workspace_at_position_mut(position)?;
 
-        workspace.tile_window(&window, position)?;
-        workspace.flush_windows()?;
-        self.try_save_layout();
+        let old_workspace_id = self.get_workspace_with_window(&window).map(|w| w.id());
+        let new_workspace_id = self.get_workspace_at_position(position)?.id();
+
+        let result = self
+            .workspaces
+            .get_mut(&new_workspace_id)
+            .unwrap()
+            .tile_window(&window, position)?;
+
+        if old_workspace_id.is_some() && old_workspace_id.unwrap() != new_workspace_id {
+            let old_workspace = self.workspaces.get_mut(&old_workspace_id.unwrap()).unwrap();
+            if let InsertResult::Swap(new_window) = result {
+                old_workspace.replace_window(&window, &new_window)?;
+            } else {
+                old_workspace.remove_window(&window)?;
+            }
+            old_workspace.flush_windows()?;
+        }
+
+        let new_workspace = self.workspaces.get_mut(&new_workspace_id).unwrap();
+        new_workspace.flush_windows()?;
+
+        // Save layout after tiling
+        if let Err(e) = save_layout(self) {
+            warn!("Warning: Failed to save layout: {}", e);
+        }
 
         Ok(())
     }
@@ -178,6 +201,15 @@ impl WindowManager {
         let workspace = self.get_workspace_at_position(position).ok()?;
         let window = self.get_window(id).ok()?;
         workspace.get_tile_bounds(&window, position)
+    }
+
+    fn get_workspace_with_window(&self, window: &WindowRef) -> Option<&Workspace> {
+        for workspace in self.workspaces.values() {
+            if workspace.has_window(&window.id()) {
+                return Some(workspace);
+            }
+        }
+        None
     }
 
     fn get_workspace_at_position(&self, position: &Position) -> WMResult<&Workspace> {

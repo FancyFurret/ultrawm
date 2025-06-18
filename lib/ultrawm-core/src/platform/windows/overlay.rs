@@ -1,6 +1,7 @@
 use crate::overlay_window::OverlayWindowConfig;
 use crate::platform::windows::ffi::enable_composition_blur;
 use crate::platform::{Bounds, PlatformOverlayImpl, PlatformResult, WindowId};
+use log::error;
 use skia_safe::Image;
 use windows::Win32::Foundation::{COLORREF, HWND};
 use windows::Win32::Graphics::Dwm::{
@@ -120,7 +121,7 @@ impl PlatformOverlayImpl for WindowsPlatformOverlay {
                 DIB_RGB_COLORS,
             );
             if res == 0 {
-                println!("Failed to render image to window");
+                error!("Failed to render image to window");
                 return Err("Failed to render image to window".into());
             }
             ReleaseDC(hwnd, hdc);

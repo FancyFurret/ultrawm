@@ -4,6 +4,7 @@
 use crate::event_loop_main::EventLoopMain;
 use crate::event_loop_wm::EventLoopWM;
 use crate::platform::{EventBridge, PlatformError, PlatformEvents, PlatformEventsImpl};
+use log::error;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -56,7 +57,7 @@ pub fn start(shutdown: Arc<AtomicBool>) -> UltraWMResult<()> {
     thread::spawn(move || {
         // Wait for signal that main thread is running
         if main_ready_rx.recv().is_err() {
-            println!("Failed to receive main thread ready signal");
+            error!("Failed to receive main thread ready signal");
             process::exit(1);
         }
 
@@ -69,7 +70,7 @@ pub fn start(shutdown: Arc<AtomicBool>) -> UltraWMResult<()> {
 
         tk.block_on(EventLoopWM::run(bridge, shutdown_wm))
             .map_err(|e| {
-                println!("Error running UltraWM: {:?}", e);
+                error!("Error running UltraWM: {:?}", e);
                 process::exit(1);
             })
     });

@@ -15,7 +15,7 @@ use crate::layouts::{ContainerId, LayoutError, LayoutResult, ResizeDirection, Si
 use crate::platform::{Bounds, PlatformWindowImpl, Position, WindowId};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
-use log::info;
+use log::{error, info};
 use std::cmp;
 use std::collections::HashMap;
 
@@ -439,7 +439,7 @@ impl WindowLayout for ContainerTree {
                 return tree;
             }
 
-            println!("Failed to deserialize saved layout, starting from scratch");
+            error!("Failed to deserialize saved layout, starting from scratch");
         }
 
         let root_bounds = Self::get_root_bounds(&bounds);
@@ -560,7 +560,7 @@ impl WindowLayout for ContainerTree {
             }
         }
 
-        self.root().recalculate();
+        self.root.recalculate();
 
         Ok(InsertResult::None)
     }
@@ -583,6 +583,8 @@ impl WindowLayout for ContainerTree {
         // Update windows map: remove old window and add new window
         self.windows.remove(&old_window_id);
         self.windows.insert(new_window.id(), new_container_window);
+
+        self.root.recalculate();
 
         Ok(())
     }
