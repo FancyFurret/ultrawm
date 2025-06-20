@@ -1,3 +1,4 @@
+use crate::keybind::Keybind;
 use log::{trace, warn};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -35,6 +36,35 @@ pub struct Config {
     pub drag_handle_opacity: f32,
     /// Resizes windows as handles are dragged
     pub live_window_resize: bool,
+    /// Bindings handle resize actions
+    pub handle_resize_bindings: HandleResizeBindings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HandleResizeBindings {
+    /// Bindings for resizing the left or top window (e.g., LMB)
+    pub resize_left_top: Vec<Keybind>,
+    /// Bindings for resizing the right or bottom window (e.g., RMB)
+    pub resize_right_bottom: Vec<Keybind>,
+    /// Bindings for resizing both sides evenly (e.g., MMB, LMB+RMB)
+    pub resize_evenly: Vec<Keybind>,
+    /// Bindings for symmetric resize of left/top (e.g., Shift+LMB)
+    pub resize_left_top_symmetric: Vec<Keybind>,
+    /// Bindings for symmetric resize of right/bottom (e.g., Shift+RMB)
+    pub resize_right_bottom_symmetric: Vec<Keybind>,
+}
+
+impl Default for HandleResizeBindings {
+    fn default() -> Self {
+        Self {
+            resize_left_top: vec![Keybind::parse("lmb")],
+            resize_right_bottom: vec![Keybind::parse("rmb")],
+            resize_evenly: vec![Keybind::parse("mmb")],
+            resize_left_top_symmetric: vec![Keybind::parse("lmb+mmb")],
+            resize_right_bottom_symmetric: vec![Keybind::parse("rmb+mmb")],
+        }
+    }
 }
 
 static CURRENT_CONFIG: Lazy<Arc<RwLock<Config>>> =
@@ -191,6 +221,7 @@ impl Default for Config {
             drag_handle_color: (40, 40, 40),
             drag_handle_opacity: 0.8,
             live_window_resize: true,
+            handle_resize_bindings: HandleResizeBindings::default(),
         }
     }
 }

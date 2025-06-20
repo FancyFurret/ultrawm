@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::drag_handle::{DragHandle, HandleOrientation};
+use crate::keybind::KeybindListExt;
 use crate::layouts::container_tree::container::{
     Container, ContainerChildRef, ContainerRef, ContainerWindow, ContainerWindowRef,
     ResizeDistribution,
@@ -12,7 +13,7 @@ use crate::layouts::container_tree::{
     MOUSE_SPLIT_PREVIEW_RATIO, MOUSE_SPLIT_THRESHOLD, MOUSE_SWAP_THRESHOLD,
 };
 use crate::layouts::{ContainerId, LayoutError, LayoutResult, ResizeDirection, Side, WindowLayout};
-use crate::platform::{Bounds, PlatformWindowImpl, Position, WindowId};
+use crate::platform::{Bounds, MouseButtons, PlatformWindowImpl, Position, WindowId};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
 use log::{error, info};
@@ -633,13 +634,23 @@ impl WindowLayout for ContainerTree {
             if needs_horizontal && p.direction() == Direction::Horizontal {
                 if (direction.has_left() && is_first) || (direction.has_right() && is_last) {
                 } else {
-                    p.resize_child(&child_ref, &bounds, direction, ResizeDistribution::Spread);
+                    let (to, side) = if direction.has_left() {
+                        (bounds.position.x, Side::Left)
+                    } else {
+                        (bounds.position.x + bounds.size.width as i32, Side::Right)
+                    };
+                    p.resize_edge(&child_ref, to, side, ResizeDistribution::Spread);
                     needs_horizontal = false;
                 }
             } else if needs_vertical && p.direction() == Direction::Vertical {
                 if (direction.has_top() && is_first) || (direction.has_bottom() && is_last) {
                 } else {
-                    p.resize_child(&child_ref, &bounds, direction, ResizeDistribution::Spread);
+                    let (to, side) = if direction.has_top() {
+                        (bounds.position.y, Side::Top)
+                    } else {
+                        (bounds.position.y + bounds.size.height as i32, Side::Bottom)
+                    };
+                    p.resize_edge(&child_ref, to, side, ResizeDistribution::Spread);
                     needs_vertical = false;
                 }
             }
@@ -666,7 +677,12 @@ impl WindowLayout for ContainerTree {
         handles
     }
 
-    fn drag_handle_moved(&mut self, handle: &DragHandle, position: &Position) -> bool {
+    fn drag_handle_moved(
+        &mut self,
+        handle: &DragHandle,
+        position: &Position,
+        buttons: &MouseButtons,
+    ) -> bool {
         // Find the container that owns this handle
         let container = match self.find_container_for_handle(handle.id) {
             Some(result) => result,
@@ -679,8 +695,30 @@ impl WindowLayout for ContainerTree {
             HandleOrientation::Horizontal => position.y,
         };
 
-        // Resize the split at the handle index
-        let success = container.resize_between(handle.index, new_position);
+        let config = Config::current();
+        let binds = &config.handle_resize_bindings;
+
+        let success = if binds.resize_evenly.matches_mouse(buttons) {
+            container.resize_between(handle.index, new_position)
+        } else if binds.resize_left_top.matches_mouse(buttons) {
+            let child = container.children().get(handle.index - 1).unwrap().clone();
+            let side = match handle.orientation {
+                HandleOrientation::Vertical => Side::Right,
+                HandleOrientation::Horizontal => Side::Bottom,
+            };
+            container.resize_edge(&child, new_position, side, ResizeDistribution::Spread);
+            true
+        } else if binds.resize_right_bottom.matches_mouse(buttons) {
+            let child = container.children().get(handle.index).unwrap().clone();
+            let side = match handle.orientation {
+                HandleOrientation::Vertical => Side::Left,
+                HandleOrientation::Horizontal => Side::Top,
+            };
+            container.resize_edge(&child, new_position, side, ResizeDistribution::Spread);
+            true
+        } else {
+            false
+        };
 
         if success {
             self.root.recalculate();

@@ -17,6 +17,7 @@ mod drag_tracker;
 mod event_loop_main;
 pub mod event_loop_wm;
 mod handle_tracker;
+mod keybind;
 mod layouts;
 mod overlay_window;
 mod partition;

@@ -6,7 +6,7 @@ use crate::overlay_window::{
     OverlayWindow, OverlayWindowBackgroundStyle, OverlayWindowBorderStyle, OverlayWindowConfig,
 };
 use crate::platform::traits::PlatformImpl;
-use crate::platform::{Bounds, Platform, PlatformEvent, Position};
+use crate::platform::{Bounds, MouseButtons, Platform, PlatformEvent, Position};
 use crate::window_move_handler::WindowMoveHandler;
 use crate::wm::WindowManager;
 use skia_safe::Color;
@@ -75,9 +75,11 @@ impl WindowResizeHandler {
         }?;
 
         match self.handle_tracker.handle_event(&event, &wm) {
-            Some(HandleDragEvent::Start(handle, pos)) => self.start(handle, pos),
-            Some(HandleDragEvent::Drag(handle, pos)) => self.drag(handle, pos, wm),
-            Some(HandleDragEvent::End(handle, pos)) => self.drop(handle, pos, wm),
+            Some(HandleDragEvent::Start(handle, pos, _)) => self.start(handle, pos),
+            Some(HandleDragEvent::Drag(handle, pos, buttons)) => {
+                self.drag(handle, pos, buttons, wm)
+            }
+            Some(HandleDragEvent::End(handle, pos, buttons)) => self.drop(handle, pos, buttons, wm),
             None => Ok(()),
         }
     }
@@ -137,6 +139,7 @@ impl WindowResizeHandler {
         &mut self,
         handle: DragHandle,
         pos: Position,
+        buttons: MouseButtons,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
         if self.handle_drag_active {
@@ -156,7 +159,7 @@ impl WindowResizeHandler {
             }
 
             if Config::current().live_window_resize {
-                wm.drag_handle_moved(&handle, &pos)?;
+                wm.drag_handle_moved(&handle, &pos, &buttons)?;
             }
         }
 
@@ -167,13 +170,14 @@ impl WindowResizeHandler {
         &mut self,
         handle: DragHandle,
         pos: Position,
+        buttons: MouseButtons,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
         if self.handle_drag_active {
             self.overlay.hide();
             self.last_preview_bounds = None;
             self.handle_drag_active = false;
-            wm.drag_handle_moved(&handle, &pos)?;
+            wm.drag_handle_moved(&handle, &pos, &buttons)?;
         }
 
         Ok(())

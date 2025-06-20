@@ -3,8 +3,8 @@ use crate::drag_handle::DragHandle;
 use crate::layouts::{ContainerTree, LayoutError, ResizeDirection};
 use crate::partition::{Partition, PartitionId};
 use crate::platform::{
-    Bounds, Platform, PlatformImpl, PlatformResult, PlatformWindow, PlatformWindowImpl, Position,
-    WindowId,
+    Bounds, MouseButtons, Platform, PlatformImpl, PlatformResult, PlatformWindow,
+    PlatformWindowImpl, Position, WindowId,
 };
 use crate::serialization::{extract_workspace_layout, load_layout, save_layout};
 use crate::tile_result::InsertResult;
@@ -323,9 +323,14 @@ impl WindowManager {
             })
     }
 
-    pub fn drag_handle_moved(&mut self, handle: &DragHandle, position: &Position) -> WMResult<()> {
+    pub fn drag_handle_moved(
+        &mut self,
+        handle: &DragHandle,
+        position: &Position,
+        buttons: &MouseButtons,
+    ) -> WMResult<()> {
         if let Ok(workspace) = self.get_workspace_at_position_mut(position) {
-            if workspace.drag_handle_moved(handle, position) {
+            if workspace.drag_handle_moved(handle, position, buttons) {
                 workspace.flush_windows()?;
                 self.try_save_layout();
             }

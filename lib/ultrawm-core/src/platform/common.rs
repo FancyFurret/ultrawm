@@ -56,6 +56,23 @@ pub enum MouseButton {
     Middle,
 }
 
+#[derive(Debug, Clone)]
+pub struct MouseButtons {
+    pub left: bool,
+    pub right: bool,
+    pub middle: bool,
+}
+
+impl MouseButtons {
+    pub fn update_button(&mut self, button: &MouseButton, pressed: bool) {
+        match button {
+            MouseButton::Left => self.left = pressed,
+            MouseButton::Right => self.right = pressed,
+            MouseButton::Middle => self.middle = pressed,
+        }
+    }
+}
+
 pub type DisplayId = u32;
 pub type ProcessId = u32;
 pub type WindowId = u64;

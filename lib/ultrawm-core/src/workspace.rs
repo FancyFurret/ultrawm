@@ -1,7 +1,7 @@
 use crate::drag_handle::DragHandle;
 use crate::layouts::{LayoutResult, ResizeDirection, WindowLayout};
 use crate::platform::traits::PlatformImpl;
-use crate::platform::{Bounds, Platform, PlatformResult, Position, WindowId};
+use crate::platform::{Bounds, MouseButtons, Platform, PlatformResult, Position, WindowId};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
 use std::collections::HashMap;
@@ -119,7 +119,12 @@ impl Workspace {
         self.layout.drag_handles()
     }
 
-    pub fn drag_handle_moved(&mut self, handle: &DragHandle, position: &Position) -> bool {
-        self.layout.drag_handle_moved(handle, position)
+    pub fn drag_handle_moved(
+        &mut self,
+        handle: &DragHandle,
+        position: &Position,
+        buttons: &MouseButtons,
+    ) -> bool {
+        self.layout.drag_handle_moved(handle, position, buttons)
     }
 }

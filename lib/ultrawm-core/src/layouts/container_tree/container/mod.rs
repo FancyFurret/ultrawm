@@ -1,14 +1,14 @@
 pub use container_ref::*;
 pub use container_window::*;
 
-use crate::layouts::{Direction, ResizeDirection};
+use super::Side;
+use crate::layouts::container_tree::{ContainerId, CONTAINER_ID_COUNTER};
+use crate::layouts::Direction;
 use crate::platform::Bounds;
+use log::error;
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::{Rc, Weak};
 use std::sync::atomic::Ordering;
-
-use super::Side;
-use crate::layouts::container_tree::{ContainerId, CONTAINER_ID_COUNTER};
 
 pub mod container_ref;
 mod container_window;
@@ -450,13 +450,22 @@ impl Container {
         }
     }
 
-    pub fn resize_child(
+    pub fn resize_edge(
         &self,
         child: &ContainerChildRef,
-        bounds: &Bounds,
-        direction: ResizeDirection,
+        edge_pos: i32,
+        side: Side,
         mode: ResizeDistribution,
     ) {
+        if self.direction == Direction::Horizontal && (side == Side::Top || side == Side::Bottom) {
+            error!("Cannot resize horizontal container on top or bottom");
+            return;
+        }
+        if self.direction == Direction::Vertical && (side == Side::Left || side == Side::Right) {
+            error!("Cannot resize vertical container on left or right");
+            return;
+        }
+
         let index = match self.index_of_child(child) {
             Some(i) => i,
             None => return,
@@ -485,10 +494,13 @@ impl Container {
             ratios_len = ratios.len();
         }
 
-        let new_size = match self.direction {
-            Direction::Horizontal => bounds.size.width as f32,
-            Direction::Vertical => bounds.size.height as f32,
-        };
+        let old_bounds = child.bounds();
+        let new_size = match side {
+            Side::Left => old_bounds.size.width as i32 + (old_bounds.position.x - edge_pos),
+            Side::Right => edge_pos - old_bounds.position.x,
+            Side::Top => old_bounds.size.height as i32 + (old_bounds.position.y - edge_pos),
+            Side::Bottom => edge_pos - old_bounds.position.y,
+        } as f32;
 
         let mut new_weight = (new_size / container_size) * total_weight;
         let min_weight = 0.1_f32;
@@ -498,17 +510,11 @@ impl Container {
         let delta = new_weight - old_weight;
 
         // Update the ratio for the resized child
-        {
-            let mut ratios = self.ratios.borrow_mut();
-            ratios[index] = new_weight;
-        }
+        self.ratios.borrow_mut()[index] = new_weight;
 
         match mode {
             ResizeDistribution::Spread => {
-                let affect_left = match self.direction {
-                    Direction::Horizontal => direction.has_left(),
-                    Direction::Vertical => direction.has_top(),
-                };
+                let affect_left = side == Side::Left || side == Side::Top;
                 let indices: Vec<usize> = if affect_left {
                     (0..index).collect()
                 } else {
@@ -1098,10 +1104,11 @@ mod tests {
 
         // Make window_b larger using spread distribution
         let new_bounds = Bounds::new(250, 0, 500, 500); // Takes up 50% of container
-        root.resize_child(
+        let right_edge = new_bounds.position.x + new_bounds.size.width as i32;
+        root.resize_edge(
             &ContainerChildRef::Window(window_b.clone()),
-            &new_bounds,
-            ResizeDirection::Right,
+            right_edge,
+            Side::Right,
             ResizeDistribution::Spread,
         );
 
@@ -1133,10 +1140,11 @@ mod tests {
 
         // Make middle window larger using symmetric distribution
         let new_bounds = Bounds::new(0, 200, 500, 600); // Takes up 60% of container
-        vertical_container.resize_child(
+        let bottom_edge = new_bounds.position.y + new_bounds.size.height as i32;
+        vertical_container.resize_edge(
             &ContainerChildRef::Window(window_b.clone()),
-            &new_bounds,
-            ResizeDirection::Bottom,
+            bottom_edge,
+            Side::Bottom,
             ResizeDistribution::Symmetric,
         );
 
@@ -1152,10 +1160,11 @@ mod tests {
 
         // Resizing with only one child should not change ratios
         let original_ratios = root.ratios().clone();
-        root.resize_child(
+        let right_edge = 300;
+        root.resize_edge(
             &ContainerChildRef::Window(window),
-            &Bounds::new(0, 0, 300, 300),
-            ResizeDirection::Right,
+            right_edge,
+            Side::Right,
             ResizeDistribution::Spread,
         );
 
@@ -1169,10 +1178,11 @@ mod tests {
         let window_b = new_window(); // Not added to root
 
         let original_ratios = root.ratios().clone();
-        root.resize_child(
+        let right_edge = 300;
+        root.resize_edge(
             &ContainerChildRef::Window(window_b),
-            &Bounds::new(0, 0, 300, 300),
-            ResizeDirection::Right,
+            right_edge,
+            Side::Right,
             ResizeDistribution::Spread,
         );
 

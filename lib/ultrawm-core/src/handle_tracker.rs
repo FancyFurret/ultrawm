@@ -1,18 +1,20 @@
 use crate::drag_handle::DragHandle;
-use crate::platform::{MouseButton, PlatformEvent, Position};
+use crate::platform::{MouseButtons, PlatformEvent, Position};
 use crate::wm::WindowManager;
 
 #[derive(Debug, Clone)]
 pub enum HandleDragEvent {
-    Start(DragHandle, Position),
-    Drag(DragHandle, Position),
-    End(DragHandle, Position),
+    Start(DragHandle, Position, MouseButtons),
+    Drag(DragHandle, Position, MouseButtons),
+    End(DragHandle, Position, MouseButtons),
 }
 
 #[derive(Debug)]
 pub struct HandleDragTracker {
     active_handle: Option<DragHandle>,
     dragging: bool,
+    current_buttons: MouseButtons,
+    drag_buttons: MouseButtons,
 }
 
 impl HandleDragTracker {
@@ -20,6 +22,16 @@ impl HandleDragTracker {
         Self {
             active_handle: None,
             dragging: false,
+            current_buttons: MouseButtons {
+                left: false,
+                right: false,
+                middle: false,
+            },
+            drag_buttons: MouseButtons {
+                left: false,
+                right: false,
+                middle: false,
+            },
         }
     }
 
@@ -32,31 +44,67 @@ impl HandleDragTracker {
             PlatformEvent::MouseMoved(pos) => {
                 if self.dragging {
                     let handle = self.active_handle.clone()?;
-                    return Some(HandleDragEvent::Drag(handle, pos.clone()));
+                    return Some(HandleDragEvent::Drag(
+                        handle,
+                        pos.clone(),
+                        self.drag_buttons.clone(),
+                    ));
                 }
             }
-            PlatformEvent::MouseDown(pos, MouseButton::Left) => {
+            PlatformEvent::MouseDown(pos, button) => {
+                self.current_buttons.update_button(button, true);
+
                 if self.dragging {
-                    return None; // already dragging
+                    self.drag_buttons.update_button(button, true);
+                    return None;
                 }
 
                 // Check if mouse is over a handle
                 if let Some(handle) = wm.drag_handle_at_position(pos) {
                     self.dragging = true;
                     self.active_handle = Some(handle.clone());
-                    return Some(HandleDragEvent::Start(handle, pos.clone()));
+                    self.drag_buttons = self.current_buttons.clone();
+                    return Some(HandleDragEvent::Start(
+                        handle,
+                        pos.clone(),
+                        self.drag_buttons.clone(),
+                    ));
                 }
             }
-            PlatformEvent::MouseUp(pos, MouseButton::Left) => {
-                if self.dragging {
+            PlatformEvent::MouseUp(pos, button) => {
+                self.current_buttons.update_button(button, false);
+
+                if self.dragging && !self.any_button_pressed() {
                     self.dragging = false;
                     if let Some(handle) = self.active_handle.take() {
-                        return Some(HandleDragEvent::End(handle, pos.clone()));
+                        let final_drag_buttons = self.drag_buttons.clone();
+                        self.drag_buttons = MouseButtons {
+                            left: false,
+                            right: false,
+                            middle: false,
+                        };
+                        return Some(HandleDragEvent::End(
+                            handle,
+                            pos.clone(),
+                            final_drag_buttons,
+                        ));
                     }
                 }
             }
             _ => {}
         }
         None
+    }
+
+    fn any_button_pressed(&self) -> bool {
+        self.current_buttons.left || self.current_buttons.right || self.current_buttons.middle
+    }
+
+    pub fn get_pressed_buttons(&self) -> &MouseButtons {
+        &self.current_buttons
+    }
+
+    pub fn get_drag_buttons(&self) -> &MouseButtons {
+        &self.drag_buttons
     }
 }

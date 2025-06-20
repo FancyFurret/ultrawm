@@ -1,5 +1,5 @@
 use crate::drag_handle::DragHandle;
-use crate::platform::{Bounds, Position, WindowId};
+use crate::platform::{Bounds, MouseButtons, Position, WindowId};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
 pub use container_tree::*;
@@ -66,7 +66,12 @@ pub trait WindowLayout: Debug {
         Vec::new()
     }
 
-    fn drag_handle_moved(&mut self, _handle: &DragHandle, _position: &Position) -> bool {
+    fn drag_handle_moved(
+        &mut self,
+        _handle: &DragHandle,
+        _position: &Position,
+        _buttons: &MouseButtons,
+    ) -> bool {
         false
     }
 
