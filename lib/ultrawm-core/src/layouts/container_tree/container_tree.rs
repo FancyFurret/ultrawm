@@ -716,6 +716,22 @@ impl WindowLayout for ContainerTree {
             };
             container.resize_edge(&child, new_position, side, ResizeDistribution::Spread);
             true
+        } else if binds.resize_left_top_symmetric.matches_mouse(buttons) {
+            let child = container.children().get(handle.index - 1).unwrap().clone();
+            let side = match handle.orientation {
+                HandleOrientation::Vertical => Side::Right,
+                HandleOrientation::Horizontal => Side::Bottom,
+            };
+            container.resize_edge(&child, new_position, side, ResizeDistribution::Symmetric);
+            true
+        } else if binds.resize_right_bottom_symmetric.matches_mouse(buttons) {
+            let child = container.children().get(handle.index).unwrap().clone();
+            let side = match handle.orientation {
+                HandleOrientation::Vertical => Side::Left,
+                HandleOrientation::Horizontal => Side::Top,
+            };
+            container.resize_edge(&child, new_position, side, ResizeDistribution::Symmetric);
+            true
         } else {
             false
         };
