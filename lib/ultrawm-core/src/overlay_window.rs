@@ -79,7 +79,6 @@ impl OverlayWindow {
                 .with_decorations(false)
                 .with_transparent(true)
                 .with_blur(true)
-                .with_active(false)
                 .with_visible(true)
                 .with_window_level(WindowLevel::AlwaysOnTop)
                 .with_resizable(false);

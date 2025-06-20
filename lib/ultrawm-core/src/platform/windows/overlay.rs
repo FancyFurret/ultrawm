@@ -13,8 +13,7 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowLongW, SetLayeredWindowAttributes, SetWindowLongW, SetWindowPos, ShowWindow,
     GWL_EXSTYLE, GWL_STYLE, HWND_TOPMOST, LWA_ALPHA, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SW_SHOW,
-    WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
-    WS_EX_TRANSPARENT, WS_POPUP,
+    WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 use winit::platform::windows::{CornerPreference, WindowExtWindows};
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -142,7 +141,6 @@ impl PlatformOverlayImpl for WindowsPlatformOverlay {
 
             let new_style = current_style | WS_POPUP.0 as i32;
             let new_ex_style = (current_ex_style & !(WS_EX_APPWINDOW.0 as i32))
-                | WS_EX_TRANSPARENT.0 as i32
                 | WS_EX_TOOLWINDOW.0 as i32
                 | WS_EX_LAYERED.0 as i32
                 | WS_EX_NOACTIVATE.0 as i32
