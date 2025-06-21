@@ -1,17 +1,17 @@
-use crate::drag_handle::DragHandle;
 use crate::platform::{MouseButtons, PlatformEvent, Position};
+use crate::resize_handle::ResizeHandle;
 use crate::wm::WindowManager;
 
 #[derive(Debug, Clone)]
 pub enum HandleDragEvent {
-    Start(DragHandle, Position, MouseButtons),
-    Drag(DragHandle, Position, MouseButtons),
-    End(DragHandle, Position, MouseButtons),
+    Start(ResizeHandle, Position, MouseButtons),
+    Drag(ResizeHandle, Position, MouseButtons),
+    End(ResizeHandle, Position, MouseButtons),
 }
 
 #[derive(Debug)]
 pub struct HandleDragTracker {
-    active_handle: Option<DragHandle>,
+    active_handle: Option<ResizeHandle>,
     dragging: bool,
     current_buttons: MouseButtons,
     drag_buttons: MouseButtons,
@@ -60,7 +60,7 @@ impl HandleDragTracker {
                 }
 
                 // Check if mouse is over a handle
-                if let Some(handle) = wm.drag_handle_at_position(pos) {
+                if let Some(handle) = wm.resize_handle_at_position(pos) {
                     self.dragging = true;
                     self.active_handle = Some(handle.clone());
                     self.drag_buttons = self.current_buttons.clone();

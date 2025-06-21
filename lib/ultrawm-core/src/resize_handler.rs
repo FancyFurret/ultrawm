@@ -1,13 +1,13 @@
 use crate::config::Config;
-use crate::drag_handle::DragHandle;
+use crate::drag_handler::WindowMoveHandler;
 use crate::event_loop_wm::{WMOperationError, WMOperationResult};
-use crate::handle_tracker::{HandleDragEvent, HandleDragTracker};
 use crate::overlay_window::{
     OverlayWindow, OverlayWindowBackgroundStyle, OverlayWindowBorderStyle, OverlayWindowConfig,
 };
 use crate::platform::traits::PlatformImpl;
 use crate::platform::{Bounds, MouseButtons, Platform, PlatformEvent, Position};
-use crate::window_move_handler::WindowMoveHandler;
+use crate::resize_handle::ResizeHandle;
+use crate::resize_handle_tracker::{HandleDragEvent, HandleDragTracker};
 use crate::wm::WindowManager;
 use skia_safe::Color;
 
@@ -16,8 +16,8 @@ pub struct WindowResizeHandler {
     last_preview_bounds: Option<Bounds>,
     handle_tracker: HandleDragTracker,
     handle_drag_active: bool,
-    active_drag_handle: Option<DragHandle>,
-    hover_drag_handle: Option<DragHandle>,
+    active_resize_handle: Option<ResizeHandle>,
+    hover_resize_handle: Option<ResizeHandle>,
     handles_enabled: bool,
     handle_width: u32,
 }
@@ -52,10 +52,10 @@ impl WindowResizeHandler {
             last_preview_bounds: None,
             handle_tracker: HandleDragTracker::new(),
             handle_drag_active: false,
-            active_drag_handle: None,
-            hover_drag_handle: None,
-            handles_enabled: config.drag_handles,
-            handle_width: config.drag_handle_width,
+            active_resize_handle: None,
+            hover_resize_handle: None,
+            handles_enabled: config.resize_handles,
+            handle_width: config.resize_handle_width,
         }
     }
 
@@ -100,9 +100,9 @@ impl WindowResizeHandler {
         }
 
         let tiling = move_handler.overlay_shown();
-        let handle_under_cursor = wm.drag_handle_at_position(pos);
-        if handle_under_cursor.is_some() && self.hover_drag_handle.is_none() && !tiling {
-            self.hover_drag_handle = handle_under_cursor.clone();
+        let handle_under_cursor = wm.resize_handle_at_position(pos);
+        if handle_under_cursor.is_some() && self.hover_resize_handle.is_none() && !tiling {
+            self.hover_resize_handle = handle_under_cursor.clone();
 
             let preview_bounds = handle_under_cursor
                 .as_ref()
@@ -112,8 +112,8 @@ impl WindowResizeHandler {
             self.overlay.show();
             self.overlay.move_to(&preview_bounds);
             self.last_preview_bounds = Some(preview_bounds);
-        } else if (handle_under_cursor.is_none() || tiling) && self.hover_drag_handle.is_some() {
-            self.hover_drag_handle = None;
+        } else if (handle_under_cursor.is_none() || tiling) && self.hover_resize_handle.is_some() {
+            self.hover_resize_handle = None;
             if !self.handle_drag_active {
                 self.overlay.hide();
                 self.last_preview_bounds = None;
@@ -123,9 +123,9 @@ impl WindowResizeHandler {
         Ok(())
     }
 
-    fn start(&mut self, handle: DragHandle, _pos: Position) -> WMOperationResult<()> {
+    fn start(&mut self, handle: ResizeHandle, _pos: Position) -> WMOperationResult<()> {
         self.handle_drag_active = true;
-        self.active_drag_handle = Some(handle.clone());
+        self.active_resize_handle = Some(handle.clone());
 
         let preview_bounds = handle.preview_bounds(self.handle_width);
         self.overlay.show();
@@ -137,14 +137,14 @@ impl WindowResizeHandler {
 
     fn drag(
         &mut self,
-        handle: DragHandle,
+        handle: ResizeHandle,
         pos: Position,
         buttons: MouseButtons,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
         if self.handle_drag_active {
             let mut preview_bounds = handle.preview_bounds(self.handle_width);
-            if handle.orientation == crate::drag_handle::HandleOrientation::Vertical {
+            if handle.orientation == crate::resize_handle::HandleOrientation::Vertical {
                 let clamped_x = handle.clamp_coordinate(pos.x);
                 preview_bounds.position.x = clamped_x - (preview_bounds.size.width as i32 / 2);
             } else {
@@ -159,7 +159,7 @@ impl WindowResizeHandler {
             }
 
             if Config::current().live_window_resize {
-                wm.drag_handle_moved(&handle, &pos, &buttons)?;
+                wm.resize_handle_moved(&handle, &pos, &buttons)?;
             }
         }
 
@@ -168,7 +168,7 @@ impl WindowResizeHandler {
 
     fn drop(
         &mut self,
-        handle: DragHandle,
+        handle: ResizeHandle,
         pos: Position,
         buttons: MouseButtons,
         wm: &mut WindowManager,
@@ -177,7 +177,7 @@ impl WindowResizeHandler {
             self.overlay.hide();
             self.last_preview_bounds = None;
             self.handle_drag_active = false;
-            wm.drag_handle_moved(&handle, &pos, &buttons)?;
+            wm.resize_handle_moved(&handle, &pos, &buttons)?;
         }
 
         Ok(())

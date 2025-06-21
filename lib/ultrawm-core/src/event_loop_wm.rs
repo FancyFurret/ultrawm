@@ -1,5 +1,5 @@
-use crate::window_move_handler::WindowMoveHandler;
-use crate::window_resize_handler::WindowResizeHandler;
+use crate::drag_handler::WindowMoveHandler;
+use crate::resize_handler::WindowResizeHandler;
 use crate::wm::WMError;
 use crate::{
     event_loop_main::EventLoopMain,

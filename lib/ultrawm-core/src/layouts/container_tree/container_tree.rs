@@ -1,5 +1,4 @@
 use crate::config::Config;
-use crate::drag_handle::{DragHandle, HandleOrientation};
 use crate::keybind::KeybindListExt;
 use crate::layouts::container_tree::container::{
     Container, ContainerChildRef, ContainerRef, ContainerWindow, ContainerWindowRef,
@@ -14,6 +13,7 @@ use crate::layouts::container_tree::{
 };
 use crate::layouts::{ContainerId, LayoutError, LayoutResult, ResizeDirection, Side, WindowLayout};
 use crate::platform::{Bounds, MouseButtons, PlatformWindowImpl, Position, WindowId};
+use crate::resize_handle::{HandleOrientation, ResizeHandle};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
 use log::{error, info};
@@ -347,7 +347,7 @@ impl ContainerTree {
         }
     }
 
-    fn collect_handles_recursive(&self, container: &ContainerRef, out: &mut Vec<DragHandle>) {
+    fn collect_handles_recursive(&self, container: &ContainerRef, out: &mut Vec<ResizeHandle>) {
         let children = container.children();
         if children.len() <= 1 {
             // No split boundaries with single child
@@ -362,7 +362,7 @@ impl ContainerTree {
                             x: boundary_x,
                             y: container.bounds().center().y,
                         };
-                        let handle = DragHandle::new(
+                        let handle = ResizeHandle::new(
                             center,
                             container.bounds().size.height,
                             HandleOrientation::Vertical,
@@ -383,7 +383,7 @@ impl ContainerTree {
                             x: container.bounds().center().x,
                             y: boundary_y,
                         };
-                        let handle = DragHandle::new(
+                        let handle = ResizeHandle::new(
                             center,
                             container.bounds().size.width,
                             HandleOrientation::Horizontal,
@@ -671,15 +671,15 @@ impl WindowLayout for ContainerTree {
         Ok(())
     }
 
-    fn drag_handles(&self) -> Vec<DragHandle> {
+    fn resize_handles(&self) -> Vec<ResizeHandle> {
         let mut handles = Vec::new();
         self.collect_handles_recursive(&self.root, &mut handles);
         handles
     }
 
-    fn drag_handle_moved(
+    fn resize_handle_moved(
         &mut self,
-        handle: &DragHandle,
+        handle: &ResizeHandle,
         position: &Position,
         buttons: &MouseButtons,
     ) -> bool {
@@ -696,7 +696,7 @@ impl WindowLayout for ContainerTree {
         };
 
         let config = Config::current();
-        let binds = &config.handle_resize_bindings;
+        let binds = &config.resize_handle_resize_bindings;
 
         let success = if binds.resize_evenly.matches_mouse(buttons) {
             container.resize_between(handle.index, new_position)

@@ -1,11 +1,11 @@
 use crate::config::Config;
-use crate::drag_handle::DragHandle;
 use crate::layouts::{ContainerTree, LayoutError, ResizeDirection};
 use crate::partition::{Partition, PartitionId};
 use crate::platform::{
     Bounds, MouseButtons, Platform, PlatformImpl, PlatformResult, PlatformWindow,
     PlatformWindowImpl, Position, WindowId,
 };
+use crate::resize_handle::ResizeHandle;
 use crate::serialization::{extract_workspace_layout, load_layout, save_layout};
 use crate::tile_result::InsertResult;
 use crate::window::{Window, WindowRef};
@@ -296,26 +296,26 @@ impl WindowManager {
     }
 
     /// Returns a list of drag handles for the workspace that covers the given position.
-    pub fn drag_handles(&self, position: &Position) -> Vec<DragHandle> {
+    pub fn resize_handles(&self, position: &Position) -> Vec<ResizeHandle> {
         if let Ok(workspace) = self.get_workspace_at_position(position) {
-            workspace.drag_handles()
+            workspace.resize_handles()
         } else {
             Vec::new()
         }
     }
 
     /// Finds the first drag handle that contains the given position (if any).
-    pub fn drag_handle_at_position(&self, position: &Position) -> Option<DragHandle> {
-        let thickness = Config::drag_handle_width() as i32;
-        self.drag_handles(position)
+    pub fn resize_handle_at_position(&self, position: &Position) -> Option<ResizeHandle> {
+        let thickness = Config::resize_handle_width() as i32;
+        self.resize_handles(position)
             .into_iter()
             .find(|h| match h.orientation {
-                crate::drag_handle::HandleOrientation::Vertical => {
+                crate::resize_handle::HandleOrientation::Vertical => {
                     let dx = (position.x - h.center.x).abs();
                     let dy = (position.y - h.center.y).abs();
                     dx <= thickness / 2 && dy <= h.length as i32 / 2
                 }
-                crate::drag_handle::HandleOrientation::Horizontal => {
+                crate::resize_handle::HandleOrientation::Horizontal => {
                     let dx = (position.x - h.center.x).abs();
                     let dy = (position.y - h.center.y).abs();
                     dy <= thickness / 2 && dx <= h.length as i32 / 2
@@ -323,14 +323,14 @@ impl WindowManager {
             })
     }
 
-    pub fn drag_handle_moved(
+    pub fn resize_handle_moved(
         &mut self,
-        handle: &DragHandle,
+        handle: &ResizeHandle,
         position: &Position,
         buttons: &MouseButtons,
     ) -> WMResult<()> {
         if let Ok(workspace) = self.get_workspace_at_position_mut(position) {
-            if workspace.drag_handle_moved(handle, position, buttons) {
+            if workspace.resize_handle_moved(handle, position, buttons) {
                 workspace.flush_windows()?;
                 self.try_save_layout();
             }

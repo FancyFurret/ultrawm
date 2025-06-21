@@ -1,5 +1,5 @@
-use crate::drag_handle::DragHandle;
 use crate::platform::{Bounds, MouseButtons, Position, WindowId};
+use crate::resize_handle::ResizeHandle;
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
 pub use container_tree::*;
@@ -62,13 +62,13 @@ pub trait WindowLayout: Debug {
         direction: ResizeDirection,
     ) -> LayoutResult<()>;
 
-    fn drag_handles(&self) -> Vec<DragHandle> {
+    fn resize_handles(&self) -> Vec<ResizeHandle> {
         Vec::new()
     }
 
-    fn drag_handle_moved(
+    fn resize_handle_moved(
         &mut self,
-        _handle: &DragHandle,
+        _handle: &ResizeHandle,
         _position: &Position,
         _buttons: &MouseButtons,
     ) -> bool {

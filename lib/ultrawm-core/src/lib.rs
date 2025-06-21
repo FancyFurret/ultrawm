@@ -12,22 +12,22 @@ use std::{process, thread};
 
 mod animation;
 pub mod config;
-mod drag_handle;
+mod drag_handler;
 mod drag_tracker;
 mod event_loop_main;
 pub mod event_loop_wm;
-mod handle_tracker;
 mod keybind;
 mod layouts;
 mod overlay_window;
 mod partition;
 pub mod platform;
+mod resize_handle;
+mod resize_handle_tracker;
+mod resize_handler;
 mod serialization;
 mod thread_lock;
 mod tile_result;
 mod window;
-mod window_move_handler;
-mod window_resize_handler;
 mod wm;
 mod workspace;
 

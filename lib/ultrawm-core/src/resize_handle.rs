@@ -9,7 +9,7 @@ pub enum HandleOrientation {
 }
 
 #[derive(Debug, Clone)]
-pub struct DragHandle {
+pub struct ResizeHandle {
     /// Center position of the handle in screen coordinates.
     pub center: Position,
     /// Length of the handle along its orientation axis (pixels)
@@ -26,7 +26,7 @@ pub struct DragHandle {
     pub index: usize,
 }
 
-impl DragHandle {
+impl ResizeHandle {
     pub fn new(
         center: Position,
         length: u32,

@@ -27,17 +27,19 @@ pub struct Config {
     /// Whether to animate the tile preview move (position/size)
     pub tile_preview_move_animate: bool,
     /// Whether to enable drag handles
-    pub drag_handles: bool,
+    pub resize_handles: bool,
     /// The width in pixels of the invisible drag handles between tiled windows
-    pub drag_handle_width: u32,
+    pub resize_handle_width: u32,
     /// Color of the drag handle highlight (RGB)
-    pub drag_handle_color: (u8, u8, u8),
+    pub resize_handle_color: (u8, u8, u8),
     /// Opacity of drag handle highlight (0.0 - 1.0)
-    pub drag_handle_opacity: f32,
+    pub resize_handle_opacity: f32,
     /// Resizes windows as handles are dragged
     pub live_window_resize: bool,
     /// Bindings handle resize actions
-    pub handle_resize_bindings: HandleResizeBindings,
+    pub resize_handle_resize_bindings: HandleResizeBindings,
+    /// Bindings for window area actions (tile, slide, etc.)
+    pub window_area_bindings: WindowAreaBindings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,6 +65,26 @@ impl Default for HandleResizeBindings {
             resize_evenly: vec![Keybind::parse("mmb")],
             resize_left_top_symmetric: vec![Keybind::parse("lmb+mmb")],
             resize_right_bottom_symmetric: vec![Keybind::parse("rmb+mmb")],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WindowAreaBindings {
+    pub tile: Vec<Keybind>,
+    pub resize: Vec<Keybind>,
+    pub resize_symmetric: Vec<Keybind>,
+    pub slide: Vec<Keybind>,
+}
+
+impl Default for WindowAreaBindings {
+    fn default() -> Self {
+        Self {
+            tile: vec![Keybind::parse("cmd+lmb")],
+            resize: vec![Keybind::parse("cmd+rmb")],
+            resize_symmetric: vec![Keybind::parse("cmd+mmb")],
+            slide: vec![Keybind::parse("cmd+lmb+rmb")],
         }
     }
 }
@@ -169,24 +191,28 @@ impl Config {
         Self::current().tile_preview_move_animate
     }
 
-    pub fn drag_handles() -> bool {
-        Self::current().drag_handles
+    pub fn resize_handles() -> bool {
+        Self::current().resize_handles
     }
 
-    pub fn drag_handle_width() -> u32 {
-        Self::current().drag_handle_width
+    pub fn resize_handle_width() -> u32 {
+        Self::current().resize_handle_width
     }
 
-    pub fn drag_handle_color() -> (u8, u8, u8) {
-        Self::current().drag_handle_color
+    pub fn resize_handle_color() -> (u8, u8, u8) {
+        Self::current().resize_handle_color
     }
 
-    pub fn drag_handle_opacity() -> f32 {
-        Self::current().drag_handle_opacity
+    pub fn resize_handle_opacity() -> f32 {
+        Self::current().resize_handle_opacity
     }
 
     pub fn live_window_resize() -> bool {
         Self::current().live_window_resize
+    }
+
+    pub fn get_window_area_bindings(&self) -> &WindowAreaBindings {
+        &self.window_area_bindings
     }
 
     /// Save the current config to a file
@@ -216,12 +242,13 @@ impl Default for Config {
             tile_preview_animation_ms: 150,
             tile_preview_fade_animate: true,
             tile_preview_move_animate: true,
-            drag_handles: true,
-            drag_handle_width: 25,
-            drag_handle_color: (40, 40, 40),
-            drag_handle_opacity: 0.8,
+            resize_handles: true,
+            resize_handle_width: 25,
+            resize_handle_color: (40, 40, 40),
+            resize_handle_opacity: 0.8,
             live_window_resize: true,
-            handle_resize_bindings: HandleResizeBindings::default(),
+            resize_handle_resize_bindings: HandleResizeBindings::default(),
+            window_area_bindings: WindowAreaBindings::default(),
         }
     }
 }
