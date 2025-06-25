@@ -63,22 +63,7 @@ impl WindowAreaTracker {
             }
             PlatformEvent::MouseDown(pos, button) => {
                 self.current_buttons.add(button);
-                if self.current_drag.is_none() {
-                    if let Some((window, drag_type)) = self.get_drag_type(wm, pos) {
-                        let start_bounds = window.bounds().clone();
-                        self.current_drag = Some(DragContext {
-                            window: window.clone(),
-                            start_position: pos.clone(),
-                            start_bounds,
-                            drag_type: drag_type.clone(),
-                        });
-                        return Some(WindowAreaDragEvent::Start(
-                            window.id(),
-                            pos.clone(),
-                            drag_type,
-                        ));
-                    }
-                }
+                return self.handle_button_change(wm, pos);
             }
             PlatformEvent::MouseMoved(pos) => {
                 if let Some(drag) = &self.current_drag {
@@ -91,13 +76,7 @@ impl WindowAreaTracker {
             }
             PlatformEvent::MouseUp(pos, button) => {
                 self.current_buttons.remove(button);
-                if let Some(drag) = self.current_drag.take() {
-                    return Some(WindowAreaDragEvent::End(
-                        drag.window.id(),
-                        pos.clone(),
-                        drag.drag_type,
-                    ));
-                }
+                return self.handle_button_change(wm, pos);
             }
             _ => {}
         }
@@ -138,6 +117,46 @@ impl WindowAreaTracker {
         } else {
             None
         }
+    }
+
+    fn handle_button_change(
+        &mut self,
+        wm: &WindowManager,
+        pos: &Position,
+    ) -> Option<WindowAreaDragEvent> {
+        let current_drag_type = self.get_drag_type(wm, pos);
+
+        if let Some(drag) = &mut self.current_drag {
+            if let Some((_, drag_type)) = current_drag_type {
+                // Update drag type if it changed
+                if drag_type != drag.drag_type {
+                    drag.drag_type = drag_type;
+                }
+            } else {
+                // No valid drag type anymore, end the drag
+                let drag = self.current_drag.take().unwrap();
+                return Some(WindowAreaDragEvent::End(
+                    drag.window.id(),
+                    pos.clone(),
+                    drag.drag_type,
+                ));
+            }
+        } else if let Some((window, drag_type)) = current_drag_type {
+            // Start new drag if no current drag
+            let start_bounds = window.bounds().clone();
+            self.current_drag = Some(DragContext {
+                window: window.clone(),
+                start_position: pos.clone(),
+                start_bounds,
+                drag_type: drag_type.clone(),
+            });
+            return Some(WindowAreaDragEvent::Start(
+                window.id(),
+                pos.clone(),
+                drag_type,
+            ));
+        }
+        None
     }
 
     fn cancel_if_no_binding(&mut self) {

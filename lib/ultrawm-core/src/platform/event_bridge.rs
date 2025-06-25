@@ -1,10 +1,11 @@
 use crate::platform::PlatformEvent;
+use std::collections::VecDeque;
 use tokio::sync::mpsc;
 
 pub struct EventBridge {
     sender: mpsc::UnboundedSender<PlatformEvent>,
     receiver: mpsc::UnboundedReceiver<PlatformEvent>,
-    pending_event: Option<PlatformEvent>,
+    pending_events: VecDeque<PlatformEvent>,
 }
 
 impl EventBridge {
@@ -13,7 +14,7 @@ impl EventBridge {
         Self {
             sender,
             receiver,
-            pending_event: None,
+            pending_events: VecDeque::new(),
         }
     }
 
@@ -22,26 +23,26 @@ impl EventBridge {
     }
 
     pub async fn next_event(&mut self) -> Option<PlatformEvent> {
-        // If we have a buffered event from a previous call, return it immediately.
-        if let Some(event) = self.pending_event.take() {
+        // If we have buffered events from a previous call, return the first one.
+        if let Some(event) = self.pending_events.pop_front() {
             return Some(event);
         }
 
         // Await the next event. If the channel is closed, return None.
         let mut event = self.receiver.recv().await?;
 
-        // Coalesce consecutive MouseMoved events so that only the most recent one is processed.
+        // Coalesce all MouseMoved events so that only the most recent one is processed.
         if matches!(event, PlatformEvent::MouseMoved(_)) {
+            // Drain all available events from the receiver
             loop {
                 match self.receiver.try_recv() {
                     Ok(PlatformEvent::MouseMoved(pos)) => {
-                        // Keep the newest mouse position and continue draining.
+                        // Keep the newest mouse position
                         event = PlatformEvent::MouseMoved(pos);
                     }
                     Ok(other_event) => {
-                        // Buffer the first non-mouse event so it will be returned on the next call.
-                        self.pending_event = Some(other_event);
-                        break;
+                        // Save non-mouse events to the queue
+                        self.pending_events.push_back(other_event);
                     }
                     Err(_) => {
                         // No more events available right now.

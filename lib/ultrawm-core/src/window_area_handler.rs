@@ -50,9 +50,6 @@ impl WindowAreaHandler {
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
         match drag_type {
-            WindowAreaDragType::Tile => {
-                self.preview.update_preview(id, &pos, wm);
-            }
             WindowAreaDragType::Resize | WindowAreaDragType::ResizeSymmetric => {
                 let window = wm.get_window(id)?;
                 let bounds = window.bounds();
@@ -78,9 +75,14 @@ impl WindowAreaHandler {
         let (start_pos, start_bounds) = start.unwrap();
         let window = wm.get_window(id)?;
 
+        if drag_type == WindowAreaDragType::Tile {
+            self.preview.update_preview(id, &pos, wm);
+        } else {
+            self.preview.hide();
+        }
+
         match drag_type {
             WindowAreaDragType::Tile => {
-                self.preview.update_preview(id, &pos, wm);
                 let dx = pos.x - start_pos.x;
                 let dy = pos.y - start_pos.y;
                 let mut new_bounds = start_bounds.clone();
@@ -107,6 +109,15 @@ impl WindowAreaHandler {
                     wm.resize_window(id, &new_bounds)
                         .map_err(WMOperationError::Resize)?;
                 }
+            }
+            WindowAreaDragType::Slide => {
+                let dx = pos.x - start_pos.x;
+                let dy = pos.y - start_pos.y;
+                let mut new_bounds = start_bounds.clone();
+                new_bounds.position.x += dx;
+                new_bounds.position.y += dy;
+                wm.resize_window(id, &new_bounds)
+                    .map_err(WMOperationError::Resize)?;
             }
             _ => {}
         }
@@ -261,14 +272,12 @@ impl WindowAreaHandler {
     ) -> WMOperationResult<()> {
         match drag_type {
             WindowAreaDragType::Tile => {
-                TilePreviewHandler::tile_on_drop(&mut self.preview, id, &pos, wm)?;
+                self.preview.tile_on_drop(id, &pos, wm)?;
             }
             WindowAreaDragType::Resize | WindowAreaDragType::ResizeSymmetric => {
                 self.resize_direction = None;
             }
-            WindowAreaDragType::Slide => {
-                // TODO: Implement slide logic
-            }
+            WindowAreaDragType::Slide => {}
         }
         Ok(())
     }

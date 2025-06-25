@@ -101,16 +101,6 @@ pub trait KeybindListExt {
 
 impl KeybindListExt for [Keybind] {
     fn matches_mouse(&self, buttons: &MouseButtons) -> bool {
-        let mut mouse_keybind = Keybind::default();
-        if buttons.contains(&MouseButton::Left) {
-            mouse_keybind.mouse.add(&MouseButton::Left);
-        }
-        if buttons.contains(&MouseButton::Right) {
-            mouse_keybind.mouse.add(&MouseButton::Right);
-        }
-        if buttons.contains(&MouseButton::Middle) {
-            mouse_keybind.mouse.add(&MouseButton::Middle);
-        }
         self.iter().any(|b| b.mouse.contains_all(buttons))
     }
 
