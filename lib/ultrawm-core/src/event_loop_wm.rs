@@ -1,5 +1,6 @@
 use crate::drag_handler::WindowMoveHandler;
 use crate::resize_handler::WindowResizeHandler;
+use crate::window_area_handler::WindowAreaHandler;
 use crate::wm::WMError;
 use crate::{
     event_loop_main::EventLoopMain,
@@ -34,6 +35,7 @@ impl EventLoopWM {
 
         let mut move_handler = WindowMoveHandler::new().await;
         let mut resize_handler = WindowResizeHandler::new().await;
+        let mut window_area_handler = WindowAreaHandler::new().await;
 
         while !shutdown.load(Ordering::SeqCst) {
             let event = bridge
@@ -59,12 +61,21 @@ impl EventLoopWM {
                 _ => {}
             }
 
-            move_handler
+            let mut handled = move_handler
                 .handle_event(&event, &mut wm)
                 .unwrap_or_else(|e| Self::handle_error(e));
-            resize_handler
-                .handle_event(&event, &move_handler, &mut wm)
-                .unwrap_or_else(|e| Self::handle_error(e));
+
+            if !handled {
+                handled = window_area_handler
+                    .handle_event(&event, &mut wm)
+                    .unwrap_or_else(|e| Self::handle_error(e));
+            }
+
+            if !handled {
+                resize_handler
+                    .handle_event(&event, &mut wm)
+                    .unwrap_or_else(|e| Self::handle_error(e));
+            }
         }
 
         wm.cleanup()?;
@@ -72,7 +83,8 @@ impl EventLoopWM {
         Ok(())
     }
 
-    fn handle_error(error: WMOperationError) {
-        error!("Error: {error}")
+    fn handle_error(error: WMOperationError) -> bool {
+        error!("Error: {error}");
+        false
     }
 }

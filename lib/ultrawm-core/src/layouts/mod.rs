@@ -55,12 +55,7 @@ pub trait WindowLayout: Debug {
 
     fn remove_window(&mut self, window: &WindowRef) -> LayoutResult<()>;
 
-    fn resize_window(
-        &mut self,
-        window: &WindowRef,
-        bounds: &Bounds,
-        direction: ResizeDirection,
-    ) -> LayoutResult<()>;
+    fn resize_window(&mut self, window: &WindowRef, bounds: &Bounds) -> LayoutResult<()>;
 
     fn resize_handles(&self) -> Vec<ResizeHandle> {
         Vec::new()

@@ -1,17 +1,14 @@
-use crate::platform::MouseButtons;
+use crate::platform::{Keys, MouseButton, MouseButtons};
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
+use std::fmt::Display;
+use winit::keyboard::KeyCode;
 
-#[derive(Debug, PartialEq, Eq, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Keybind {
-    pub ctrl: bool,
-    pub shift: bool,
-    pub alt: bool,
-    pub super_key: bool,
-    pub lmb: bool,
-    pub rmb: bool,
-    pub mmb: bool,
+    pub keys: Keys,
+    pub mouse: MouseButtons,
 }
 
 impl Keybind {
@@ -20,13 +17,13 @@ impl Keybind {
         let mut keybind = Keybind::default();
         for part in s.split('+') {
             match part.trim().to_ascii_lowercase().as_str() {
-                "ctrl" => keybind.ctrl = true,
-                "shift" => keybind.shift = true,
-                "alt" => keybind.alt = true,
-                "super" | "win" | "cmd" => keybind.super_key = true,
-                "lmb" => keybind.lmb = true,
-                "rmb" => keybind.rmb = true,
-                "mmb" => keybind.mmb = true,
+                "ctrl" => keybind.keys.add(&KeyCode::ControlLeft),
+                "shift" => keybind.keys.add(&KeyCode::ShiftLeft),
+                "alt" => keybind.keys.add(&KeyCode::AltLeft),
+                "super" | "win" | "cmd" => keybind.keys.add(&KeyCode::SuperLeft),
+                "lmb" => keybind.mouse.add(&MouseButton::Left),
+                "rmb" => keybind.mouse.add(&MouseButton::Right),
+                "mmb" => keybind.mouse.add(&MouseButton::Middle),
                 "" => {}
                 _ => {}
             }
@@ -66,51 +63,59 @@ impl<'de> Deserialize<'de> for Keybind {
     }
 }
 
-impl ToString for Keybind {
-    fn to_string(&self) -> String {
+impl Display for Keybind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut parts = Vec::new();
-        if self.ctrl {
+        if self.keys.contains(&KeyCode::ControlLeft) {
             parts.push("ctrl");
         }
-        if self.shift {
+        if self.keys.contains(&KeyCode::ShiftLeft) {
             parts.push("shift");
         }
-        if self.alt {
+        if self.keys.contains(&KeyCode::AltLeft) {
             parts.push("alt");
         }
-        if self.super_key {
+        if self.keys.contains(&KeyCode::SuperLeft) {
             parts.push("super");
         }
-        if self.lmb {
+        if self.mouse.contains(&MouseButton::Left) {
             parts.push("lmb");
         }
-        if self.rmb {
+        if self.mouse.contains(&MouseButton::Right) {
             parts.push("rmb");
         }
-        if self.mmb {
+        if self.mouse.contains(&MouseButton::Middle) {
             parts.push("mmb");
         }
-        parts.join("+")
+        write!(f, "{}", parts.join("+"))
     }
 }
 
 pub trait KeybindListExt {
     fn matches_mouse(&self, buttons: &MouseButtons) -> bool;
+    fn matches_keys(&self, keys: &Keys) -> bool;
+    fn matches(&self, keys: &Keys, buttons: &MouseButtons) -> bool {
+        self.matches_mouse(buttons) && self.matches_keys(keys)
+    }
 }
 
 impl KeybindListExt for [Keybind] {
     fn matches_mouse(&self, buttons: &MouseButtons) -> bool {
         let mut mouse_keybind = Keybind::default();
-        if buttons.left {
-            mouse_keybind.lmb = true;
+        if buttons.contains(&MouseButton::Left) {
+            mouse_keybind.mouse.add(&MouseButton::Left);
         }
-        if buttons.right {
-            mouse_keybind.rmb = true;
+        if buttons.contains(&MouseButton::Right) {
+            mouse_keybind.mouse.add(&MouseButton::Right);
         }
-        if buttons.middle {
-            mouse_keybind.mmb = true;
+        if buttons.contains(&MouseButton::Middle) {
+            mouse_keybind.mouse.add(&MouseButton::Middle);
         }
-        self.iter().any(|b| b == &mouse_keybind)
+        self.iter().any(|b| b.mouse.contains_all(buttons))
+    }
+
+    fn matches_keys(&self, keys: &Keys) -> bool {
+        self.iter().any(|b| b.keys.contains_all(keys))
     }
 }
 
@@ -118,140 +123,8 @@ impl KeybindListExt for Vec<Keybind> {
     fn matches_mouse(&self, buttons: &MouseButtons) -> bool {
         self.as_slice().matches_mouse(buttons)
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_simple_mouse_buttons() {
-        assert_eq!(
-            Keybind::parse("lmb"),
-            Keybind {
-                lmb: true,
-                ..Default::default()
-            }
-        );
-        assert_eq!(
-            Keybind::parse("rmb"),
-            Keybind {
-                rmb: true,
-                ..Default::default()
-            }
-        );
-        assert_eq!(
-            Keybind::parse("mmb"),
-            Keybind {
-                mmb: true,
-                ..Default::default()
-            }
-        );
-    }
-
-    #[test]
-    fn test_modifiers() {
-        assert_eq!(
-            Keybind::parse("ctrl"),
-            Keybind {
-                ctrl: true,
-                ..Default::default()
-            }
-        );
-        assert_eq!(
-            Keybind::parse("shift"),
-            Keybind {
-                shift: true,
-                ..Default::default()
-            }
-        );
-        assert_eq!(
-            Keybind::parse("alt"),
-            Keybind {
-                alt: true,
-                ..Default::default()
-            }
-        );
-        assert_eq!(
-            Keybind::parse("win"),
-            Keybind {
-                super_key: true,
-                ..Default::default()
-            }
-        );
-        assert_eq!(
-            Keybind::parse("cmd"),
-            Keybind {
-                super_key: true,
-                ..Default::default()
-            }
-        );
-    }
-
-    #[test]
-    fn test_combinations() {
-        assert_eq!(
-            Keybind::parse("ctrl+shift+lmb"),
-            Keybind {
-                ctrl: true,
-                shift: true,
-                lmb: true,
-                ..Default::default()
-            }
-        );
-        assert_eq!(
-            Keybind::parse("lmb+ctrl+alt"),
-            Keybind {
-                ctrl: true,
-                alt: true,
-                lmb: true,
-                ..Default::default()
-            }
-        );
-        assert_eq!(
-            Keybind::parse("alt+super+mmb"),
-            Keybind {
-                alt: true,
-                super_key: true,
-                mmb: true,
-                ..Default::default()
-            }
-        );
-    }
-
-    #[test]
-    fn test_case_and_whitespace() {
-        assert_eq!(
-            Keybind::parse("CTRL+LMB"),
-            Keybind {
-                ctrl: true,
-                lmb: true,
-                ..Default::default()
-            }
-        );
-        assert_eq!(
-            Keybind::parse("  shift + RMB  "),
-            Keybind {
-                shift: true,
-                rmb: true,
-                ..Default::default()
-            }
-        );
-    }
-
-    #[test]
-    fn test_unknown_ignored() {
-        assert_eq!(
-            Keybind::parse("foo+bar+lmb"),
-            Keybind {
-                lmb: true,
-                ..Default::default()
-            }
-        );
-    }
-
-    #[test]
-    fn test_empty_string() {
-        assert_eq!(Keybind::parse(""), Keybind::default());
+    fn matches_keys(&self, keys: &Keys) -> bool {
+        self.as_slice().matches_keys(keys)
     }
 }

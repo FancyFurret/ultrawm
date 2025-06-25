@@ -81,10 +81,10 @@ pub struct WindowAreaBindings {
 impl Default for WindowAreaBindings {
     fn default() -> Self {
         Self {
-            tile: vec![Keybind::parse("cmd+lmb")],
-            resize: vec![Keybind::parse("cmd+rmb")],
-            resize_symmetric: vec![Keybind::parse("cmd+mmb")],
-            slide: vec![Keybind::parse("cmd+lmb+rmb")],
+            tile: vec![Keybind::parse("ctrl+lmb")],
+            resize: vec![Keybind::parse("ctrl+rmb")],
+            resize_symmetric: vec![Keybind::parse("ctrl+mmb")],
+            slide: vec![Keybind::parse("ctrl+lmb+rmb")],
         }
     }
 }

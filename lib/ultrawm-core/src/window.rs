@@ -37,6 +37,21 @@ impl Window {
         self.dirty.replace(true);
     }
 
+    pub fn set_bounds_immediate(&self, bounds: Bounds) -> PlatformResult<()> {
+        let mut bounds = bounds;
+        let config = Config::current();
+
+        // Apply gap (offset from screen edge)
+        bounds.position.x += config.window_gap as i32 / 2;
+        bounds.position.y += config.window_gap as i32 / 2;
+
+        bounds.size.width = bounds.size.width.saturating_sub(config.window_gap);
+        bounds.size.height = bounds.size.height.saturating_sub(config.window_gap);
+
+        self.platform_window.borrow().set_bounds(&bounds)?;
+        Ok(())
+    }
+
     pub fn platform_window(&self) -> Ref<PlatformWindow> {
         self.platform_window.borrow()
     }
@@ -51,19 +66,7 @@ impl Window {
         }
 
         self.dirty.replace(false);
-
-        let mut bounds = self.bounds.borrow().clone();
-        let config = Config::current();
-
-        // Apply gap (offset from screen edge)
-        bounds.position.x += config.window_gap as i32 / 2;
-        bounds.position.y += config.window_gap as i32 / 2;
-
-        bounds.size.width = bounds.size.width.saturating_sub(config.window_gap);
-        bounds.size.height = bounds.size.height.saturating_sub(config.window_gap);
-
-        self.platform_window.borrow().set_bounds(&bounds)?;
-
+        self.set_bounds_immediate(self.bounds.borrow().clone())?;
         Ok(())
     }
 

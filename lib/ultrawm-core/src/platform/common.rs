@@ -1,6 +1,8 @@
 use crate::platform::PlatformWindow;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use thiserror::Error;
+use winit::keyboard::KeyCode;
 
 #[derive(Debug, Error)]
 pub enum PlatformError {
@@ -46,29 +48,92 @@ pub enum PlatformEvent {
     MouseDown(Position, MouseButton),
     MouseUp(Position, MouseButton),
     MouseMoved(Position),
+    KeyDown(KeyCode),
+    KeyUp(KeyCode),
 }
 
-#[derive(Debug)]
-#[allow(dead_code)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub enum MouseButton {
     Left,
     Right,
     Middle,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MouseButtons {
-    pub left: bool,
-    pub right: bool,
-    pub middle: bool,
+    buttons: HashSet<MouseButton>,
 }
 
 impl MouseButtons {
+    pub fn new() -> Self {
+        Self {
+            buttons: HashSet::new(),
+        }
+    }
+
+    pub fn any(&self) -> bool {
+        self.buttons.len() > 0
+    }
+
+    pub fn contains(&self, button: &MouseButton) -> bool {
+        self.buttons.contains(button)
+    }
+
+    pub fn contains_all(&self, other: &MouseButtons) -> bool {
+        other.buttons.iter().all(|button| self.contains(button))
+            && self.buttons.len() == other.buttons.len()
+    }
+
+    pub fn add(&mut self, button: &MouseButton) {
+        self.buttons.insert(button.clone());
+    }
+
+    pub fn remove(&mut self, button: &MouseButton) {
+        self.buttons.remove(button);
+    }
+
     pub fn update_button(&mut self, button: &MouseButton, pressed: bool) {
-        match button {
-            MouseButton::Left => self.left = pressed,
-            MouseButton::Right => self.right = pressed,
-            MouseButton::Middle => self.middle = pressed,
+        if pressed {
+            self.buttons.insert(button.clone());
+        } else {
+            self.buttons.remove(button);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Keys {
+    keys: HashSet<KeyCode>,
+}
+
+impl Keys {
+    pub fn new() -> Self {
+        Self {
+            keys: HashSet::new(),
+        }
+    }
+
+    pub fn contains(&self, key: &KeyCode) -> bool {
+        self.keys.contains(key)
+    }
+
+    pub fn contains_all(&self, other: &Keys) -> bool {
+        other.keys.iter().all(|key| self.contains(key)) && self.keys.len() == other.keys.len()
+    }
+
+    pub fn add(&mut self, key: &KeyCode) {
+        self.keys.insert(key.clone());
+    }
+
+    pub fn remove(&mut self, key: &KeyCode) {
+        self.keys.remove(key);
+    }
+
+    pub fn update_key(&mut self, key: &KeyCode, pressed: bool) {
+        if pressed {
+            self.keys.insert(key.clone());
+        } else {
+            self.keys.remove(key);
         }
     }
 }
@@ -114,6 +179,24 @@ impl Bounds {
             && self.position.x + self.size.width as i32 > other.position.x
             && self.position.y < other.position.y + other.size.height as i32
             && self.position.y + self.size.height as i32 > other.position.y
+    }
+
+    pub fn offset_top(&mut self, offset: i32) {
+        self.position.y += offset;
+        self.size.height = (self.size.height as i32 - offset) as u32;
+    }
+
+    pub fn offset_bottom(&mut self, offset: i32) {
+        self.size.height = (self.size.height as i32 + offset) as u32;
+    }
+
+    pub fn offset_left(&mut self, offset: i32) {
+        self.position.x += offset;
+        self.size.width = (self.size.width as i32 - offset) as u32;
+    }
+
+    pub fn offset_right(&mut self, offset: i32) {
+        self.size.width = (self.size.width as i32 + offset) as u32;
     }
 }
 

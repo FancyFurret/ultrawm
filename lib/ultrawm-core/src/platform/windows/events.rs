@@ -14,13 +14,16 @@ use windows::Win32::UI::HiDpi::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, GetCursorPos, SetWindowsHookExW, EVENT_OBJECT_DESTROY, EVENT_OBJECT_FOCUS,
     EVENT_OBJECT_SHOW, EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZESTART,
-    EVENT_SYSTEM_MOVESIZESTART, HHOOK, WH_MOUSE_LL, WINEVENT_OUTOFCONTEXT, WM_LBUTTONDOWN,
-    WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_RBUTTONDOWN, WM_RBUTTONUP,
+    EVENT_SYSTEM_MOVESIZESTART, HHOOK, KBDLLHOOKSTRUCT, WH_KEYBOARD_LL, WH_MOUSE_LL,
+    WINEVENT_OUTOFCONTEXT, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN,
+    WM_MBUTTONUP, WM_MOUSEMOVE, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
 };
+use winit::keyboard::KeyCode;
 
 static EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
 static mut MOUSE_HOOK: Option<HHOOK> = None;
 static INTERCEPT_CLICKS: AtomicBool = AtomicBool::new(false);
+static mut KEYBOARD_HOOK: Option<HHOOK> = None;
 
 pub struct WindowsPlatformEvents;
 
@@ -73,6 +76,11 @@ unsafe impl PlatformEventsImpl for WindowsPlatformEvents {
         let mouse_hook = SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_hook_proc), None, 0)
             .map_err(|e| format!("Could not set mouse hook: {:?}", e))?;
         MOUSE_HOOK = Some(mouse_hook);
+
+        // Set up low-level keyboard hook
+        let keyboard_hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook_proc), None, 0)
+            .map_err(|e| format!("Could not set keyboard hook: {:?}", e))?;
+        KEYBOARD_HOOK = Some(keyboard_hook);
 
         Ok(())
     }
@@ -151,4 +159,104 @@ unsafe extern "system" fn mouse_hook_proc(
     }
 
     unsafe { CallNextHookEx(None, n_code, w_param, l_param) }
+}
+
+unsafe extern "system" fn keyboard_hook_proc(
+    n_code: i32,
+    w_param: WPARAM,
+    l_param: LPARAM,
+) -> LRESULT {
+    if n_code >= 0 {
+        let kb_struct = &*(l_param.0 as *const KBDLLHOOKSTRUCT);
+        let vk_code = kb_struct.vkCode as u32;
+        let keycode = map_vk_to_keycode(vk_code);
+        if let Some(keycode) = keycode {
+            let event = match w_param.0 as u32 {
+                WM_KEYDOWN | WM_SYSKEYDOWN => PlatformEvent::KeyDown(keycode),
+                WM_KEYUP | WM_SYSKEYUP => PlatformEvent::KeyUp(keycode),
+                _ => return unsafe { CallNextHookEx(None, n_code, w_param, l_param) },
+            };
+            EVENT_DISPATCHER.get().unwrap().send(event);
+        }
+    }
+    unsafe { CallNextHookEx(None, n_code, w_param, l_param) }
+}
+
+fn map_vk_to_keycode(vk: u32) -> Option<KeyCode> {
+    use win_key_codes::*;
+    use winit::keyboard::KeyCode::*;
+    match vk as i32 {
+        VK_A => Some(KeyA),
+        VK_B => Some(KeyB),
+        VK_C => Some(KeyC),
+        VK_D => Some(KeyD),
+        VK_E => Some(KeyE),
+        VK_F => Some(KeyF),
+        VK_G => Some(KeyG),
+        VK_H => Some(KeyH),
+        VK_I => Some(KeyI),
+        VK_J => Some(KeyJ),
+        VK_K => Some(KeyK),
+        VK_L => Some(KeyL),
+        VK_M => Some(KeyM),
+        VK_N => Some(KeyN),
+        VK_O => Some(KeyO),
+        VK_P => Some(KeyP),
+        VK_Q => Some(KeyQ),
+        VK_R => Some(KeyR),
+        VK_S => Some(KeyS),
+        VK_T => Some(KeyT),
+        VK_U => Some(KeyU),
+        VK_V => Some(KeyV),
+        VK_W => Some(KeyW),
+        VK_X => Some(KeyX),
+        VK_Y => Some(KeyY),
+        VK_Z => Some(KeyZ),
+        VK_0 => Some(Digit0),
+        VK_1 => Some(Digit1),
+        VK_2 => Some(Digit2),
+        VK_3 => Some(Digit3),
+        VK_4 => Some(Digit4),
+        VK_5 => Some(Digit5),
+        VK_6 => Some(Digit6),
+        VK_7 => Some(Digit7),
+        VK_8 => Some(Digit8),
+        VK_9 => Some(Digit9),
+        VK_F1 => Some(F1),
+        VK_F2 => Some(F2),
+        VK_F3 => Some(F3),
+        VK_F4 => Some(F4),
+        VK_F5 => Some(F5),
+        VK_F6 => Some(F6),
+        VK_F7 => Some(F7),
+        VK_F8 => Some(F8),
+        VK_F9 => Some(F9),
+        VK_F10 => Some(F10),
+        VK_F11 => Some(F11),
+        VK_F12 => Some(F12),
+        VK_ESCAPE => Some(Escape),
+        VK_TAB => Some(Tab),
+        VK_RETURN => Some(Enter),
+        VK_BACK => Some(Backspace),
+        VK_DELETE => Some(Delete),
+        VK_INSERT => Some(Insert),
+        VK_HOME => Some(Home),
+        VK_END => Some(End),
+        VK_UP => Some(ArrowUp),
+        VK_DOWN => Some(ArrowDown),
+        VK_LEFT => Some(ArrowLeft),
+        VK_RIGHT => Some(ArrowRight),
+        VK_SHIFT => Some(ShiftLeft),
+        VK_LSHIFT => Some(ShiftLeft),
+        VK_RSHIFT => Some(ShiftRight),
+        VK_CONTROL => Some(ControlLeft),
+        VK_LCONTROL => Some(ControlLeft),
+        VK_RCONTROL => Some(ControlRight),
+        VK_MENU => Some(AltLeft),
+        VK_LMENU => Some(AltLeft),
+        VK_RMENU => Some(AltRight),
+        VK_LWIN => Some(SuperLeft),
+        VK_RWIN => Some(SuperRight),
+        _ => None,
+    }
 }

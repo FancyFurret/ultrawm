@@ -22,16 +22,8 @@ impl HandleDragTracker {
         Self {
             active_handle: None,
             dragging: false,
-            current_buttons: MouseButtons {
-                left: false,
-                right: false,
-                middle: false,
-            },
-            drag_buttons: MouseButtons {
-                left: false,
-                right: false,
-                middle: false,
-            },
+            current_buttons: MouseButtons::new(),
+            drag_buttons: MouseButtons::new(),
         }
     }
 
@@ -78,11 +70,7 @@ impl HandleDragTracker {
                     self.dragging = false;
                     if let Some(handle) = self.active_handle.take() {
                         let final_drag_buttons = self.drag_buttons.clone();
-                        self.drag_buttons = MouseButtons {
-                            left: false,
-                            right: false,
-                            middle: false,
-                        };
+                        self.drag_buttons = MouseButtons::new();
                         return Some(HandleDragEvent::End(
                             handle,
                             pos.clone(),
@@ -97,7 +85,7 @@ impl HandleDragTracker {
     }
 
     fn any_button_pressed(&self) -> bool {
-        self.current_buttons.left || self.current_buttons.right || self.current_buttons.middle
+        self.current_buttons.any()
     }
 
     pub fn get_pressed_buttons(&self) -> &MouseButtons {

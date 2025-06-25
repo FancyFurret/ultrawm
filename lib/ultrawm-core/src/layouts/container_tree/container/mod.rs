@@ -5,7 +5,6 @@ use super::Side;
 use crate::layouts::container_tree::{ContainerId, CONTAINER_ID_COUNTER};
 use crate::layouts::Direction;
 use crate::platform::Bounds;
-use log::error;
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::{Rc, Weak};
 use std::sync::atomic::Ordering;
@@ -34,17 +33,6 @@ impl Default for InsertOrder {
     fn default() -> Self {
         InsertOrder::After
     }
-}
-
-/// Behavior for distributing size changes when a child is resized.
-///
-/// * `Spread` ‒ the delta is spread equally across all other siblings (current default).
-/// * `Symmetric` ‒ the delta is applied equally to the *two* groups on either side of the
-///   resized child so it grows / shrinks outward symmetrically, keeping the child centred.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ResizeDistribution {
-    Spread,
-    Symmetric,
 }
 
 #[derive(Debug)]
@@ -226,25 +214,6 @@ impl Container {
             let scale_factor = 1.0 / current_total;
             for ratio in ratios.iter_mut() {
                 *ratio *= scale_factor;
-            }
-        }
-    }
-
-    /// Distribute a delta across specified indices
-    fn distribute_delta_across_indices(&self, indices: &[usize], delta: f32, min_weight: f32) {
-        if indices.is_empty() {
-            return;
-        }
-
-        let mut ratios = self.ratios.borrow_mut();
-        let per_delta = delta / indices.len() as f32;
-
-        for &idx in indices {
-            if idx < ratios.len() {
-                ratios[idx] += per_delta;
-                if ratios[idx] < min_weight {
-                    ratios[idx] = min_weight;
-                }
             }
         }
     }
@@ -450,101 +419,178 @@ impl Container {
         }
     }
 
-    pub fn resize_edge(
-        &self,
-        child: &ContainerChildRef,
-        edge_pos: i32,
-        side: Side,
-        mode: ResizeDistribution,
-    ) {
-        if self.direction == Direction::Horizontal && (side == Side::Top || side == Side::Bottom) {
-            error!("Cannot resize horizontal container on top or bottom");
-            return;
-        }
-        if self.direction == Direction::Vertical && (side == Side::Left || side == Side::Right) {
-            error!("Cannot resize vertical container on left or right");
-            return;
-        }
-
+    /// Resize a child to new bounds, updating ratios as needed.
+    pub fn resize_bounds(&self, child: &ContainerChildRef, new_bounds: &Bounds) {
+        let old_bounds = child.bounds();
         let index = match self.index_of_child(child) {
             Some(i) => i,
             None => return,
         };
 
-        // Can't adjust ratios meaningfully with only one child.
-        if self.children().len() < 2 {
+        let children = self.children();
+        if children.len() < 2 {
             return;
         }
 
-        let container_size = match self.direction {
-            Direction::Horizontal => self.bounds().size.width as f32,
-            Direction::Vertical => self.bounds().size.height as f32,
-        };
+        let mut ratios = self.ratios.borrow_mut();
+        const MIN_WEIGHT: f32 = 0.05_f32;
 
-        if container_size <= 0.0 {
-            return;
-        }
+        let top_offset = new_bounds.position.y - old_bounds.position.y;
+        let bottom_offset = new_bounds.position.y + new_bounds.size.height as i32
+            - old_bounds.position.y
+            - old_bounds.size.height as i32;
+        let left_offset = new_bounds.position.x - old_bounds.position.x;
+        let right_offset = new_bounds.position.x + new_bounds.size.width as i32
+            - old_bounds.position.x
+            - old_bounds.size.width as i32;
 
-        // Calculate new_weight and delta before borrowing ratios mutably
-        let (total_weight, old_weight, ratios_len): (f32, f32, usize);
-        {
-            let ratios = self.ratios.borrow();
-            total_weight = ratios.iter().sum::<f32>();
-            old_weight = ratios[index];
-            ratios_len = ratios.len();
-        }
+        let before_count = index;
+        let after_count = ratios.len() - index - 1;
+        let start_offset;
+        let end_offset;
+        let container_bounds = self.bounds();
+        let container_size;
+        let mut new_container_bounds = container_bounds.clone();
 
-        let old_bounds = child.bounds();
-        let new_size = match side {
-            Side::Left => old_bounds.size.width as i32 + (old_bounds.position.x - edge_pos),
-            Side::Right => edge_pos - old_bounds.position.x,
-            Side::Top => old_bounds.size.height as i32 + (old_bounds.position.y - edge_pos),
-            Side::Bottom => edge_pos - old_bounds.position.y,
-        } as f32;
+        match self.direction {
+            Direction::Horizontal => {
+                start_offset = left_offset;
+                end_offset = right_offset;
+                container_size = container_bounds.size.width;
 
-        let mut new_weight = (new_size / container_size) * total_weight;
-        let min_weight = 0.1_f32;
-        if new_weight < min_weight {
-            new_weight = min_weight;
-        }
-        let delta = new_weight - old_weight;
+                new_container_bounds.offset_top(top_offset);
+                new_container_bounds.offset_bottom(bottom_offset);
 
-        // Update the ratio for the resized child
-        self.ratios.borrow_mut()[index] = new_weight;
-
-        match mode {
-            ResizeDistribution::Spread => {
-                let affect_left = side == Side::Left || side == Side::Top;
-                let indices: Vec<usize> = if affect_left {
-                    (0..index).collect()
-                } else {
-                    (index + 1..ratios_len).collect()
-                };
-                if indices.is_empty() {
-                    let all_indices: Vec<usize> = (0..ratios_len).filter(|&i| i != index).collect();
-                    self.distribute_delta_across_indices(&all_indices, -delta, min_weight);
-                } else {
-                    self.distribute_delta_across_indices(&indices, -delta, min_weight);
+                if before_count == 0 {
+                    new_container_bounds.offset_left(left_offset);
+                } else if after_count == 0 {
+                    new_container_bounds.offset_right(right_offset);
                 }
             }
-            ResizeDistribution::Symmetric => {
-                let left_count = index;
-                let right_count = ratios_len - index - 1;
-                if left_count == 0 || right_count == 0 {
-                    // Fallback to Spread logic: distribute among all siblings except the resized one
-                    let all_indices: Vec<usize> = (0..ratios_len).filter(|&i| i != index).collect();
-                    self.distribute_delta_across_indices(&all_indices, -delta, min_weight);
-                } else {
-                    let left_indices: Vec<usize> = (0..index).collect();
-                    let right_indices: Vec<usize> = (index + 1..ratios_len).collect();
-                    self.distribute_delta_across_indices(&left_indices, -delta / 2.0, min_weight);
-                    self.distribute_delta_across_indices(&right_indices, -delta / 2.0, min_weight);
+            Direction::Vertical => {
+                start_offset = top_offset;
+                end_offset = bottom_offset;
+                container_size = container_bounds.size.height;
+
+                new_container_bounds.offset_left(left_offset);
+                new_container_bounds.offset_right(right_offset);
+
+                if before_count == 0 {
+                    new_container_bounds.offset_top(top_offset);
+                } else if after_count == 0 {
+                    new_container_bounds.offset_bottom(bottom_offset);
                 }
             }
         }
 
-        // Re-normalize weights so their sum equals original total_weight
+        fn offset_ratios(ratios: &mut [f32], ratio_offset: f32) {
+            let total: f32 = ratios.iter().sum();
+            let new_total = (total + ratio_offset).max(MIN_WEIGHT);
+            let scale_factor = new_total / total;
+            for i in 0..ratios.len() {
+                ratios[i] *= scale_factor;
+            }
+        }
+
+        // Update ratios before
+        if start_offset != 0 && before_count > 0 {
+            offset_ratios(
+                &mut ratios[0..index],
+                start_offset as f32 / container_size as f32,
+            );
+        }
+
+        // Update ratios after
+        if end_offset != 0 && after_count > 0 {
+            offset_ratios(
+                &mut ratios[(index + 1)..],
+                -(end_offset as f32 / container_size as f32),
+            );
+        }
+
+        // Set ratio for the resized window
+        let used_before: f32 = ratios[0..index].iter().sum();
+        let used_after: f32 = ratios[(index + 1)..].iter().sum();
+        ratios[index] = (1.0 - used_before - used_after).max(MIN_WEIGHT);
+        drop(ratios);
+
+        // Normalize
         self.normalize_ratios();
+
+        // Update our bounds if needed
+        if let Some(parent) = self.parent() {
+            if new_container_bounds != container_bounds {
+                parent.resize_bounds(
+                    &ContainerChildRef::Container(self.self_ref().upgrade().unwrap()),
+                    &new_container_bounds,
+                )
+            }
+        }
+    }
+
+    pub fn resize_edge(
+        &self,
+        child: &ContainerChildRef,
+        edge_pos: i32,
+        side: Side,
+        symmetric: bool,
+    ) {
+        let mut bounds = child.bounds();
+        match side {
+            Side::Left => {
+                let right = bounds.position.x + bounds.size.width as i32;
+                if symmetric {
+                    let center = (bounds.position.x + right) / 2;
+                    let delta = edge_pos - bounds.position.x;
+                    bounds.position.x += delta;
+                    bounds.size.width = (right - (bounds.position.x)).max(1) as u32;
+                    bounds.position.x = center - (bounds.size.width as i32 / 2);
+                } else {
+                    bounds.position.x = edge_pos;
+                    bounds.size.width = (right - edge_pos).max(1) as u32;
+                }
+            }
+            Side::Right => {
+                if symmetric {
+                    let left = bounds.position.x;
+                    let center = (left + (bounds.position.x + bounds.size.width as i32)) / 2;
+                    let delta = edge_pos - (bounds.position.x + bounds.size.width as i32);
+                    bounds.size.width = (bounds.size.width as i32 + 2 * delta).max(1) as u32;
+                    bounds.position.x = center - (bounds.size.width as i32 / 2);
+                } else {
+                    bounds.size.width = (edge_pos - bounds.position.x).max(1) as u32;
+                }
+            }
+            Side::Top => {
+                let bottom = bounds.position.y + bounds.size.height as i32;
+                if symmetric {
+                    let center = (bounds.position.y + bottom) / 2;
+                    let delta = edge_pos - bounds.position.y;
+                    bounds.position.y += delta;
+                    bounds.size.height = (bottom - (bounds.position.y)).max(1) as u32;
+                    bounds.position.y = center - (bounds.size.height as i32 / 2);
+                } else {
+                    bounds.position.y = edge_pos;
+                    bounds.size.height = (bottom - edge_pos).max(1) as u32;
+                }
+            }
+            Side::Bottom => {
+                if symmetric {
+                    let top = bounds.position.y;
+                    let center = (top + (bounds.position.y + bounds.size.height as i32)) / 2;
+                    let delta = edge_pos - (bounds.position.y + bounds.size.height as i32);
+                    bounds.size.height = (bounds.size.height as i32 + 2 * delta).max(1) as u32;
+                    bounds.position.y = center - (bounds.size.height as i32 / 2);
+                } else {
+                    bounds.size.height = (edge_pos - bounds.position.y).max(1) as u32;
+                }
+            }
+        }
+        self.resize_bounds(child, &bounds);
+    }
+
+    pub fn resize_window(&self, child: &ContainerChildRef, new_bounds: &Bounds) {
+        self.resize_bounds(child, new_bounds);
     }
 
     /// Resize the split between children at the given index based on a new position
@@ -1109,7 +1155,7 @@ mod tests {
             &ContainerChildRef::Window(window_b.clone()),
             right_edge,
             Side::Right,
-            ResizeDistribution::Spread,
+            false,
         );
 
         // Check that ratios still sum to ~1.0
@@ -1145,7 +1191,7 @@ mod tests {
             &ContainerChildRef::Window(window_b.clone()),
             bottom_edge,
             Side::Bottom,
-            ResizeDistribution::Symmetric,
+            true,
         );
 
         // Check that ratios still sum to ~1.0
@@ -1165,7 +1211,7 @@ mod tests {
             &ContainerChildRef::Window(window),
             right_edge,
             Side::Right,
-            ResizeDistribution::Spread,
+            false,
         );
 
         assert_eq!(*root.ratios(), original_ratios);
@@ -1183,7 +1229,7 @@ mod tests {
             &ContainerChildRef::Window(window_b),
             right_edge,
             Side::Right,
-            ResizeDistribution::Spread,
+            false,
         );
 
         // Should not change ratios if child doesn't exist

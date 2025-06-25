@@ -26,8 +26,11 @@ mod resize_handle_tracker;
 mod resize_handler;
 mod serialization;
 mod thread_lock;
+pub mod tile_preview_handler;
 mod tile_result;
 mod window;
+mod window_area_handler;
+mod window_area_tracker;
 mod wm;
 mod workspace;
 

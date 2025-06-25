@@ -1,4 +1,4 @@
-use crate::layouts::{LayoutResult, ResizeDirection, WindowLayout};
+use crate::layouts::{LayoutResult, WindowLayout};
 use crate::platform::traits::PlatformImpl;
 use crate::platform::{Bounds, MouseButtons, Platform, PlatformResult, Position, WindowId};
 use crate::resize_handle::ResizeHandle;
@@ -92,13 +92,8 @@ impl Workspace {
         Ok(action)
     }
 
-    pub fn resize_window(
-        &mut self,
-        window: &WindowRef,
-        bounds: &Bounds,
-        direction: ResizeDirection,
-    ) -> LayoutResult<()> {
-        self.layout.resize_window(window, bounds, direction)
+    pub fn resize_window(&mut self, window: &WindowRef, bounds: &Bounds) -> LayoutResult<()> {
+        self.layout.resize_window(window, bounds)
     }
 
     pub fn flush_windows(&mut self) -> PlatformResult<()> {

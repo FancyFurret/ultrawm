@@ -1,5 +1,4 @@
 use crate::config::Config;
-use crate::drag_handler::WindowMoveHandler;
 use crate::event_loop_wm::{WMOperationError, WMOperationResult};
 use crate::overlay_window::{
     OverlayWindow, OverlayWindowBackgroundStyle, OverlayWindowBorderStyle, OverlayWindowConfig,
@@ -62,34 +61,35 @@ impl WindowResizeHandler {
     pub fn handle_event(
         &mut self,
         event: &PlatformEvent,
-        move_handler: &WindowMoveHandler,
         wm: &mut WindowManager,
-    ) -> WMOperationResult<()> {
+    ) -> WMOperationResult<bool> {
         if !self.handles_enabled {
-            return Ok(());
+            return Ok(false);
         }
 
         match &event {
-            PlatformEvent::MouseMoved(pos) => self.mouse_moved(pos, move_handler, wm),
+            PlatformEvent::MouseMoved(pos) => self.mouse_moved(pos, wm),
             _ => Ok(()),
         }?;
 
         match self.handle_tracker.handle_event(&event, &wm) {
-            Some(HandleDragEvent::Start(handle, pos, _)) => self.start(handle, pos),
-            Some(HandleDragEvent::Drag(handle, pos, buttons)) => {
-                self.drag(handle, pos, buttons, wm)
+            Some(HandleDragEvent::Start(handle, pos, _)) => {
+                self.start(handle, pos)?;
+                Ok(true)
             }
-            Some(HandleDragEvent::End(handle, pos, buttons)) => self.drop(handle, pos, buttons, wm),
-            None => Ok(()),
+            Some(HandleDragEvent::Drag(handle, pos, buttons)) => {
+                self.drag(handle, pos, buttons, wm)?;
+                Ok(true)
+            }
+            Some(HandleDragEvent::End(handle, pos, buttons)) => {
+                self.drop(handle, pos, buttons, wm)?;
+                Ok(true)
+            }
+            None => Ok(false),
         }
     }
 
-    fn mouse_moved(
-        &mut self,
-        pos: &Position,
-        move_handler: &WindowMoveHandler,
-        wm: &WindowManager,
-    ) -> WMOperationResult<()> {
+    fn mouse_moved(&mut self, pos: &Position, wm: &WindowManager) -> WMOperationResult<()> {
         // Prevent normal window resizing
         if let Some(_) = wm.find_window_at_resize_edge(pos) {
             Platform::hide_resize_cursor().map_err(|e| WMOperationError::Error(e.into()))?;
@@ -99,9 +99,8 @@ impl WindowResizeHandler {
             // PlatformEvents::set_intercept_clicks(false)?;
         }
 
-        let tiling = move_handler.overlay_shown();
         let handle_under_cursor = wm.resize_handle_at_position(pos);
-        if handle_under_cursor.is_some() && self.hover_resize_handle.is_none() && !tiling {
+        if handle_under_cursor.is_some() && self.hover_resize_handle.is_none() {
             self.hover_resize_handle = handle_under_cursor.clone();
 
             let preview_bounds = handle_under_cursor
@@ -112,7 +111,7 @@ impl WindowResizeHandler {
             self.overlay.show();
             self.overlay.move_to(&preview_bounds);
             self.last_preview_bounds = Some(preview_bounds);
-        } else if (handle_under_cursor.is_none() || tiling) && self.hover_resize_handle.is_some() {
+        } else if (handle_under_cursor.is_none()) && self.hover_resize_handle.is_some() {
             self.hover_resize_handle = None;
             if !self.handle_drag_active {
                 self.overlay.hide();

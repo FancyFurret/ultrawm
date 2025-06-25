@@ -1,68 +1,41 @@
-use crate::config::Config;
 use crate::drag_tracker::{WindowDragEvent, WindowDragTracker, WindowDragType};
-use crate::event_loop_wm::{WMOperationError, WMOperationResult};
-use crate::overlay_window::{OverlayWindow, OverlayWindowBackgroundStyle, OverlayWindowConfig};
-use crate::platform::{Bounds, PlatformEvent, Position, WindowId};
+use crate::event_loop_wm::WMOperationResult;
+use crate::platform::{PlatformEvent, Position, WindowId};
+use crate::tile_preview_handler::TilePreviewHandler;
 use crate::wm::WindowManager;
-use skia_safe::Color;
 
 pub struct WindowMoveHandler {
-    overlay: OverlayWindow,
+    preview: TilePreviewHandler,
     drag_tracker: WindowDragTracker,
-    last_preview_bounds: Option<Bounds>,
-    valid_tile_position: bool,
 }
 
 impl WindowMoveHandler {
     pub async fn new() -> Self {
-        let config = Config::current();
-
-        let overlay = OverlayWindow::new(OverlayWindowConfig {
-            fade_animation_ms: if config.tile_preview_fade_animate {
-                config.tile_preview_animation_ms
-            } else {
-                0
-            },
-            move_animation_ms: if config.tile_preview_move_animate {
-                config.tile_preview_animation_ms
-            } else {
-                0
-            },
-            animation_fps: config.tile_preview_fps,
-            border_radius: 20.0,
-            blur: true,
-            background: Some(OverlayWindowBackgroundStyle {
-                color: Color::from_rgb(35, 35, 35),
-                opacity: 0.5,
-            }),
-            border: None,
-        })
-        .await;
         Self {
-            overlay,
+            preview: TilePreviewHandler::new().await,
             drag_tracker: WindowDragTracker::new(),
-            last_preview_bounds: None,
-            valid_tile_position: false,
         }
     }
 
     pub fn overlay_shown(&self) -> bool {
-        self.overlay.shown()
+        self.preview.is_shown()
     }
 
     pub fn handle_event(
         &mut self,
         event: &PlatformEvent,
         wm: &mut WindowManager,
-    ) -> WMOperationResult<()> {
+    ) -> WMOperationResult<bool> {
         match self.drag_tracker.handle_event(&event, &wm) {
             Some(WindowDragEvent::Drag(id, position, drag_type)) => {
-                self.drag(id, position, drag_type, wm)
+                self.drag(id, position, drag_type, wm)?;
+                Ok(true)
             }
             Some(WindowDragEvent::End(id, position, drag_type)) => {
-                self.drop(id, position, drag_type, wm)
+                self.drop(id, position, drag_type, wm)?;
+                Ok(true)
             }
-            _ => Ok(()),
+            _ => Ok(false),
         }
     }
 
@@ -74,25 +47,8 @@ impl WindowMoveHandler {
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
         if drag_type == WindowDragType::Move {
-            let bounds = if let Some(bounds) = wm.get_tile_bounds(id, &position) {
-                self.valid_tile_position = true;
-                bounds
-            } else {
-                self.valid_tile_position = false;
-                wm.get_window(id)?.bounds().clone()
-            };
-
-            if let Some(last_preview_bounds) = &self.last_preview_bounds {
-                if &bounds == last_preview_bounds {
-                    return Ok(());
-                }
-            }
-
-            self.overlay.show();
-            self.overlay.move_to(&bounds);
-            self.last_preview_bounds = Some(bounds);
+            self.preview.update_preview(id, &position, wm);
         }
-
         Ok(())
     }
 
@@ -104,29 +60,8 @@ impl WindowMoveHandler {
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
         if drag_type == WindowDragType::Move {
-            self.overlay.hide();
-            self.last_preview_bounds = None;
-
-            if self.valid_tile_position {
-                wm.tile_window(id, &position)
-                    .map_err(|e| WMOperationError::Move(e))?;
-            } else {
-                // Move the window back to its original position
-                let window = wm.get_window(id)?;
-                let tiled_bounds = window.bounds().clone();
-                window.set_bounds(tiled_bounds);
-                window
-                    .flush()
-                    .map_err(|e| WMOperationError::Move(e.into()))?;
-            }
-        } else if let WindowDragType::Resize(direction) = drag_type {
-            if let Ok(window) = wm.get_window(id) {
-                let new_bounds = window.platform_bounds();
-                wm.resize_window(window.id(), &new_bounds, direction)
-                    .map_err(|e| WMOperationError::Move(e))?;
-            }
+            TilePreviewHandler::tile_on_drop(&mut self.preview, id, &position, wm)?;
         }
-
         Ok(())
     }
 }

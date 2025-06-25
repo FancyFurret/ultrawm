@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::layouts::{ContainerTree, LayoutError, ResizeDirection};
+use crate::layouts::{ContainerTree, LayoutError};
 use crate::partition::{Partition, PartitionId};
 use crate::platform::{
     Bounds, MouseButtons, Platform, PlatformImpl, PlatformResult, PlatformWindow,
@@ -175,16 +175,11 @@ impl WindowManager {
         Ok(())
     }
 
-    pub fn resize_window(
-        &mut self,
-        id: WindowId,
-        bounds: &Bounds,
-        direction: ResizeDirection,
-    ) -> WMResult<()> {
+    pub fn resize_window(&mut self, id: WindowId, bounds: &Bounds) -> WMResult<()> {
         let window = self.get_window(id)?;
         let workspace = self.get_workspace_for_window_mut(&id)?;
 
-        workspace.resize_window(&window, bounds, direction)?;
+        workspace.resize_window(&window, bounds)?;
         workspace.flush_windows()?;
         self.try_save_layout();
         Ok(())
@@ -346,5 +341,9 @@ impl WindowManager {
         if let Err(e) = save_layout(self) {
             warn!("Failed to save layout: {e}");
         }
+    }
+
+    pub fn all_windows(&self) -> impl Iterator<Item = &WindowRef> {
+        self.windows.values()
     }
 }

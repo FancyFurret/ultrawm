@@ -109,7 +109,7 @@ enum TileAction {
 mod tests {
     use super::*;
     use crate::layouts::container_tree::container::{
-        Container, ContainerRef, ContainerWindow, InsertOrder, ResizeDistribution,
+        Container, ContainerRef, ContainerWindow, InsertOrder,
     };
     use crate::platform::mock::MockPlatformWindow;
     use crate::platform::Bounds;
@@ -228,43 +228,6 @@ mod tests {
         assert_eq!(InsertOrder::Before, InsertOrder::Before);
         assert_eq!(InsertOrder::After, InsertOrder::After);
         assert_ne!(InsertOrder::Before, InsertOrder::After);
-    }
-
-    // === ResizeDistribution Tests ===
-
-    #[test]
-    fn test_resize_distribution_equality() {
-        assert_eq!(ResizeDistribution::Spread, ResizeDistribution::Spread);
-        assert_eq!(ResizeDistribution::Symmetric, ResizeDistribution::Symmetric);
-        assert_ne!(ResizeDistribution::Spread, ResizeDistribution::Symmetric);
-    }
-
-    #[test]
-    fn test_resize_distribution_debug() {
-        // Test that debug formatting works
-        let spread = ResizeDistribution::Spread;
-        let symmetric = ResizeDistribution::Symmetric;
-
-        assert!(format!("{:?}", spread).contains("Spread"));
-        assert!(format!("{:?}", symmetric).contains("Symmetric"));
-    }
-
-    #[test]
-    fn test_resize_distribution_clone() {
-        let original = ResizeDistribution::Spread;
-        let cloned = original.clone();
-        assert_eq!(original, cloned);
-
-        let original = ResizeDistribution::Symmetric;
-        let cloned = original.clone();
-        assert_eq!(original, cloned);
-    }
-
-    #[test]
-    fn test_resize_distribution_copy() {
-        let original = ResizeDistribution::Spread;
-        let copied = original;
-        assert_eq!(original, copied);
     }
 
     // === Direction Tests ===
