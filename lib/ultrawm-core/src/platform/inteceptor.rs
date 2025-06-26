@@ -120,11 +120,13 @@ impl Interceptor {
                 }
             }
             WMEvent::MouseUp(pos, button) => {
-                let should_replay = {
+                let should_replay = if Self::has_active_requests_for_button(button) {
                     let mut handled = HANDLED_BUTTONS.lock().unwrap();
                     let was_handled = handled.contains(button);
                     handled.remove(button);
                     !was_handled
+                } else {
+                    false
                 };
 
                 if should_replay {
