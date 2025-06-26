@@ -10,6 +10,10 @@ pub struct Keybind<T: KeybindVariant> {
     _phantom: PhantomData<T>,
 }
 impl<T: KeybindVariant> Keybind<T> {
+    pub fn combos(&self) -> &Vec<InputCombo> {
+        &self.combos
+    }
+
     pub fn matches_buttons(&self, buttons: &MouseButtons) -> bool {
         self.combos.iter().any(|b| b.buttons().matches(buttons))
     }

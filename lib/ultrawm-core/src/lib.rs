@@ -3,6 +3,7 @@
 
 use crate::event_loop_main::EventLoopMain;
 use crate::event_loop_wm::EventLoopWM;
+use crate::platform::inteceptor::Interceptor;
 use crate::platform::{EventBridge, PlatformError, PlatformEvents, PlatformEventsImpl};
 use log::error;
 use std::sync::atomic::AtomicBool;
@@ -82,6 +83,8 @@ pub fn start(shutdown: Arc<AtomicBool>) -> UltraWMResult<()> {
     unsafe {
         PlatformEvents::initialize(dispatcher)?;
     }
+
+    Interceptor::initialize()?;
 
     // Signal that we're about to start the main event loop
     if main_ready_tx.send(()).is_err() {

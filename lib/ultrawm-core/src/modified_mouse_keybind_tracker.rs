@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::config::ModifiedMouseKeybind;
 use crate::platform::{
     inteceptor::{InterceptionRequest, Interceptor},
@@ -9,12 +11,12 @@ use log::error;
 pub struct ModifiedMouseKeybindTracker {
     current_keys: Keys,
     current_buttons: MouseButtons,
-    pressed_buttons: Vec<MouseButton>,
     interception_request: Option<InterceptionRequest>,
     active: bool,
     moved: bool,
     started: bool,
     keybind: ModifiedMouseKeybind,
+    included_buttons: HashSet<MouseButton>,
 }
 
 pub enum KeybindEvent {
@@ -28,11 +30,16 @@ impl ModifiedMouseKeybindTracker {
         Self {
             current_keys: Keys::new(),
             current_buttons: MouseButtons::new(),
-            pressed_buttons: Vec::new(),
             interception_request: None,
             active: false,
             moved: false,
             started: false,
+            included_buttons: keybind
+                .combos()
+                .iter()
+                .flat_map(|combo| combo.buttons().iter())
+                .cloned()
+                .collect(),
             keybind,
         }
     }
@@ -55,10 +62,6 @@ impl ModifiedMouseKeybindTracker {
                 self.update_keybind_state(pos)
             }
             PlatformEvent::MouseUp(pos, button) => {
-                if self.active && !self.moved {
-                    self.pressed_buttons.push(button.clone());
-                }
-
                 self.current_buttons.remove(button);
                 self.update_interception_state();
                 self.update_keybind_state(pos)
@@ -70,7 +73,7 @@ impl ModifiedMouseKeybindTracker {
                     self.moved = true;
                     if !self.started {
                         self.started = true;
-                        Interceptor::set_handled();
+                        Interceptor::set_handled(&self.included_buttons);
                         Some(KeybindEvent::Start(pos.clone()))
                     } else {
                         Some(KeybindEvent::Drag(pos.clone()))
@@ -87,7 +90,7 @@ impl ModifiedMouseKeybindTracker {
             .modifiers_match(&self.current_keys, &self.current_buttons);
 
         if should_intercept && self.interception_request.is_none() {
-            match Interceptor::request_interception() {
+            match Interceptor::request_interception(self.included_buttons.clone()) {
                 Ok(request) => {
                     self.interception_request = Some(request);
                 }
@@ -97,7 +100,6 @@ impl ModifiedMouseKeybindTracker {
             }
         } else if !should_intercept && self.interception_request.is_some() {
             self.interception_request = None;
-            self.pressed_buttons.clear();
         }
     }
 

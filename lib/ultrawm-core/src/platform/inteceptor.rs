@@ -1,57 +1,64 @@
 use crate::platform::traits::PlatformImpl;
 use crate::platform::{
-    Platform, PlatformEvent, PlatformEvents, PlatformEventsImpl, PlatformResult,
+    MouseButton, Platform, PlatformEvent, PlatformEvents, PlatformEventsImpl, PlatformResult,
 };
 use log::error;
 use std::collections::{HashMap, HashSet};
-use std::sync::{atomic::AtomicU64, LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex};
 
-static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-static ACTIVE_REQUESTS: LazyLock<Mutex<HashSet<u64>>> =
-    LazyLock::new(|| Mutex::new(HashSet::new()));
+// Track how many requests exist for each button
+static BUTTON_REQUEST_COUNTS: LazyLock<Mutex<HashMap<MouseButton, u64>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 static BUTTON_STATES: LazyLock<Mutex<HashMap<crate::platform::MouseButton, bool>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+static HANDLED_BUTTONS: LazyLock<Mutex<HashSet<MouseButton>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
 #[derive(Debug)]
 pub struct InterceptionRequest {
-    id: u64,
+    buttons: HashSet<MouseButton>,
 }
 
 impl InterceptionRequest {
-    fn new() -> Result<Self, String> {
-        let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let mut requests = ACTIVE_REQUESTS
+    fn new(buttons: HashSet<MouseButton>) -> Result<Self, String> {
+        let mut button_counts = BUTTON_REQUEST_COUNTS
             .lock()
             .map_err(|e| format!("Lock error: {}", e))?;
 
-        let was_empty = requests.is_empty();
-        requests.insert(id);
-
-        // If this is the first request, start intercepting
-        if was_empty {
-            PlatformEvents::set_intercept_clicks(true).map_err(|e| {
-                error!("Failed to set intercept clicks: {e:?}");
-                format!("Failed to set intercept clicks: {e:?}")
-            })?;
+        // Update button request counts and start intercepting buttons that weren't intercepted before
+        for button in &buttons {
+            let count = button_counts.entry(button.clone()).or_insert(0);
+            if *count == 0 {
+                // First request for this button - start intercepting
+                if let Err(e) = PlatformEvents::intercept_button(button.clone(), true) {
+                    error!("Failed to start intercepting button: {e:?}");
+                }
+            }
+            *count += 1;
         }
 
-        Ok(Self { id })
+        Ok(Self { buttons })
     }
 
     fn release(&self) -> Result<(), String> {
-        let mut requests = ACTIVE_REQUESTS
+        let mut button_counts = BUTTON_REQUEST_COUNTS
             .lock()
             .map_err(|e| format!("Lock error: {}", e))?;
 
-        requests.remove(&self.id);
-
-        // If no more requests, stop intercepting
-        if requests.is_empty() {
-            PlatformEvents::set_intercept_clicks(false).map_err(|e| {
-                error!("Failed to unset intercept clicks: {e:?}");
-                format!("Failed to unset intercept clicks: {e:?}")
-            })?;
+        // Update button request counts and stop intercepting buttons that have no more requests
+        for button in &self.buttons {
+            if let Some(count) = button_counts.get_mut(button) {
+                *count -= 1;
+                if *count == 0 {
+                    // No more requests for this button - stop intercepting
+                    button_counts.remove(button);
+                    if let Err(e) = PlatformEvents::intercept_button(button.clone(), false) {
+                        error!("Failed to stop intercepting button: {e:?}");
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -69,8 +76,25 @@ impl Drop for InterceptionRequest {
 pub struct Interceptor;
 
 impl Interceptor {
-    pub fn request_interception() -> Result<InterceptionRequest, String> {
-        InterceptionRequest::new()
+    pub fn initialize() -> PlatformResult<()> {
+        // Always intercept mouse modifiers
+        PlatformEvents::intercept_button(MouseButton::Button4, true)?;
+        PlatformEvents::intercept_button(MouseButton::Button5, true)?;
+        BUTTON_REQUEST_COUNTS
+            .lock()
+            .unwrap()
+            .insert(MouseButton::Button4, 1);
+        BUTTON_REQUEST_COUNTS
+            .lock()
+            .unwrap()
+            .insert(MouseButton::Button5, 1);
+        Ok(())
+    }
+
+    pub fn request_interception(
+        buttons: HashSet<MouseButton>,
+    ) -> Result<InterceptionRequest, String> {
+        InterceptionRequest::new(buttons)
     }
 
     pub fn release_request(request: InterceptionRequest) {
@@ -78,30 +102,29 @@ impl Interceptor {
         drop(request);
     }
 
-    pub fn has_active_requests() -> bool {
-        ACTIVE_REQUESTS
+    pub fn has_active_requests_for_button(button: &MouseButton) -> bool {
+        BUTTON_REQUEST_COUNTS
             .lock()
-            .map(|requests| !requests.is_empty())
+            .map(|counts| counts.get(button).unwrap_or(&0) > &0)
             .unwrap_or(false)
     }
 
     pub fn handle_event(event: &PlatformEvent) -> PlatformResult<()> {
-        if !Self::has_active_requests() {
-            return Ok(());
-        }
-
         match event {
             PlatformEvent::MouseDown(_pos, button) => {
-                if let Ok(mut states) = BUTTON_STATES.lock() {
-                    states.insert(button.clone(), true);
+                // Track button down state for all intercepted buttons
+                if Self::has_active_requests_for_button(button) {
+                    if let Ok(mut states) = BUTTON_STATES.lock() {
+                        states.insert(button.clone(), true);
+                    }
                 }
             }
             PlatformEvent::MouseUp(pos, button) => {
                 let should_replay = {
-                    let mut states = BUTTON_STATES.lock().unwrap();
-                    let was_down = states.get(button).copied().unwrap_or(false);
-                    states.insert(button.clone(), false);
-                    was_down
+                    let mut handled = HANDLED_BUTTONS.lock().unwrap();
+                    let was_handled = handled.contains(button);
+                    handled.remove(button);
+                    !was_handled
                 };
 
                 if should_replay {
@@ -114,9 +137,11 @@ impl Interceptor {
         Ok(())
     }
 
-    pub fn set_handled() {
-        if let Ok(mut states) = BUTTON_STATES.lock() {
-            states.clear();
+    pub fn set_handled(buttons: &HashSet<MouseButton>) {
+        if let Ok(mut handled) = HANDLED_BUTTONS.lock() {
+            for button in buttons {
+                handled.insert(button.clone());
+            }
         }
     }
 }

@@ -5,8 +5,9 @@ use crate::platform::{
 };
 use log::warn;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::collections::HashSet;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{LazyLock, Mutex, OnceLock};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::UI::Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK};
 use windows::Win32::UI::HiDpi::{
@@ -23,7 +24,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use winit::keyboard::KeyCode;
 
 static EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
-static INTERCEPT_CLICKS: AtomicBool = AtomicBool::new(false);
+static INTERCEPT_BUTTONS: LazyLock<Mutex<HashSet<MouseButton>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
 static IGNORE_NEXT_CLICKS: AtomicU64 = AtomicU64::new(0);
 static WIN_EVENT_HOOKS: Mutex<Vec<HWINEVENTHOOK>> = Mutex::new(Vec::new());
 static LOW_LEVEL_HOOKS: Mutex<Vec<HHOOK>> = Mutex::new(Vec::new());
@@ -118,8 +120,14 @@ unsafe impl PlatformEventsImpl for WindowsPlatformEvents {
         Ok(())
     }
 
-    fn set_intercept_clicks(intercept: bool) -> PlatformResult<()> {
-        INTERCEPT_CLICKS.store(intercept, Ordering::SeqCst);
+    fn intercept_button(button: MouseButton, intercept: bool) -> PlatformResult<()> {
+        if let Ok(mut intercept_buttons) = INTERCEPT_BUTTONS.lock() {
+            if intercept {
+                intercept_buttons.insert(button);
+            } else {
+                intercept_buttons.remove(&button);
+            }
+        }
         Ok(())
     }
 }
@@ -168,65 +176,71 @@ unsafe extern "system" fn mouse_hook_proc(
     w_param: WPARAM,
     l_param: LPARAM,
 ) -> LRESULT {
-    if n_code >= 0 {
-        // Use GetCursorPos to get the logical position of the mouse
-        let mut position = POINT::default();
-        let _ = GetCursorPos(&mut position);
-        let position = Position::new(position.x, position.y);
+    if n_code < 0 {
+        return CallNextHookEx(None, n_code, w_param, l_param);
+    }
 
-        let event = match w_param.0 as u32 {
-            WM_LBUTTONDOWN => PlatformEvent::MouseDown(position, MouseButton::Left),
-            WM_LBUTTONUP => PlatformEvent::MouseUp(position, MouseButton::Left),
-            WM_RBUTTONDOWN => PlatformEvent::MouseDown(position, MouseButton::Right),
-            WM_RBUTTONUP => PlatformEvent::MouseUp(position, MouseButton::Right),
-            WM_MBUTTONDOWN => PlatformEvent::MouseDown(position, MouseButton::Middle),
-            WM_MBUTTONUP => PlatformEvent::MouseUp(position, MouseButton::Middle),
-            WM_XBUTTONDOWN => {
-                if let Some(button) = map_xbutton_to_button(l_param) {
-                    PlatformEvent::MouseDown(position, button)
-                } else {
-                    return unsafe { CallNextHookEx(None, n_code, w_param, l_param) };
-                }
-            }
-            WM_XBUTTONUP => {
-                if let Some(button) = map_xbutton_to_button(l_param) {
-                    PlatformEvent::MouseUp(position, button)
-                } else {
-                    return unsafe { CallNextHookEx(None, n_code, w_param, l_param) };
-                }
-            }
-            WM_MOUSEMOVE => PlatformEvent::MouseMoved(position),
-            _ => {
-                return unsafe { CallNextHookEx(None, n_code, w_param, l_param) };
-            }
-        };
+    // Use GetCursorPos to get the logical position of the mouse
+    let mut position = POINT::default();
+    let _ = GetCursorPos(&mut position);
+    let position = Position::new(position.x, position.y);
 
-        // Check if we should ignore this event due to simulated click
-        if matches!(
-            event,
-            PlatformEvent::MouseDown(_, _) | PlatformEvent::MouseUp(_, _)
-        ) {
-            let current_ignore_count = IGNORE_NEXT_CLICKS.load(Ordering::SeqCst);
-            if current_ignore_count > 0 {
-                IGNORE_NEXT_CLICKS.store(current_ignore_count - 1, Ordering::SeqCst);
-                return unsafe { CallNextHookEx(None, n_code, w_param, l_param) };
+    let event = match w_param.0 as u32 {
+        WM_LBUTTONDOWN => PlatformEvent::MouseDown(position, MouseButton::Left),
+        WM_LBUTTONUP => PlatformEvent::MouseUp(position, MouseButton::Left),
+        WM_RBUTTONDOWN => PlatformEvent::MouseDown(position, MouseButton::Right),
+        WM_RBUTTONUP => PlatformEvent::MouseUp(position, MouseButton::Right),
+        WM_MBUTTONDOWN => PlatformEvent::MouseDown(position, MouseButton::Middle),
+        WM_MBUTTONUP => PlatformEvent::MouseUp(position, MouseButton::Middle),
+        WM_XBUTTONDOWN => {
+            if let Some(button) = map_xbutton_to_button(l_param) {
+                PlatformEvent::MouseDown(position, button)
+            } else {
+                return CallNextHookEx(None, n_code, w_param, l_param);
             }
         }
+        WM_XBUTTONUP => {
+            if let Some(button) = map_xbutton_to_button(l_param) {
+                PlatformEvent::MouseUp(position, button)
+            } else {
+                return CallNextHookEx(None, n_code, w_param, l_param);
+            }
+        }
+        WM_MOUSEMOVE => PlatformEvent::MouseMoved(position),
+        _ => {
+            return CallNextHookEx(None, n_code, w_param, l_param);
+        }
+    };
 
-        EVENT_DISPATCHER.get().unwrap().send(event);
+    // Check if we should ignore this event due to simulated click
+    let button = match &event {
+        PlatformEvent::MouseDown(_, button) | PlatformEvent::MouseUp(_, button) => {
+            Some(button.clone())
+        }
+        _ => None,
+    };
 
-        if INTERCEPT_CLICKS.load(Ordering::SeqCst) {
-            match w_param.0 as u32 {
-                WM_LBUTTONDOWN | WM_LBUTTONUP | WM_RBUTTONDOWN | WM_RBUTTONUP | WM_MBUTTONDOWN
-                | WM_MBUTTONUP | WM_XBUTTONDOWN | WM_XBUTTONUP => {
-                    return LRESULT(1);
-                }
-                _ => {}
+    // Check if we should ignore this event due to simulated click
+    if button.is_some() {
+        let current_ignore_count = IGNORE_NEXT_CLICKS.load(Ordering::SeqCst);
+        if current_ignore_count > 0 {
+            IGNORE_NEXT_CLICKS.store(current_ignore_count - 1, Ordering::SeqCst);
+            return CallNextHookEx(None, n_code, w_param, l_param);
+        }
+    }
+
+    EVENT_DISPATCHER.get().unwrap().send(event);
+
+    // Check if we should intercept this specific button before calling next hook
+    if let Some(button) = button.as_ref() {
+        if let Ok(intercept_buttons) = INTERCEPT_BUTTONS.lock() {
+            if intercept_buttons.contains(button) {
+                return LRESULT(1);
             }
         }
     }
 
-    unsafe { CallNextHookEx(None, n_code, w_param, l_param) }
+    CallNextHookEx(None, n_code, w_param, l_param)
 }
 
 unsafe extern "system" fn keyboard_hook_proc(

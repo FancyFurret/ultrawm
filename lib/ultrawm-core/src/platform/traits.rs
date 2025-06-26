@@ -19,7 +19,7 @@ where
     unsafe fn initialize(dispatcher: EventDispatcher) -> PlatformResult<()>;
     unsafe fn finalize() -> PlatformResult<()>;
 
-    fn set_intercept_clicks(intercept: bool) -> PlatformResult<()>;
+    fn intercept_button(button: MouseButton, intercept: bool) -> PlatformResult<()>;
 }
 
 pub trait PlatformImpl

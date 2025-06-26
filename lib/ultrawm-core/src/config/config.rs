@@ -81,10 +81,10 @@ pub struct WindowAreaBindings {
 impl Default for WindowAreaBindings {
     fn default() -> Self {
         Self {
-            tile: vec!["ctrl+lmb"].into(),
-            resize: vec!["ctrl+rmb"].into(),
-            resize_symmetric: vec!["ctrl+mmb"].into(),
-            slide: vec!["ctrl+lmb+rmb"].into(),
+            tile: vec!["ctrl+lmb", "bmb+lmb"].into(),
+            resize: vec!["ctrl+rmb", "bmb+rmb"].into(),
+            resize_symmetric: vec!["ctrl+mmb", "bmb+mmb"].into(),
+            slide: vec!["ctrl+lmb+rmb", "bmb+lmb+rmb"].into(),
         }
     }
 }

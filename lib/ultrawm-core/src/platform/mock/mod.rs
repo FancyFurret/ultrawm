@@ -16,7 +16,10 @@ unsafe impl PlatformEventsImpl for MockPlatformEvents {
     unsafe fn finalize() -> PlatformResult<()> {
         Ok(())
     }
-    fn set_intercept_clicks(_intercept: bool) -> PlatformResult<()> {
+    fn intercept_button(
+        _button: crate::platform::MouseButton,
+        _intercept: bool,
+    ) -> PlatformResult<()> {
         Ok(())
     }
 }
