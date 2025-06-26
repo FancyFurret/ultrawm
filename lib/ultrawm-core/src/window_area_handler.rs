@@ -1,14 +1,18 @@
 use crate::event_loop_wm::{WMOperationError, WMOperationResult};
 use crate::layouts::container_tree::ResizeDirection;
-use crate::platform::{Bounds, PlatformEvent, Position, WindowId};
+use crate::platform::traits::PlatformImpl;
+use crate::platform::{Bounds, CursorType, Platform, PlatformEvent, Position, WindowId};
 use crate::tile_preview_handler::TilePreviewHandler;
 use crate::window_area_tracker::{WindowAreaDragEvent, WindowAreaDragType, WindowAreaTracker};
 use crate::wm::WindowManager;
+use log::warn;
 
 pub struct WindowAreaHandler {
     preview: TilePreviewHandler,
     tracker: WindowAreaTracker,
     resize_direction: Option<ResizeDirection>,
+    drag_start_position: Option<Position>,
+    drag_start_bounds: Option<Bounds>,
 }
 
 impl WindowAreaHandler {
@@ -17,6 +21,8 @@ impl WindowAreaHandler {
             preview: TilePreviewHandler::new().await,
             tracker: WindowAreaTracker::new(),
             resize_direction: None,
+            drag_start_position: None,
+            drag_start_bounds: None,
         }
     }
 
@@ -25,21 +31,27 @@ impl WindowAreaHandler {
         event: &PlatformEvent,
         wm: &mut WindowManager,
     ) -> WMOperationResult<bool> {
-        match self.tracker.handle_event(event, wm) {
-            Some(WindowAreaDragEvent::Start(id, pos, drag_type)) => {
-                self.start(id, pos, drag_type, wm)?;
-                Ok(true)
+        let events = self.tracker.handle_event(event, wm);
+        let mut handled = false;
+
+        for drag_event in events {
+            match drag_event {
+                WindowAreaDragEvent::Start(id, pos, drag_type) => {
+                    self.start(id, pos, drag_type, wm)?;
+                    handled = true;
+                }
+                WindowAreaDragEvent::Drag(id, pos, drag_type) => {
+                    self.drag(id, pos, drag_type, wm)?;
+                    handled = true;
+                }
+                WindowAreaDragEvent::End(id, pos, drag_type) => {
+                    self.drop(id, pos, drag_type, wm)?;
+                    handled = true;
+                }
             }
-            Some(WindowAreaDragEvent::Drag(id, pos, drag_type)) => {
-                self.drag(id, pos, drag_type, wm)?;
-                Ok(true)
-            }
-            Some(WindowAreaDragEvent::End(id, pos, drag_type)) => {
-                self.drop(id, pos, drag_type, wm)?;
-                Ok(true)
-            }
-            None => Ok(false),
         }
+
+        Ok(handled)
     }
 
     fn start(
@@ -49,15 +61,26 @@ impl WindowAreaHandler {
         drag_type: WindowAreaDragType,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
-        match drag_type {
+        let window = wm.get_window(id)?;
+        let bounds = window.bounds();
+
+        // Store start position and bounds for this drag
+        self.drag_start_position = Some(pos.clone());
+        self.drag_start_bounds = Some(bounds.clone());
+
+        // Set appropriate cursor for the drag type
+        let cursor_type = match drag_type {
+            WindowAreaDragType::Tile | WindowAreaDragType::Slide => CursorType::Move,
             WindowAreaDragType::Resize | WindowAreaDragType::ResizeSymmetric => {
-                let window = wm.get_window(id)?;
-                let bounds = window.bounds();
                 let direction = Self::resize_direction(&bounds, &pos);
                 self.resize_direction = Some(direction);
+                Self::cursor_for_resize_direction(direction)
             }
-            _ => {}
-        }
+        };
+
+        Platform::set_cursor(cursor_type).unwrap_or_else(|e| {
+            warn!("Failed to set cursor: {}", e);
+        });
         Ok(())
     }
 
@@ -68,11 +91,14 @@ impl WindowAreaHandler {
         drag_type: WindowAreaDragType,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
-        let start = self.tracker.get_drag_start(id);
-        if start.is_none() {
-            return Ok(());
-        }
-        let (start_pos, start_bounds) = start.unwrap();
+        let start_pos = match &self.drag_start_position {
+            Some(pos) => pos.clone(),
+            None => return Ok(()), // No drag in progress
+        };
+        let start_bounds = match &self.drag_start_bounds {
+            Some(bounds) => bounds.clone(),
+            None => return Ok(()), // No drag in progress
+        };
         let window = wm.get_window(id)?;
 
         if drag_type == WindowAreaDragType::Tile {
@@ -119,7 +145,6 @@ impl WindowAreaHandler {
                 wm.resize_window(id, &new_bounds)
                     .map_err(WMOperationError::Resize)?;
             }
-            _ => {}
         }
 
         Ok(())
@@ -130,6 +155,15 @@ impl WindowAreaHandler {
             return dir;
         }
         Self::detect_edge(bounds, pos)
+    }
+
+    fn cursor_for_resize_direction(direction: ResizeDirection) -> CursorType {
+        match direction {
+            ResizeDirection::Top | ResizeDirection::Bottom => CursorType::ResizeNorth,
+            ResizeDirection::Left | ResizeDirection::Right => CursorType::ResizeEast,
+            ResizeDirection::TopLeft | ResizeDirection::BottomRight => CursorType::ResizeNorthWest,
+            ResizeDirection::TopRight | ResizeDirection::BottomLeft => CursorType::ResizeNorthEast,
+        }
     }
 
     fn detect_corner_wedge(bounds: &Bounds, pos: &Position) -> Option<ResizeDirection> {
@@ -279,6 +313,15 @@ impl WindowAreaHandler {
             }
             WindowAreaDragType::Slide => {}
         }
+
+        self.drag_start_position = None;
+        self.drag_start_bounds = None;
+
+        // Reset cursor to default
+        Platform::reset_cursor().unwrap_or_else(|e| {
+            warn!("Failed to reset cursor: {}", e);
+        });
+
         Ok(())
     }
 }

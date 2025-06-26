@@ -4,7 +4,7 @@ use crate::window_area_handler::WindowAreaHandler;
 use crate::wm::WMError;
 use crate::{
     event_loop_main::EventLoopMain,
-    platform::{EventBridge, PlatformEvent},
+    platform::{inteceptor::Interceptor, EventBridge, PlatformEvent},
     wm::WindowManager,
     UltraWMResult,
 };
@@ -42,6 +42,10 @@ impl EventLoopWM {
                 .next_event()
                 .await
                 .ok_or("Could not get next event")?;
+
+            Interceptor::handle_event(&event).unwrap_or_else(|e| {
+                error!("Interceptor error: {e}");
+            });
 
             match &event {
                 PlatformEvent::WindowOpened(window) => {

@@ -1,4 +1,4 @@
-use crate::keybind::Keybind;
+use crate::config::{ModifiedMouseKeybind, MouseKeybind};
 use log::{trace, warn};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -46,25 +46,25 @@ pub struct Config {
 #[serde(default)]
 pub struct HandleResizeBindings {
     /// Bindings for resizing the left or top window (e.g., LMB)
-    pub resize_left_top: Vec<Keybind>,
+    pub resize_before: MouseKeybind,
     /// Bindings for resizing the right or bottom window (e.g., RMB)
-    pub resize_right_bottom: Vec<Keybind>,
+    pub resize_after: MouseKeybind,
     /// Bindings for resizing both sides evenly (e.g., MMB, LMB+RMB)
-    pub resize_evenly: Vec<Keybind>,
+    pub resize_evenly: MouseKeybind,
     /// Bindings for symmetric resize of left/top (e.g., Shift+LMB)
-    pub resize_left_top_symmetric: Vec<Keybind>,
+    pub resize_before_symmetric: MouseKeybind,
     /// Bindings for symmetric resize of right/bottom (e.g., Shift+RMB)
-    pub resize_right_bottom_symmetric: Vec<Keybind>,
+    pub resize_after_symmetric: MouseKeybind,
 }
 
 impl Default for HandleResizeBindings {
     fn default() -> Self {
         Self {
-            resize_left_top: vec![Keybind::parse("lmb")],
-            resize_right_bottom: vec![Keybind::parse("rmb")],
-            resize_evenly: vec![Keybind::parse("mmb")],
-            resize_left_top_symmetric: vec![Keybind::parse("lmb+mmb")],
-            resize_right_bottom_symmetric: vec![Keybind::parse("rmb+mmb")],
+            resize_before: vec!["lmb"].into(),
+            resize_after: vec!["rmb"].into(),
+            resize_evenly: vec!["mmb"].into(),
+            resize_before_symmetric: vec!["lmb+mmb"].into(),
+            resize_after_symmetric: vec!["rmb+mmb"].into(),
         }
     }
 }
@@ -72,19 +72,19 @@ impl Default for HandleResizeBindings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WindowAreaBindings {
-    pub tile: Vec<Keybind>,
-    pub resize: Vec<Keybind>,
-    pub resize_symmetric: Vec<Keybind>,
-    pub slide: Vec<Keybind>,
+    pub tile: ModifiedMouseKeybind,
+    pub resize: ModifiedMouseKeybind,
+    pub resize_symmetric: ModifiedMouseKeybind,
+    pub slide: ModifiedMouseKeybind,
 }
 
 impl Default for WindowAreaBindings {
     fn default() -> Self {
         Self {
-            tile: vec![Keybind::parse("ctrl+lmb")],
-            resize: vec![Keybind::parse("ctrl+rmb")],
-            resize_symmetric: vec![Keybind::parse("ctrl+mmb")],
-            slide: vec![Keybind::parse("ctrl+lmb+rmb")],
+            tile: vec!["ctrl+lmb"].into(),
+            resize: vec!["ctrl+rmb"].into(),
+            resize_symmetric: vec!["ctrl+mmb"].into(),
+            slide: vec!["ctrl+lmb+rmb"].into(),
         }
     }
 }

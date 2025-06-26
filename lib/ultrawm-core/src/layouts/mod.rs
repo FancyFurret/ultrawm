@@ -1,5 +1,5 @@
-use crate::platform::{Bounds, MouseButtons, Position, WindowId};
-use crate::resize_handle::ResizeHandle;
+use crate::platform::{Bounds, Position, WindowId};
+use crate::resize_handle::{ResizeHandle, ResizeMode};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
 pub use container_tree::*;
@@ -65,7 +65,7 @@ pub trait WindowLayout: Debug {
         &mut self,
         _handle: &ResizeHandle,
         _position: &Position,
-        _buttons: &MouseButtons,
+        _mode: ResizeMode,
     ) -> bool {
         false
     }

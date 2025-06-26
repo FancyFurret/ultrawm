@@ -1,5 +1,4 @@
 use crate::config::Config;
-use crate::keybind::KeybindListExt;
 use crate::layouts::container_tree::container::{
     Container, ContainerChildRef, ContainerRef, ContainerWindow, ContainerWindowRef,
 };
@@ -11,8 +10,8 @@ use crate::layouts::container_tree::{
     MOUSE_SPLIT_PREVIEW_RATIO, MOUSE_SPLIT_THRESHOLD, MOUSE_SWAP_THRESHOLD,
 };
 use crate::layouts::{ContainerId, LayoutError, LayoutResult, Side, WindowLayout};
-use crate::platform::{Bounds, MouseButtons, PlatformWindowImpl, Position, WindowId};
-use crate::resize_handle::{HandleOrientation, ResizeHandle};
+use crate::platform::{Bounds, PlatformWindowImpl, Position, WindowId};
+use crate::resize_handle::{HandleOrientation, ResizeHandle, ResizeMode};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
 use log::{error, info};
@@ -624,7 +623,7 @@ impl WindowLayout for ContainerTree {
         &mut self,
         handle: &ResizeHandle,
         position: &Position,
-        buttons: &MouseButtons,
+        mode: ResizeMode,
     ) -> bool {
         // Find the container that owns this handle
         let container = match self.find_container_for_handle(handle.id) {
@@ -638,45 +637,44 @@ impl WindowLayout for ContainerTree {
             HandleOrientation::Horizontal => position.y,
         };
 
-        let config = Config::current();
-        let binds = &config.resize_handle_resize_bindings;
-
-        let success = if binds.resize_evenly.matches_mouse(buttons) {
-            container.resize_between(handle.index, new_position)
-        } else if binds.resize_left_top.matches_mouse(buttons) {
-            let child = container.children().get(handle.index - 1).unwrap().clone();
-            let side = match handle.orientation {
-                HandleOrientation::Vertical => Side::Right,
-                HandleOrientation::Horizontal => Side::Bottom,
-            };
-            container.resize_edge(&child, new_position, side, false);
-            true
-        } else if binds.resize_right_bottom.matches_mouse(buttons) {
-            let child = container.children().get(handle.index).unwrap().clone();
-            let side = match handle.orientation {
-                HandleOrientation::Vertical => Side::Left,
-                HandleOrientation::Horizontal => Side::Top,
-            };
-            container.resize_edge(&child, new_position, side, false);
-            true
-        } else if binds.resize_left_top_symmetric.matches_mouse(buttons) {
-            let child = container.children().get(handle.index - 1).unwrap().clone();
-            let side = match handle.orientation {
-                HandleOrientation::Vertical => Side::Right,
-                HandleOrientation::Horizontal => Side::Bottom,
-            };
-            container.resize_edge(&child, new_position, side, true);
-            true
-        } else if binds.resize_right_bottom_symmetric.matches_mouse(buttons) {
-            let child = container.children().get(handle.index).unwrap().clone();
-            let side = match handle.orientation {
-                HandleOrientation::Vertical => Side::Left,
-                HandleOrientation::Horizontal => Side::Top,
-            };
-            container.resize_edge(&child, new_position, side, true);
-            true
-        } else {
-            false
+        let success = match mode {
+            ResizeMode::Evenly => container.resize_between(handle.index, new_position),
+            ResizeMode::Before => {
+                let child = container.children().get(handle.index - 1).unwrap().clone();
+                let side = match handle.orientation {
+                    HandleOrientation::Vertical => Side::Right,
+                    HandleOrientation::Horizontal => Side::Bottom,
+                };
+                container.resize_edge(&child, new_position, side, false);
+                true
+            }
+            ResizeMode::After => {
+                let child = container.children().get(handle.index).unwrap().clone();
+                let side = match handle.orientation {
+                    HandleOrientation::Vertical => Side::Left,
+                    HandleOrientation::Horizontal => Side::Top,
+                };
+                container.resize_edge(&child, new_position, side, false);
+                true
+            }
+            ResizeMode::BeforeSymmetric => {
+                let child = container.children().get(handle.index - 1).unwrap().clone();
+                let side = match handle.orientation {
+                    HandleOrientation::Vertical => Side::Right,
+                    HandleOrientation::Horizontal => Side::Bottom,
+                };
+                container.resize_edge(&child, new_position, side, true);
+                true
+            }
+            ResizeMode::AfterSymmetric => {
+                let child = container.children().get(handle.index).unwrap().clone();
+                let side = match handle.orientation {
+                    HandleOrientation::Vertical => Side::Left,
+                    HandleOrientation::Horizontal => Side::Top,
+                };
+                container.resize_edge(&child, new_position, side, true);
+                true
+            }
         };
 
         if success {

@@ -8,6 +8,14 @@ pub enum HandleOrientation {
     Horizontal,
 }
 
+pub enum ResizeMode {
+    Evenly,
+    Before,
+    After,
+    BeforeSymmetric,
+    AfterSymmetric,
+}
+
 #[derive(Debug, Clone)]
 pub struct ResizeHandle {
     /// Center position of the handle in screen coordinates.

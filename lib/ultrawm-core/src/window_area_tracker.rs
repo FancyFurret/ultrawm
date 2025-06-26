@@ -1,6 +1,6 @@
 use crate::config::WindowAreaBindings;
-use crate::keybind::KeybindListExt;
-use crate::platform::{Bounds, Keys, MouseButtons, PlatformEvent, Position, WindowId};
+use crate::modified_mouse_keybind_tracker::{KeybindEvent, ModifiedMouseKeybindTracker};
+use crate::platform::{Bounds, PlatformEvent, Position, WindowId};
 use crate::window::WindowRef;
 use crate::wm::WindowManager;
 use crate::Config;
@@ -30,20 +30,38 @@ struct DragContext {
 }
 
 pub struct WindowAreaTracker {
-    current_keys: Keys,
-    current_buttons: MouseButtons,
     bindings: WindowAreaBindings,
-    current_drag: Option<DragContext>,
+    tile_binding: ModifiedMouseKeybindTracker,
+    resize_binding: ModifiedMouseKeybindTracker,
+    resize_symmetric_binding: ModifiedMouseKeybindTracker,
+    slide_binding: ModifiedMouseKeybindTracker,
+    tile_drag: Option<DragContext>,
+    resize_drag: Option<DragContext>,
+    resize_symmetric_drag: Option<DragContext>,
+    slide_drag: Option<DragContext>,
 }
 
 impl WindowAreaTracker {
     pub fn new() -> Self {
         let config = Config::current();
         Self {
-            current_keys: Keys::new(),
-            current_buttons: MouseButtons::new(),
             bindings: config.window_area_bindings.clone(),
-            current_drag: None,
+            tile_binding: ModifiedMouseKeybindTracker::new(
+                config.window_area_bindings.tile.clone(),
+            ),
+            resize_binding: ModifiedMouseKeybindTracker::new(
+                config.window_area_bindings.resize.clone(),
+            ),
+            resize_symmetric_binding: ModifiedMouseKeybindTracker::new(
+                config.window_area_bindings.resize_symmetric.clone(),
+            ),
+            slide_binding: ModifiedMouseKeybindTracker::new(
+                config.window_area_bindings.slide.clone(),
+            ),
+            tile_drag: None,
+            resize_drag: None,
+            resize_symmetric_drag: None,
+            slide_drag: None,
         }
     }
 
@@ -51,144 +69,95 @@ impl WindowAreaTracker {
         &mut self,
         event: &PlatformEvent,
         wm: &WindowManager,
+    ) -> Vec<WindowAreaDragEvent> {
+        // Call all bindings so they can track their state properly, collect and filter results
+        let mut events: Vec<WindowAreaDragEvent> = vec![
+            Self::handle_binding(
+                event,
+                &mut self.tile_binding,
+                WindowAreaDragType::Tile,
+                wm,
+                &mut self.tile_drag,
+            ),
+            Self::handle_binding(
+                event,
+                &mut self.resize_binding,
+                WindowAreaDragType::Resize,
+                wm,
+                &mut self.resize_drag,
+            ),
+            Self::handle_binding(
+                event,
+                &mut self.resize_symmetric_binding,
+                WindowAreaDragType::ResizeSymmetric,
+                wm,
+                &mut self.resize_symmetric_drag,
+            ),
+            Self::handle_binding(
+                event,
+                &mut self.slide_binding,
+                WindowAreaDragType::Slide,
+                wm,
+                &mut self.slide_drag,
+            ),
+        ]
+        .into_iter()
+        .filter_map(|x| x)
+        .collect();
+
+        // Sort events so End events come before Start events
+        events.sort_by_key(|event| match event {
+            WindowAreaDragEvent::End(_, _, _) => 0,
+            WindowAreaDragEvent::Drag(_, _, _) => 1,
+            WindowAreaDragEvent::Start(_, _, _) => 2,
+        });
+
+        events
+    }
+
+    fn handle_binding(
+        event: &PlatformEvent,
+        binding: &mut ModifiedMouseKeybindTracker,
+        drag_type: WindowAreaDragType,
+        wm: &WindowManager,
+        current_drag: &mut Option<DragContext>,
     ) -> Option<WindowAreaDragEvent> {
-        match event {
-            PlatformEvent::KeyDown(key) => {
-                self.current_keys.add(key);
-                self.cancel_if_no_binding();
+        match binding.handle_event(event) {
+            Some(KeybindEvent::Start(pos)) => {
+                let window = wm
+                    .all_windows()
+                    .find(|w| w.bounds().contains(&pos))?
+                    .clone();
+                let start_bounds = window.bounds().clone();
+
+                *current_drag = Some(DragContext {
+                    window: window.clone(),
+                    start_position: pos.clone(),
+                    start_bounds,
+                    drag_type: drag_type.clone(),
+                });
+
+                Some(WindowAreaDragEvent::Start(window.id(), pos, drag_type))
             }
-            PlatformEvent::KeyUp(key) => {
-                self.current_keys.remove(key);
-                self.cancel_if_no_binding();
+            Some(KeybindEvent::Drag(pos)) => {
+                if let Some(drag) = current_drag {
+                    Some(WindowAreaDragEvent::Drag(drag.window.id(), pos, drag_type))
+                } else {
+                    None
+                }
             }
-            PlatformEvent::MouseDown(pos, button) => {
-                self.current_buttons.add(button);
-                return self.handle_button_change(wm, pos);
-            }
-            PlatformEvent::MouseMoved(pos) => {
-                if let Some(drag) = &self.current_drag {
-                    return Some(WindowAreaDragEvent::Drag(
+            Some(KeybindEvent::End(pos)) => {
+                if let Some(drag) = current_drag.take() {
+                    Some(WindowAreaDragEvent::End(
                         drag.window.id(),
-                        pos.clone(),
-                        drag.drag_type.clone(),
-                    ));
+                        pos,
+                        drag.drag_type,
+                    ))
+                } else {
+                    None
                 }
             }
-            PlatformEvent::MouseUp(pos, button) => {
-                self.current_buttons.remove(button);
-                return self.handle_button_change(wm, pos);
-            }
-            _ => {}
+            None => None,
         }
-        None
-    }
-
-    fn get_drag_type(
-        &self,
-        wm: &WindowManager,
-        pos: &Position,
-    ) -> Option<(WindowRef, WindowAreaDragType)> {
-        let window = wm.all_windows().find(|w| w.bounds().contains(pos))?.clone();
-
-        if self
-            .bindings
-            .resize
-            .matches(&self.current_keys, &self.current_buttons)
-        {
-            Some((window, WindowAreaDragType::Resize))
-        } else if self
-            .bindings
-            .resize_symmetric
-            .matches(&self.current_keys, &self.current_buttons)
-        {
-            Some((window, WindowAreaDragType::ResizeSymmetric))
-        } else if self
-            .bindings
-            .slide
-            .matches(&self.current_keys, &self.current_buttons)
-        {
-            Some((window, WindowAreaDragType::Slide))
-        } else if self
-            .bindings
-            .tile
-            .matches(&self.current_keys, &self.current_buttons)
-        {
-            Some((window, WindowAreaDragType::Tile))
-        } else {
-            None
-        }
-    }
-
-    fn handle_button_change(
-        &mut self,
-        wm: &WindowManager,
-        pos: &Position,
-    ) -> Option<WindowAreaDragEvent> {
-        let current_drag_type = self.get_drag_type(wm, pos);
-
-        if let Some(drag) = &mut self.current_drag {
-            if let Some((_, drag_type)) = current_drag_type {
-                // Update drag type if it changed
-                if drag_type != drag.drag_type {
-                    drag.drag_type = drag_type;
-                }
-            } else {
-                // No valid drag type anymore, end the drag
-                let drag = self.current_drag.take().unwrap();
-                return Some(WindowAreaDragEvent::End(
-                    drag.window.id(),
-                    pos.clone(),
-                    drag.drag_type,
-                ));
-            }
-        } else if let Some((window, drag_type)) = current_drag_type {
-            // Start new drag if no current drag
-            let start_bounds = window.bounds().clone();
-            self.current_drag = Some(DragContext {
-                window: window.clone(),
-                start_position: pos.clone(),
-                start_bounds,
-                drag_type: drag_type.clone(),
-            });
-            return Some(WindowAreaDragEvent::Start(
-                window.id(),
-                pos.clone(),
-                drag_type,
-            ));
-        }
-        None
-    }
-
-    fn cancel_if_no_binding(&mut self) {
-        if self.current_drag.is_some()
-            && !self
-                .bindings
-                .resize
-                .matches(&self.current_keys, &self.current_buttons)
-            && !self
-                .bindings
-                .resize_symmetric
-                .matches(&self.current_keys, &self.current_buttons)
-            && !self
-                .bindings
-                .slide
-                .matches(&self.current_keys, &self.current_buttons)
-            && !self
-                .bindings
-                .tile
-                .matches(&self.current_keys, &self.current_buttons)
-        {
-            self.current_drag = None;
-        }
-    }
-
-    pub fn get_drag_start(&self, id: WindowId) -> Option<(Position, Bounds)> {
-        self.current_drag.as_ref().and_then(|drag| {
-            if drag.window.id() == id {
-                Some((drag.start_position.clone(), drag.start_bounds.clone()))
-            } else {
-                None
-            }
-        })
     }
 }

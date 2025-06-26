@@ -16,8 +16,8 @@ mod drag_handler;
 mod drag_tracker;
 mod event_loop_main;
 pub mod event_loop_wm;
-mod keybind;
 mod layouts;
+mod modified_mouse_keybind_tracker;
 mod overlay_window;
 mod partition;
 pub mod platform;
@@ -90,6 +90,10 @@ pub fn start(shutdown: Arc<AtomicBool>) -> UltraWMResult<()> {
 
     // Start main event loop
     EventLoopMain::run()?;
+
+    unsafe {
+        PlatformEvents::finalize()?;
+    }
 
     Ok(())
 }

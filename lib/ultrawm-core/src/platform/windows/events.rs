@@ -3,27 +3,30 @@ use crate::platform::{
     EventDispatcher, MouseButton, PlatformEvent, PlatformEventsImpl, PlatformResult,
     PlatformWindowImpl, Position, WindowId,
 };
+use log::warn;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
-use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
+use windows::Win32::UI::Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK};
 use windows::Win32::UI::HiDpi::{
     SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, GetCursorPos, SetWindowsHookExW, EVENT_OBJECT_DESTROY, EVENT_OBJECT_FOCUS,
-    EVENT_OBJECT_SHOW, EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZESTART,
-    EVENT_SYSTEM_MOVESIZESTART, HHOOK, KBDLLHOOKSTRUCT, WH_KEYBOARD_LL, WH_MOUSE_LL,
-    WINEVENT_OUTOFCONTEXT, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN,
-    WM_MBUTTONUP, WM_MOUSEMOVE, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
+    CallNextHookEx, GetCursorPos, SetWindowsHookExW, UnhookWindowsHookEx, EVENT_OBJECT_DESTROY,
+    EVENT_OBJECT_FOCUS, EVENT_OBJECT_SHOW, EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZESTART,
+    EVENT_SYSTEM_MOVESIZESTART, HHOOK, KBDLLHOOKSTRUCT, MSLLHOOKSTRUCT, WH_KEYBOARD_LL,
+    WH_MOUSE_LL, WINEVENT_OUTOFCONTEXT, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP,
+    WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSKEYDOWN,
+    WM_SYSKEYUP, WM_XBUTTONDOWN, WM_XBUTTONUP, XBUTTON1, XBUTTON2,
 };
 use winit::keyboard::KeyCode;
 
 static EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
-static mut MOUSE_HOOK: Option<HHOOK> = None;
 static INTERCEPT_CLICKS: AtomicBool = AtomicBool::new(false);
-static mut KEYBOARD_HOOK: Option<HHOOK> = None;
+static IGNORE_NEXT_CLICKS: AtomicU64 = AtomicU64::new(0);
+static WIN_EVENT_HOOKS: Mutex<Vec<HWINEVENTHOOK>> = Mutex::new(Vec::new());
+static LOW_LEVEL_HOOKS: Mutex<Vec<HHOOK>> = Mutex::new(Vec::new());
 
 pub struct WindowsPlatformEvents;
 
@@ -55,7 +58,6 @@ unsafe impl PlatformEventsImpl for WindowsPlatformEvents {
             EVENT_OBJECT_DESTROY,
         ];
 
-        let mut hooks = Vec::new();
         for event in events {
             let hook = SetWinEventHook(
                 event,
@@ -69,18 +71,49 @@ unsafe impl PlatformEventsImpl for WindowsPlatformEvents {
             if hook.0 == 0 {
                 return Err(format!("Could not set win event hook for event {}", event).into());
             }
-            hooks.push(hook);
+            WIN_EVENT_HOOKS.lock().unwrap().push(hook);
         }
 
         // Set up low-level mouse hook
         let mouse_hook = SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_hook_proc), None, 0)
             .map_err(|e| format!("Could not set mouse hook: {:?}", e))?;
-        MOUSE_HOOK = Some(mouse_hook);
+        LOW_LEVEL_HOOKS.lock().unwrap().push(mouse_hook);
 
         // Set up low-level keyboard hook
         let keyboard_hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook_proc), None, 0)
             .map_err(|e| format!("Could not set keyboard hook: {:?}", e))?;
-        KEYBOARD_HOOK = Some(keyboard_hook);
+        LOW_LEVEL_HOOKS.lock().unwrap().push(keyboard_hook);
+
+        Ok(())
+    }
+
+    unsafe fn finalize() -> PlatformResult<()> {
+        let mut errors = Vec::new();
+
+        let mut win_hooks = WIN_EVENT_HOOKS.lock().unwrap();
+        for &hook in win_hooks.iter() {
+            if UnhookWinEvent(hook).0 == 0 {
+                errors.push(format!("Failed to unhook WinEvent hook {:?}", hook));
+            }
+        }
+        win_hooks.clear();
+
+        let mut low_level_hooks = LOW_LEVEL_HOOKS.lock().unwrap();
+        for &hook in low_level_hooks.iter() {
+            if UnhookWindowsHookEx(hook).is_err() {
+                errors.push(format!("Failed to unhook low-level hook {:?}", hook));
+            }
+        }
+        low_level_hooks.clear();
+
+        if !errors.is_empty() {
+            return Err(format!(
+                "Failed to cleanup {} hooks: {}",
+                errors.len(),
+                errors.join(", ")
+            )
+            .into());
+        }
 
         Ok(())
     }
@@ -88,6 +121,13 @@ unsafe impl PlatformEventsImpl for WindowsPlatformEvents {
     fn set_intercept_clicks(intercept: bool) -> PlatformResult<()> {
         INTERCEPT_CLICKS.store(intercept, Ordering::SeqCst);
         Ok(())
+    }
+}
+
+impl WindowsPlatformEvents {
+    pub fn ignore_next_simulated_clicks(count: u64) {
+        let current = IGNORE_NEXT_CLICKS.load(Ordering::SeqCst);
+        IGNORE_NEXT_CLICKS.store(current + count, Ordering::SeqCst);
     }
 }
 
@@ -141,16 +181,44 @@ unsafe extern "system" fn mouse_hook_proc(
             WM_RBUTTONUP => PlatformEvent::MouseUp(position, MouseButton::Right),
             WM_MBUTTONDOWN => PlatformEvent::MouseDown(position, MouseButton::Middle),
             WM_MBUTTONUP => PlatformEvent::MouseUp(position, MouseButton::Middle),
+            WM_XBUTTONDOWN => {
+                if let Some(button) = map_xbutton_to_button(l_param) {
+                    PlatformEvent::MouseDown(position, button)
+                } else {
+                    return unsafe { CallNextHookEx(None, n_code, w_param, l_param) };
+                }
+            }
+            WM_XBUTTONUP => {
+                if let Some(button) = map_xbutton_to_button(l_param) {
+                    PlatformEvent::MouseUp(position, button)
+                } else {
+                    return unsafe { CallNextHookEx(None, n_code, w_param, l_param) };
+                }
+            }
             WM_MOUSEMOVE => PlatformEvent::MouseMoved(position),
-            _ => return unsafe { CallNextHookEx(None, n_code, w_param, l_param) },
+            _ => {
+                return unsafe { CallNextHookEx(None, n_code, w_param, l_param) };
+            }
         };
+
+        // Check if we should ignore this event due to simulated click
+        if matches!(
+            event,
+            PlatformEvent::MouseDown(_, _) | PlatformEvent::MouseUp(_, _)
+        ) {
+            let current_ignore_count = IGNORE_NEXT_CLICKS.load(Ordering::SeqCst);
+            if current_ignore_count > 0 {
+                IGNORE_NEXT_CLICKS.store(current_ignore_count - 1, Ordering::SeqCst);
+                return unsafe { CallNextHookEx(None, n_code, w_param, l_param) };
+            }
+        }
 
         EVENT_DISPATCHER.get().unwrap().send(event);
 
         if INTERCEPT_CLICKS.load(Ordering::SeqCst) {
             match w_param.0 as u32 {
                 WM_LBUTTONDOWN | WM_LBUTTONUP | WM_RBUTTONDOWN | WM_RBUTTONUP | WM_MBUTTONDOWN
-                | WM_MBUTTONUP => {
+                | WM_MBUTTONUP | WM_XBUTTONDOWN | WM_XBUTTONUP => {
                     return LRESULT(1);
                 }
                 _ => {}
@@ -180,6 +248,23 @@ unsafe extern "system" fn keyboard_hook_proc(
         }
     }
     unsafe { CallNextHookEx(None, n_code, w_param, l_param) }
+}
+
+fn map_xbutton_to_button(l_param: LPARAM) -> Option<MouseButton> {
+    unsafe {
+        let hook_struct = &*(l_param.0 as *const MSLLHOOKSTRUCT);
+        let mouse_data = hook_struct.mouseData;
+        let button_id = ((mouse_data >> 16) & 0xFFFF) as u16;
+
+        match button_id {
+            XBUTTON1 => Some(MouseButton::Button4),
+            XBUTTON2 => Some(MouseButton::Button5),
+            _ => {
+                warn!("Unknown xbutton id: {}", button_id);
+                None
+            }
+        }
+    }
 }
 
 fn map_vk_to_keycode(vk: u32) -> Option<KeyCode> {

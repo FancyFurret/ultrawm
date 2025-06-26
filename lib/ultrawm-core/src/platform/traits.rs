@@ -5,7 +5,8 @@ use crate::platform::PlatformWindow;
 use crate::{
     overlay_window::OverlayWindowConfig,
     platform::{
-        Bounds, Display, EventDispatcher, PlatformResult, Position, ProcessId, Size, WindowId,
+        Bounds, CursorType, Display, EventDispatcher, MouseButton, PlatformResult, Position,
+        ProcessId, Size, WindowId,
     },
 };
 
@@ -16,6 +17,7 @@ where
     /// Initializes the platform. This should be called once at the start of the program.
     /// This function should only be called from the main thread. It is not thread safe.
     unsafe fn initialize(dispatcher: EventDispatcher) -> PlatformResult<()>;
+    unsafe fn finalize() -> PlatformResult<()>;
 
     fn set_intercept_clicks(intercept: bool) -> PlatformResult<()>;
 }
@@ -34,14 +36,17 @@ where
     /// Returns the current mouse position.
     fn get_mouse_position() -> PlatformResult<Position>;
 
-    /// Hides the resize cursor and replaces it with a pointer if the current cursor is a resize cursor.
-    fn hide_resize_cursor() -> PlatformResult<()>;
+    /// Sets the cursor to the specified type.
+    fn set_cursor(cursor_type: CursorType) -> PlatformResult<()>;
 
     /// Resets the cursor to the system default.
     fn reset_cursor() -> PlatformResult<()>;
 
     fn start_window_bounds_batch(window_count: u32) -> PlatformResult<()>;
     fn end_window_bounds_batch() -> PlatformResult<()>;
+
+    /// Simulates a mouse click at the specified position
+    fn simulate_mouse_click(position: Position, button: MouseButton) -> PlatformResult<()>;
 }
 
 pub trait PlatformOverlayImpl {

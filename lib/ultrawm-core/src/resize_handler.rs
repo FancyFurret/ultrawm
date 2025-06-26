@@ -4,7 +4,7 @@ use crate::overlay_window::{
     OverlayWindow, OverlayWindowBackgroundStyle, OverlayWindowBorderStyle, OverlayWindowConfig,
 };
 use crate::platform::traits::PlatformImpl;
-use crate::platform::{Bounds, MouseButtons, Platform, PlatformEvent, Position};
+use crate::platform::{Bounds, CursorType, MouseButtons, Platform, PlatformEvent, Position};
 use crate::resize_handle::ResizeHandle;
 use crate::resize_handle_tracker::{HandleDragEvent, HandleDragTracker};
 use crate::wm::WindowManager;
@@ -92,7 +92,8 @@ impl WindowResizeHandler {
     fn mouse_moved(&mut self, pos: &Position, wm: &WindowManager) -> WMOperationResult<()> {
         // Prevent normal window resizing
         if let Some(_) = wm.find_window_at_resize_edge(pos) {
-            Platform::hide_resize_cursor().map_err(|e| WMOperationError::Error(e.into()))?;
+            Platform::set_cursor(CursorType::Normal)
+                .map_err(|e| WMOperationError::Error(e.into()))?;
             // PlatformEvents::set_intercept_clicks(true)?;
         } else {
             Platform::reset_cursor().map_err(|e| WMOperationError::Error(e.into()))?;

@@ -1,9 +1,10 @@
 use crate::layouts::{LayoutResult, WindowLayout};
 use crate::platform::traits::PlatformImpl;
 use crate::platform::{Bounds, MouseButtons, Platform, PlatformResult, Position, WindowId};
-use crate::resize_handle::ResizeHandle;
+use crate::resize_handle::{ResizeHandle, ResizeMode};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
+use crate::Config;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -120,6 +121,26 @@ impl Workspace {
         position: &Position,
         buttons: &MouseButtons,
     ) -> bool {
-        self.layout.resize_handle_moved(handle, position, buttons)
+        let config = Config::current();
+        let binds = config.resize_handle_resize_bindings.clone();
+        let mode = if binds.resize_evenly.matches_buttons(buttons) {
+            Some(ResizeMode::Evenly)
+        } else if binds.resize_before.matches_buttons(buttons) {
+            Some(ResizeMode::Before)
+        } else if binds.resize_after.matches_buttons(buttons) {
+            Some(ResizeMode::After)
+        } else if binds.resize_before_symmetric.matches_buttons(buttons) {
+            Some(ResizeMode::BeforeSymmetric)
+        } else if binds.resize_after_symmetric.matches_buttons(buttons) {
+            Some(ResizeMode::AfterSymmetric)
+        } else {
+            None
+        };
+
+        if let Some(mode) = mode {
+            self.layout.resize_handle_moved(handle, position, mode)
+        } else {
+            false
+        }
     }
 }

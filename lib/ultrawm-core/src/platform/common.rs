@@ -57,6 +57,8 @@ pub enum MouseButton {
     Left,
     Right,
     Middle,
+    Button4,
+    Button5,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -79,7 +81,7 @@ impl MouseButtons {
         self.buttons.contains(button)
     }
 
-    pub fn contains_all(&self, other: &MouseButtons) -> bool {
+    pub fn matches(&self, other: &MouseButtons) -> bool {
         other.buttons.iter().all(|button| self.contains(button))
             && self.buttons.len() == other.buttons.len()
     }
@@ -99,6 +101,10 @@ impl MouseButtons {
             self.buttons.remove(button);
         }
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &MouseButton> {
+        self.buttons.iter()
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -113,11 +119,15 @@ impl Keys {
         }
     }
 
+    pub fn any(&self) -> bool {
+        self.keys.len() > 0
+    }
+
     pub fn contains(&self, key: &KeyCode) -> bool {
         self.keys.contains(key)
     }
 
-    pub fn contains_all(&self, other: &Keys) -> bool {
+    pub fn matches(&self, other: &Keys) -> bool {
         other.keys.iter().all(|key| self.contains(key)) && self.keys.len() == other.keys.len()
     }
 
@@ -135,6 +145,10 @@ impl Keys {
         } else {
             self.keys.remove(key);
         }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &KeyCode> {
+        self.keys.iter()
     }
 }
 

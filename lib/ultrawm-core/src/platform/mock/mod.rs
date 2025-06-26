@@ -13,6 +13,9 @@ unsafe impl PlatformEventsImpl for MockPlatformEvents {
     unsafe fn initialize(_dispatcher: EventDispatcher) -> PlatformResult<()> {
         Ok(())
     }
+    unsafe fn finalize() -> PlatformResult<()> {
+        Ok(())
+    }
     fn set_intercept_clicks(_intercept: bool) -> PlatformResult<()> {
         Ok(())
     }
@@ -32,7 +35,7 @@ impl PlatformImpl for MockPlatform {
         Ok(Position { x: 0, y: 0 })
     }
 
-    fn hide_resize_cursor() -> PlatformResult<()> {
+    fn set_cursor(_cursor_type: crate::platform::CursorType) -> PlatformResult<()> {
         Ok(())
     }
 
@@ -45,6 +48,13 @@ impl PlatformImpl for MockPlatform {
     }
 
     fn end_window_bounds_batch() -> PlatformResult<()> {
+        Ok(())
+    }
+
+    fn simulate_mouse_click(
+        _position: Position,
+        _button: crate::platform::MouseButton,
+    ) -> PlatformResult<()> {
         Ok(())
     }
 }
