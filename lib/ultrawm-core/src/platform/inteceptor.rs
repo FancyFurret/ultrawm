@@ -1,6 +1,6 @@
 use crate::platform::traits::PlatformImpl;
 use crate::platform::{
-    MouseButton, Platform, PlatformEvent, PlatformEvents, PlatformEventsImpl, PlatformResult,
+    MouseButton, Platform, PlatformEvents, PlatformEventsImpl, PlatformResult, WMEvent,
 };
 use log::error;
 use std::collections::{HashMap, HashSet};
@@ -109,9 +109,9 @@ impl Interceptor {
             .unwrap_or(false)
     }
 
-    pub fn handle_event(event: &PlatformEvent) -> PlatformResult<()> {
+    pub fn handle_event(event: &WMEvent) -> PlatformResult<()> {
         match event {
-            PlatformEvent::MouseDown(_pos, button) => {
+            WMEvent::MouseDown(_pos, button) => {
                 // Track button down state for all intercepted buttons
                 if Self::has_active_requests_for_button(button) {
                     if let Ok(mut states) = BUTTON_STATES.lock() {
@@ -119,7 +119,7 @@ impl Interceptor {
                     }
                 }
             }
-            PlatformEvent::MouseUp(pos, button) => {
+            WMEvent::MouseUp(pos, button) => {
                 let should_replay = {
                     let mut handled = HANDLED_BUTTONS.lock().unwrap();
                     let was_handled = handled.contains(button);

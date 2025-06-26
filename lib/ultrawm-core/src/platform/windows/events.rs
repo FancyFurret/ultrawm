@@ -1,7 +1,7 @@
 use crate::platform::windows::{window_is_manageable, WindowsPlatformWindow};
 use crate::platform::{
-    EventDispatcher, MouseButton, PlatformEvent, PlatformEventsImpl, PlatformResult,
-    PlatformWindowImpl, Position, WindowId,
+    EventDispatcher, MouseButton, PlatformEventsImpl, PlatformResult, PlatformWindowImpl, Position,
+    WMEvent, WindowId,
 };
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -151,18 +151,18 @@ unsafe extern "system" fn win_event_hook_proc(
     let window = WindowsPlatformWindow::new(hwnd).unwrap();
 
     let event = match event {
-        EVENT_SYSTEM_MOVESIZESTART => PlatformEvent::WindowTransformStarted(window.id()),
-        EVENT_SYSTEM_MINIMIZESTART => PlatformEvent::WindowHidden(window.id()),
-        EVENT_SYSTEM_MINIMIZEEND => PlatformEvent::WindowShown(window.id()),
-        EVENT_OBJECT_SHOW => PlatformEvent::WindowOpened(window.clone()),
-        EVENT_OBJECT_FOCUS => PlatformEvent::WindowFocused(window.id()),
-        EVENT_OBJECT_DESTROY => PlatformEvent::WindowClosed(window.id()),
+        EVENT_SYSTEM_MOVESIZESTART => WMEvent::WindowTransformStarted(window.id()),
+        EVENT_SYSTEM_MINIMIZESTART => WMEvent::WindowHidden(window.id()),
+        EVENT_SYSTEM_MINIMIZEEND => WMEvent::WindowShown(window.id()),
+        EVENT_OBJECT_SHOW => WMEvent::WindowOpened(window.clone()),
+        EVENT_OBJECT_FOCUS => WMEvent::WindowFocused(window.id()),
+        EVENT_OBJECT_DESTROY => WMEvent::WindowClosed(window.id()),
         _ => return,
     };
 
     // If it's a show event, make sure the window is manageable
     // The WM will automatically ignore unmanaged windows for other events
-    if let PlatformEvent::WindowOpened(window) = &event {
+    if let WMEvent::WindowOpened(window) = &event {
         if window_is_manageable(window).is_err() {
             return;
         }
@@ -186,27 +186,27 @@ unsafe extern "system" fn mouse_hook_proc(
     let position = Position::new(position.x, position.y);
 
     let event = match w_param.0 as u32 {
-        WM_LBUTTONDOWN => PlatformEvent::MouseDown(position, MouseButton::Left),
-        WM_LBUTTONUP => PlatformEvent::MouseUp(position, MouseButton::Left),
-        WM_RBUTTONDOWN => PlatformEvent::MouseDown(position, MouseButton::Right),
-        WM_RBUTTONUP => PlatformEvent::MouseUp(position, MouseButton::Right),
-        WM_MBUTTONDOWN => PlatformEvent::MouseDown(position, MouseButton::Middle),
-        WM_MBUTTONUP => PlatformEvent::MouseUp(position, MouseButton::Middle),
+        WM_LBUTTONDOWN => WMEvent::MouseDown(position, MouseButton::Left),
+        WM_LBUTTONUP => WMEvent::MouseUp(position, MouseButton::Left),
+        WM_RBUTTONDOWN => WMEvent::MouseDown(position, MouseButton::Right),
+        WM_RBUTTONUP => WMEvent::MouseUp(position, MouseButton::Right),
+        WM_MBUTTONDOWN => WMEvent::MouseDown(position, MouseButton::Middle),
+        WM_MBUTTONUP => WMEvent::MouseUp(position, MouseButton::Middle),
         WM_XBUTTONDOWN => {
             if let Some(button) = map_xbutton_to_button(l_param) {
-                PlatformEvent::MouseDown(position, button)
+                WMEvent::MouseDown(position, button)
             } else {
                 return CallNextHookEx(None, n_code, w_param, l_param);
             }
         }
         WM_XBUTTONUP => {
             if let Some(button) = map_xbutton_to_button(l_param) {
-                PlatformEvent::MouseUp(position, button)
+                WMEvent::MouseUp(position, button)
             } else {
                 return CallNextHookEx(None, n_code, w_param, l_param);
             }
         }
-        WM_MOUSEMOVE => PlatformEvent::MouseMoved(position),
+        WM_MOUSEMOVE => WMEvent::MouseMoved(position),
         _ => {
             return CallNextHookEx(None, n_code, w_param, l_param);
         }
@@ -214,9 +214,7 @@ unsafe extern "system" fn mouse_hook_proc(
 
     // Check if we should ignore this event due to simulated click
     let button = match &event {
-        PlatformEvent::MouseDown(_, button) | PlatformEvent::MouseUp(_, button) => {
-            Some(button.clone())
-        }
+        WMEvent::MouseDown(_, button) | WMEvent::MouseUp(_, button) => Some(button.clone()),
         _ => None,
     };
 
@@ -254,8 +252,8 @@ unsafe extern "system" fn keyboard_hook_proc(
         let keycode = map_vk_to_keycode(vk_code);
         if let Some(keycode) = keycode {
             let event = match w_param.0 as u32 {
-                WM_KEYDOWN | WM_SYSKEYDOWN => PlatformEvent::KeyDown(keycode),
-                WM_KEYUP | WM_SYSKEYUP => PlatformEvent::KeyUp(keycode),
+                WM_KEYDOWN | WM_SYSKEYDOWN => WMEvent::KeyDown(keycode),
+                WM_KEYUP | WM_SYSKEYUP => WMEvent::KeyUp(keycode),
                 _ => return unsafe { CallNextHookEx(None, n_code, w_param, l_param) },
             };
             EVENT_DISPATCHER.get().unwrap().send(event);

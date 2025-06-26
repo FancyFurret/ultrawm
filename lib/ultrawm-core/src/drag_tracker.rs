@@ -1,7 +1,6 @@
 use crate::layouts::ResizeDirection;
 use crate::platform::{
-    Bounds, MouseButton, Platform, PlatformEvent, PlatformImpl, PlatformWindowImpl, Position,
-    WindowId,
+    Bounds, MouseButton, Platform, PlatformImpl, PlatformWindowImpl, Position, WMEvent, WindowId,
 };
 use crate::window::WindowRef;
 use crate::wm::WindowManager;
@@ -43,13 +42,9 @@ impl WindowDragTracker {
         }
     }
 
-    pub fn handle_event(
-        &mut self,
-        event: &PlatformEvent,
-        wm: &WindowManager,
-    ) -> Option<WindowDragEvent> {
+    pub fn handle_event(&mut self, event: &WMEvent, wm: &WindowManager) -> Option<WindowDragEvent> {
         match event {
-            PlatformEvent::WindowTransformStarted(id) => {
+            WMEvent::WindowTransformStarted(id) => {
                 if !self.left_mouse_down || self.current_drag.is_some() {
                     return None;
                 }
@@ -65,10 +60,10 @@ impl WindowDragTracker {
                     ),
                 });
             }
-            PlatformEvent::MouseDown(_, MouseButton::Left) => {
+            WMEvent::MouseDown(_, MouseButton::Left) => {
                 self.left_mouse_down = true;
             }
-            PlatformEvent::MouseUp(pos, MouseButton::Left) => {
+            WMEvent::MouseUp(pos, MouseButton::Left) => {
                 self.left_mouse_down = false;
 
                 if self.current_drag.is_none() {
@@ -82,7 +77,7 @@ impl WindowDragTracker {
                     drag.drag_type?,
                 ));
             }
-            PlatformEvent::MouseMoved(pos) => {
+            WMEvent::MouseMoved(pos) => {
                 if self.current_drag.is_none() {
                     return None;
                 }

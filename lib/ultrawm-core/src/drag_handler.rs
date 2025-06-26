@@ -1,6 +1,6 @@
 use crate::drag_tracker::{WindowDragEvent, WindowDragTracker, WindowDragType};
 use crate::event_loop_wm::WMOperationResult;
-use crate::platform::{PlatformEvent, Position, WindowId};
+use crate::platform::{Position, WMEvent, WindowId};
 use crate::tile_preview_handler::TilePreviewHandler;
 use crate::wm::WindowManager;
 
@@ -23,7 +23,7 @@ impl WindowMoveHandler {
 
     pub fn handle_event(
         &mut self,
-        event: &PlatformEvent,
+        event: &WMEvent,
         wm: &mut WindowManager,
     ) -> WMOperationResult<bool> {
         match self.drag_tracker.handle_event(&event, &wm) {

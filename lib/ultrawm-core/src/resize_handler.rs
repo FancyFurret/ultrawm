@@ -4,7 +4,7 @@ use crate::overlay_window::{
     OverlayWindow, OverlayWindowBackgroundStyle, OverlayWindowBorderStyle, OverlayWindowConfig,
 };
 use crate::platform::traits::PlatformImpl;
-use crate::platform::{Bounds, CursorType, MouseButtons, Platform, PlatformEvent, Position};
+use crate::platform::{Bounds, CursorType, MouseButtons, Platform, Position, WMEvent};
 use crate::resize_handle::ResizeHandle;
 use crate::resize_handle_tracker::{HandleDragEvent, HandleDragTracker};
 use crate::wm::WindowManager;
@@ -60,7 +60,7 @@ impl WindowResizeHandler {
 
     pub fn handle_event(
         &mut self,
-        event: &PlatformEvent,
+        event: &WMEvent,
         wm: &mut WindowManager,
     ) -> WMOperationResult<bool> {
         if !self.handles_enabled {
@@ -68,7 +68,7 @@ impl WindowResizeHandler {
         }
 
         match &event {
-            PlatformEvent::MouseMoved(pos) => self.mouse_moved(pos, wm),
+            WMEvent::MouseMoved(pos) => self.mouse_moved(pos, wm),
             _ => Ok(()),
         }?;
 

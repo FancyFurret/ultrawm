@@ -4,7 +4,7 @@ use crate::window_area_handler::WindowAreaHandler;
 use crate::wm::WMError;
 use crate::{
     event_loop_main::EventLoopMain,
-    platform::{inteceptor::Interceptor, EventBridge, PlatformEvent},
+    platform::{inteceptor::Interceptor, EventBridge, WMEvent},
     wm::WindowManager,
     UltraWMResult,
 };
@@ -36,11 +36,11 @@ impl EventLoopWM {
         let mut window_area_handler = WindowAreaHandler::new().await;
 
         while let Some(event) = bridge.next_event().await {
-            if matches!(event, PlatformEvent::Shutdown) {
+            if matches!(event, WMEvent::Shutdown) {
                 break;
             }
 
-            if matches!(event, PlatformEvent::ConfigChanged) {
+            if matches!(event, WMEvent::ConfigChanged) {
                 info!("Reloading config...");
                 move_handler = WindowMoveHandler::new().await;
                 resize_handler = WindowResizeHandler::new().await;
@@ -55,15 +55,15 @@ impl EventLoopWM {
             });
 
             match &event {
-                PlatformEvent::WindowOpened(window) => {
+                WMEvent::WindowOpened(window) => {
                     wm.track_window(window.clone()).unwrap_or_else(|_| {
                         warn!("Could not track window");
                     });
                 }
-                PlatformEvent::WindowShown(_) => {
+                WMEvent::WindowShown(_) => {
                     // TODO: If the window was hidden, then bring it back to where it was
                 }
-                PlatformEvent::WindowClosed(id) | PlatformEvent::WindowHidden(id) => {
+                WMEvent::WindowClosed(id) | WMEvent::WindowHidden(id) => {
                     // TODO: Check if manageable
                     wm.remove_window(*id).unwrap_or_else(|_| {
                         // println!("Could not remove window");

@@ -1,4 +1,4 @@
-use crate::platform::{MouseButtons, PlatformEvent, Position};
+use crate::platform::{MouseButtons, Position, WMEvent};
 use crate::resize_handle::ResizeHandle;
 use crate::wm::WindowManager;
 
@@ -27,13 +27,9 @@ impl HandleDragTracker {
         }
     }
 
-    pub fn handle_event(
-        &mut self,
-        event: &PlatformEvent,
-        wm: &WindowManager,
-    ) -> Option<HandleDragEvent> {
+    pub fn handle_event(&mut self, event: &WMEvent, wm: &WindowManager) -> Option<HandleDragEvent> {
         match event {
-            PlatformEvent::MouseMoved(pos) => {
+            WMEvent::MouseMoved(pos) => {
                 if self.dragging {
                     let handle = self.active_handle.clone()?;
                     return Some(HandleDragEvent::Drag(
@@ -43,7 +39,7 @@ impl HandleDragTracker {
                     ));
                 }
             }
-            PlatformEvent::MouseDown(pos, button) => {
+            WMEvent::MouseDown(pos, button) => {
                 self.current_buttons.update_button(button, true);
 
                 if self.dragging {
@@ -63,7 +59,7 @@ impl HandleDragTracker {
                     ));
                 }
             }
-            PlatformEvent::MouseUp(pos, button) => {
+            WMEvent::MouseUp(pos, button) => {
                 self.current_buttons.update_button(button, false);
 
                 if self.dragging && !self.any_button_pressed() {

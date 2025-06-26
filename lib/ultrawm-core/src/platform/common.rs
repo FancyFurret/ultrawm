@@ -34,7 +34,7 @@ impl From<()> for PlatformError {
 pub type PlatformResult<T> = Result<T, PlatformError>;
 
 #[derive(Debug)]
-pub enum PlatformEvent {
+pub enum WMEvent {
     /// A new window has been opened. *If needed*, can also be sent when a window is shown after
     /// being hidden.
     WindowOpened(PlatformWindow),

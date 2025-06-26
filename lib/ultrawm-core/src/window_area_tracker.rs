@@ -1,6 +1,6 @@
 use crate::config::WindowAreaBindings;
 use crate::modified_mouse_keybind_tracker::{KeybindEvent, ModifiedMouseKeybindTracker};
-use crate::platform::{Bounds, PlatformEvent, Position, WindowId};
+use crate::platform::{Bounds, Position, WMEvent, WindowId};
 use crate::window::WindowRef;
 use crate::wm::WindowManager;
 use crate::Config;
@@ -67,7 +67,7 @@ impl WindowAreaTracker {
 
     pub fn handle_event(
         &mut self,
-        event: &PlatformEvent,
+        event: &WMEvent,
         wm: &WindowManager,
     ) -> Vec<WindowAreaDragEvent> {
         // Call all bindings so they can track their state properly, collect and filter results
@@ -116,7 +116,7 @@ impl WindowAreaTracker {
     }
 
     fn handle_binding(
-        event: &PlatformEvent,
+        event: &WMEvent,
         binding: &mut ModifiedMouseKeybindTracker,
         drag_type: WindowAreaDragType,
         wm: &WindowManager,

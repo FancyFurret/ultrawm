@@ -5,7 +5,7 @@ use crate::event_loop_main::EventLoopMain;
 use crate::event_loop_wm::EventLoopWM;
 use crate::platform::inteceptor::Interceptor;
 use crate::platform::{
-    EventBridge, EventDispatcher, PlatformError, PlatformEvent, PlatformEvents, PlatformEventsImpl,
+    EventBridge, EventDispatcher, PlatformError, PlatformEvents, PlatformEventsImpl, WMEvent,
 };
 use log::error;
 use std::sync::mpsc;
@@ -57,7 +57,7 @@ pub fn start_with_config(config: Config) -> UltraWMResult<()> {
 pub fn load_config(config: Config) -> UltraWMResult<()> {
     Config::set_config(config);
     if let Some(dispatcher) = GLOBAL_EVENT_DISPATCHER.get().cloned() {
-        dispatcher.send(PlatformEvent::ConfigChanged);
+        dispatcher.send(WMEvent::ConfigChanged);
     }
 
     Ok(())
@@ -65,7 +65,7 @@ pub fn load_config(config: Config) -> UltraWMResult<()> {
 
 pub fn shutdown() {
     if let Some(dispatcher) = GLOBAL_EVENT_DISPATCHER.get().cloned() {
-        dispatcher.send(PlatformEvent::Shutdown);
+        dispatcher.send(WMEvent::Shutdown);
     }
 }
 

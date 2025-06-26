@@ -1,7 +1,7 @@
 use crate::event_loop_wm::{WMOperationError, WMOperationResult};
 use crate::layouts::container_tree::ResizeDirection;
 use crate::platform::traits::PlatformImpl;
-use crate::platform::{Bounds, CursorType, Platform, PlatformEvent, Position, WindowId};
+use crate::platform::{Bounds, CursorType, Platform, Position, WMEvent, WindowId};
 use crate::tile_preview_handler::TilePreviewHandler;
 use crate::window_area_tracker::{WindowAreaDragEvent, WindowAreaDragType, WindowAreaTracker};
 use crate::wm::WindowManager;
@@ -28,7 +28,7 @@ impl WindowAreaHandler {
 
     pub fn handle_event(
         &mut self,
-        event: &PlatformEvent,
+        event: &WMEvent,
         wm: &mut WindowManager,
     ) -> WMOperationResult<bool> {
         let events = self.tracker.handle_event(event, wm);

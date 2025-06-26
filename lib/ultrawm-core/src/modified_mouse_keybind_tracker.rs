@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crate::config::ModifiedMouseKeybind;
 use crate::platform::{
     inteceptor::{InterceptionRequest, Interceptor},
-    Keys, MouseButton, MouseButtons, PlatformEvent, Position,
+    Keys, MouseButton, MouseButtons, Position, WMEvent,
 };
 use log::error;
 
@@ -44,29 +44,29 @@ impl ModifiedMouseKeybindTracker {
         }
     }
 
-    pub fn handle_event(&mut self, event: &PlatformEvent) -> Option<KeybindEvent> {
+    pub fn handle_event(&mut self, event: &WMEvent) -> Option<KeybindEvent> {
         match event {
-            PlatformEvent::KeyDown(key) => {
+            WMEvent::KeyDown(key) => {
                 self.current_keys.add(key);
                 self.update_interception_state();
                 None
             }
-            PlatformEvent::KeyUp(key) => {
+            WMEvent::KeyUp(key) => {
                 self.current_keys.remove(key);
                 self.update_interception_state();
                 None
             }
-            PlatformEvent::MouseDown(pos, button) => {
+            WMEvent::MouseDown(pos, button) => {
                 self.current_buttons.add(button);
                 self.update_interception_state();
                 self.update_keybind_state(pos)
             }
-            PlatformEvent::MouseUp(pos, button) => {
+            WMEvent::MouseUp(pos, button) => {
                 self.current_buttons.remove(button);
                 self.update_interception_state();
                 self.update_keybind_state(pos)
             }
-            PlatformEvent::MouseMoved(pos) => {
+            WMEvent::MouseMoved(pos) => {
                 if !self.active {
                     None
                 } else {
