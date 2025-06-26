@@ -143,4 +143,9 @@ impl Workspace {
             false
         }
     }
+
+    pub fn config_changed(&mut self) -> PlatformResult<()> {
+        self.layout.config_changed();
+        self.flush_windows()
+    }
 }

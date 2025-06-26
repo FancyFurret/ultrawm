@@ -45,8 +45,6 @@ pub struct WindowManager {
 
 impl WindowManager {
     pub fn new() -> PlatformResult<Self> {
-        let _config = Config::current();
-
         let displays = Platform::list_all_displays()?;
 
         // For now, just make 1 partition per display. Will be configurable later.
@@ -345,5 +343,12 @@ impl WindowManager {
 
     pub fn all_windows(&self) -> impl Iterator<Item = &WindowRef> {
         self.windows.values()
+    }
+
+    pub fn config_changed(&mut self) -> PlatformResult<()> {
+        for workspace in self.workspaces.values_mut() {
+            workspace.config_changed()?;
+        }
+        Ok(())
     }
 }

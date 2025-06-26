@@ -124,10 +124,10 @@ impl Display for InputCombo {
             parts.push("mmb");
         }
         if self.buttons.contains(&MouseButton::Button4) {
-            parts.push("button4");
+            parts.push("back");
         }
         if self.buttons.contains(&MouseButton::Button5) {
-            parts.push("button5");
+            parts.push("forward");
         }
         write!(f, "{}", parts.join("+"))
     }

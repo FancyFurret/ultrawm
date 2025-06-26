@@ -50,6 +50,9 @@ pub enum PlatformEvent {
     MouseMoved(Position),
     KeyDown(KeyCode),
     KeyUp(KeyCode),
+
+    Shutdown,
+    ConfigChanged,
 }
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]

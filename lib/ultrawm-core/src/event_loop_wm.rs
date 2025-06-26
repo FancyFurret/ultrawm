@@ -8,9 +8,7 @@ use crate::{
     wm::WindowManager,
     UltraWMResult,
 };
-use log::{error, trace, warn};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use log::{error, info, trace, warn};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -28,7 +26,7 @@ pub type WMOperationResult<T> = Result<T, WMOperationError>;
 pub struct EventLoopWM {}
 
 impl EventLoopWM {
-    pub async fn run(mut bridge: EventBridge, shutdown: Arc<AtomicBool>) -> UltraWMResult<()> {
+    pub async fn run(mut bridge: EventBridge) -> UltraWMResult<()> {
         trace!("Handling events...");
 
         let mut wm = WindowManager::new()?;
@@ -37,11 +35,20 @@ impl EventLoopWM {
         let mut resize_handler = WindowResizeHandler::new().await;
         let mut window_area_handler = WindowAreaHandler::new().await;
 
-        while !shutdown.load(Ordering::SeqCst) {
-            let event = bridge
-                .next_event()
-                .await
-                .ok_or("Could not get next event")?;
+        while let Some(event) = bridge.next_event().await {
+            if matches!(event, PlatformEvent::Shutdown) {
+                break;
+            }
+
+            if matches!(event, PlatformEvent::ConfigChanged) {
+                info!("Reloading config...");
+                move_handler = WindowMoveHandler::new().await;
+                resize_handler = WindowResizeHandler::new().await;
+                window_area_handler = WindowAreaHandler::new().await;
+                wm.config_changed().unwrap_or_else(|e| {
+                    error!("Could not reload config: {e}");
+                });
+            }
 
             Interceptor::handle_event(&event).unwrap_or_else(|e| {
                 error!("Interceptor error: {e}");

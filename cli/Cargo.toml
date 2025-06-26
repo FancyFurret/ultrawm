@@ -15,3 +15,4 @@ resvg = "0.37"
 clap = { version = "4.5.40", features = ["derive"] }
 log = "0.4"
 colored = "2.1"
+open = "5.0"

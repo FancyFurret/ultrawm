@@ -56,7 +56,7 @@ impl EventBridge {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EventDispatcher {
     sender: mpsc::UnboundedSender<PlatformEvent>,
 }

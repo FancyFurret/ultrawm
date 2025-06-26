@@ -76,8 +76,8 @@ impl Window {
         let mut bounds = self.bounds.borrow().clone();
         bounds.position.x += config.window_gap as i32 / 2;
         bounds.position.y += config.window_gap as i32 / 2;
-        bounds.size.width -= config.window_gap;
-        bounds.size.height -= config.window_gap;
+        bounds.size.width = (bounds.size.width as i32 - config.window_gap as i32).max(100) as u32;
+        bounds.size.height = (bounds.size.height as i32 - config.window_gap as i32).max(100) as u32;
         bounds
     }
 

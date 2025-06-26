@@ -702,6 +702,12 @@ impl WindowLayout for ContainerTree {
 
         result
     }
+
+    fn config_changed(&mut self) {
+        let bounds = Self::get_root_bounds(&self.bounds);
+        self.root.set_bounds(bounds);
+        self.root.recalculate();
+    }
 }
 
 #[cfg(test)]

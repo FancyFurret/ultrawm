@@ -4,11 +4,13 @@
 use crate::event_loop_main::EventLoopMain;
 use crate::event_loop_wm::EventLoopWM;
 use crate::platform::inteceptor::Interceptor;
-use crate::platform::{EventBridge, PlatformError, PlatformEvents, PlatformEventsImpl};
+use crate::platform::{
+    EventBridge, EventDispatcher, PlatformError, PlatformEvent, PlatformEvents, PlatformEventsImpl,
+};
 use log::error;
-use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
-use std::sync::Arc;
+use std::sync::OnceLock;
+use std::time::Duration;
 use std::{process, thread};
 
 mod animation;
@@ -37,6 +39,8 @@ mod workspace;
 
 pub use config::Config;
 
+static GLOBAL_EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
+
 pub fn version() -> &'static str {
     option_env!("VERSION").unwrap_or("v0.0.0-dev")
 }
@@ -45,20 +49,37 @@ pub fn reset_layout() -> UltraWMResult<()> {
     serialization::reset_layout().map_err(|_| "Failed to reset layout".into())
 }
 
-pub fn start_with_config(shutdown: Arc<AtomicBool>, config: Config) -> UltraWMResult<()> {
+pub fn start_with_config(config: Config) -> UltraWMResult<()> {
     Config::set_config(config);
-    start(shutdown)
+    start()
 }
 
-pub fn start(shutdown: Arc<AtomicBool>) -> UltraWMResult<()> {
+pub fn load_config(config: Config) -> UltraWMResult<()> {
+    Config::set_config(config);
+    if let Some(dispatcher) = GLOBAL_EVENT_DISPATCHER.get().cloned() {
+        dispatcher.send(PlatformEvent::ConfigChanged);
+    }
+
+    Ok(())
+}
+
+pub fn shutdown() {
+    if let Some(dispatcher) = GLOBAL_EVENT_DISPATCHER.get().cloned() {
+        dispatcher.send(PlatformEvent::Shutdown);
+    }
+}
+
+pub fn start() -> UltraWMResult<()> {
     let bridge = EventBridge::new();
     let dispatcher = bridge.dispatcher();
+
+    // Store the dispatcher globally for later use
+    GLOBAL_EVENT_DISPATCHER.set(dispatcher.clone()).unwrap();
 
     // Create a channel to signal when main thread is ready
     let (main_ready_tx, main_ready_rx) = mpsc::channel();
 
     // Spawn the WM thread but wait for main thread to be ready
-    let shutdown_wm = shutdown.clone();
     thread::spawn(move || {
         // Wait for signal that main thread is running
         if main_ready_rx.recv().is_err() {
@@ -66,18 +87,17 @@ pub fn start(shutdown: Arc<AtomicBool>) -> UltraWMResult<()> {
             process::exit(1);
         }
 
-        thread::sleep(std::time::Duration::from_millis(1000));
+        thread::sleep(Duration::from_millis(1000));
 
         let tk = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .unwrap();
 
-        tk.block_on(EventLoopWM::run(bridge, shutdown_wm))
-            .map_err(|e| {
-                error!("Error running UltraWM: {:?}", e);
-                process::exit(1);
-            })
+        tk.block_on(EventLoopWM::run(bridge)).map_err(|e| {
+            error!("Error running UltraWM: {:?}", e);
+            process::exit(1);
+        })
     });
 
     unsafe {

@@ -71,4 +71,6 @@ pub trait WindowLayout: Debug {
     }
 
     fn debug_layout(&self) -> String;
+
+    fn config_changed(&mut self) {}
 }

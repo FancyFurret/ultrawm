@@ -1,7 +1,5 @@
 use log::{error, info, trace, warn};
 use std::env;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use ultrawm_core::{config::Config, UltraWMResult};
 
 mod cli;
@@ -68,11 +66,8 @@ fn main() -> UltraWMResult<()> {
         config.persistence = false;
     }
 
-    let shutdown = Arc::new(AtomicBool::new(false));
-    let shutdown_clone = shutdown.clone();
-
     // Initialize tray icon
-    let _tray = match UltraWMTray::new(shutdown.clone()) {
+    let _tray = match UltraWMTray::new() {
         Ok(tray) => {
             trace!("Tray icon initialized successfully");
             Some(tray)
@@ -87,12 +82,12 @@ fn main() -> UltraWMResult<()> {
     // Set up Ctrl+C handler
     ctrlc::set_handler(move || {
         info!("Received Ctrl+C, shutting down...");
-        shutdown_clone.store(true, Ordering::SeqCst);
+        ultrawm_core::shutdown();
     })
     .expect("Error setting Ctrl+C handler");
 
     // Start the window manager with the loaded config
-    ultrawm_core::start_with_config(shutdown, config)?;
+    ultrawm_core::start_with_config(config)?;
 
     info!("UltraWM stopped");
     Ok(())

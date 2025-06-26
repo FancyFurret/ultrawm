@@ -85,7 +85,7 @@ impl Container {
         self.bounds.borrow().clone()
     }
 
-    fn set_bounds(&self, bounds: Bounds) {
+    pub fn set_bounds(&self, bounds: Bounds) {
         self.bounds.replace(bounds);
     }
 

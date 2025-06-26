@@ -9,6 +9,7 @@ pub struct Keybind<T: KeybindVariant> {
     combos: Vec<InputCombo>,
     _phantom: PhantomData<T>,
 }
+
 impl<T: KeybindVariant> Keybind<T> {
     pub fn combos(&self) -> &Vec<InputCombo> {
         &self.combos
@@ -75,8 +76,8 @@ impl KeybindVariant for MouseKeybindVariant {
 pub struct ModifiedMouseKeybindVariant;
 impl KeybindVariant for ModifiedMouseKeybindVariant {
     fn validate<E: serde::de::Error>(combo: &InputCombo) -> Result<(), E> {
-        if !combo.keys().any() {
-            return Err(E::custom("This keybind must contain at least one key"));
+        if !combo.buttons().any() {
+            return Err(E::custom("This keybind must contain at least one button"));
         }
 
         if combo.modifiers().len() == 0 {

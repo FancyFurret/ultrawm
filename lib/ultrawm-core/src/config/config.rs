@@ -10,6 +10,10 @@ use std::sync::RwLock;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
+    /// The path the config file was loaded from
+    #[serde(skip)]
+    pub config_path: Option<PathBuf>,
+
     /// Whether to save your layout and load it on startup
     pub persistence: bool,
     /// The number of pixels between windows
@@ -113,11 +117,13 @@ impl Config {
         let contents = fs::read_to_string(&path)
             .map_err(|e| format!("Failed to read config file '{}': {}", path.display(), e))?;
 
-        let config: Config = serde_yaml::from_str(&contents)
+        let mut config: Config = serde_yaml::from_str(&contents)
             .map_err(|e| format!("Failed to parse config file '{}': {}", path.display(), e))?;
 
+        config.config_path = Some(path.clone());
+
         // Save the config back to ensure all fields are present (fills in any missing fields with defaults)
-        if let Err(e) = config.save_to_file(&path) {
+        if let Err(e) = config.save_to_file(&path.clone()) {
             warn!("Failed to update config file with missing fields: {e}");
         }
 
@@ -234,6 +240,7 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            config_path: None,
             persistence: true,
             window_gap: 20,
             partition_gap: 40,
