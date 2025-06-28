@@ -103,7 +103,7 @@ impl Config {
         dirs::config_dir().map(|dir| dir.join("UltraWM").join("config.yaml"))
     }
 
-    pub fn load(config_path: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load(config_path: Option<&str>, save: bool) -> Result<Self, Box<dyn std::error::Error>> {
         let path = match config_path {
             Some(p) => PathBuf::from(p),
             None => {
@@ -125,8 +125,10 @@ impl Config {
         config.config_path = Some(path.clone());
 
         // Save the config back to ensure all fields are present (fills in any missing fields with defaults)
-        if let Err(e) = config.save_to_file(&path.clone()) {
-            warn!("Failed to update config file with missing fields: {e}");
+        if save {
+            if let Err(e) = config.save_to_file(&path.clone()) {
+                warn!("Failed to update config file with missing fields: {e}");
+            }
         }
 
         Ok(config)

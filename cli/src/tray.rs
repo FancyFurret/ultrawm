@@ -44,7 +44,7 @@ impl UltraWMTray {
             let path = Config::current().config_path.clone();
 
             if let Some(path) = path {
-                let config = Config::load(path.to_str());
+                let config = Config::load(path.to_str(), false);
                 if let Ok(config) = config {
                     ultrawm_core::load_config(config)
                         .unwrap_or_else(|e| warn!("Failed to load config: {:?}", e));

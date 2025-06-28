@@ -193,6 +193,10 @@ impl OverlayWindowAnimator {
                 self.handle_command(cmd, &mut running);
             }
 
+            if !running {
+                break;
+            }
+
             if self.is_animating() {
                 let now = Instant::now();
                 let elapsed = now.duration_since(last_frame_time);
@@ -208,10 +212,6 @@ impl OverlayWindowAnimator {
                     Ok(cmd) => self.handle_command(cmd, &mut running),
                     Err(_) => break,
                 }
-            }
-
-            if !running {
-                break;
             }
         }
     }

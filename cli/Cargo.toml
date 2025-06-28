@@ -16,3 +16,4 @@ clap = { version = "4.5.40", features = ["derive"] }
 log = "0.4.27"
 colored = "3.0.0"
 open = "5.3.2"
+notify = "8.0.0"

@@ -1,5 +1,7 @@
 use log::{error, info, trace, warn};
+use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::env;
+use std::path::PathBuf;
 use ultrawm_core::{config::Config, UltraWMResult};
 
 mod cli;
@@ -24,7 +26,7 @@ fn main() -> UltraWMResult<()> {
         Default::default()
     } else {
         let config_path = args.config_path.as_ref().map(|p| p.to_str().unwrap());
-        match Config::load(config_path) {
+        match Config::load(config_path, true) {
             Ok(config) => {
                 if let Some(path) = &args.config_path {
                     info!("Configuration loaded from: {}", path.display());
@@ -66,6 +68,19 @@ fn main() -> UltraWMResult<()> {
         config.persistence = false;
     }
 
+    // Set up config file watching if we have a config path
+    let _watcher = if let Some(path) = config.config_path.clone() {
+        match setup_config_watcher(path) {
+            Ok(watcher) => Some(watcher),
+            Err(e) => {
+                warn!("Failed to set up config file watcher: {:?}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     // Initialize tray icon
     let _tray = match UltraWMTray::new() {
         Ok(tray) => {
@@ -91,4 +106,38 @@ fn main() -> UltraWMResult<()> {
 
     info!("UltraWM stopped");
     Ok(())
+}
+
+fn setup_config_watcher(config_path: PathBuf) -> UltraWMResult<RecommendedWatcher> {
+    let config_path_clone = config_path.clone();
+    let mut watcher: RecommendedWatcher =
+        notify::recommended_watcher(move |res: Result<Event, notify::Error>| match res {
+            Ok(event) => match event.kind {
+                EventKind::Modify(_) | EventKind::Create(_) => {
+                    info!("Config file changed, reloading...");
+                    match Config::load(Some(config_path_clone.to_str().unwrap()), false) {
+                        Ok(new_config) => {
+                            ultrawm_core::load_config(new_config)
+                                .unwrap_or_else(|e| warn!("Failed to load config: {:?}", e));
+                        }
+                        Err(e) => {
+                            error!("Failed to reload config: {}", e);
+                            warn!("Keeping previous configuration");
+                        }
+                    }
+                }
+                EventKind::Remove(_) => {
+                    warn!("Config file was removed, keeping current configuration");
+                }
+                _ => {}
+            },
+            Err(e) => error!("File watcher error: {:?}", e),
+        })
+        .map_err(|e| format!("Failed to create file watcher: {:?}", e))?;
+
+    watcher
+        .watch(&config_path, RecursiveMode::NonRecursive)
+        .map_err(|e| format!("Failed to watch config file: {:?}", e))?;
+
+    Ok(watcher)
 }
