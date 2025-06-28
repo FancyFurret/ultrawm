@@ -114,7 +114,6 @@ fn setup_config_watcher(config_path: PathBuf) -> UltraWMResult<RecommendedWatche
         notify::recommended_watcher(move |res: Result<Event, notify::Error>| match res {
             Ok(event) => match event.kind {
                 EventKind::Modify(_) | EventKind::Create(_) => {
-                    info!("Config file changed, reloading...");
                     match Config::load(Some(config_path_clone.to_str().unwrap()), false) {
                         Ok(new_config) => {
                             ultrawm_core::load_config(new_config)
