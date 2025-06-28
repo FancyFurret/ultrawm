@@ -146,10 +146,14 @@ impl PlatformOverlayImpl for WindowsPlatformOverlay {
                 | WS_EX_NOACTIVATE.0 as i32
                 | WS_EX_TOPMOST.0 as i32;
 
-            ShowWindow(hwnd, SW_SHOW);
+            ShowWindow(hwnd, SW_SHOW)
+                .ok()
+                .map_err(|err| err.to_string())?;
             SetWindowLongW(hwnd, GWL_STYLE, new_style);
             SetWindowLongW(hwnd, GWL_EXSTYLE, new_ex_style);
-            ShowWindow(hwnd, SW_SHOW);
+            ShowWindow(hwnd, SW_SHOW)
+                .ok()
+                .map_err(|err| err.to_string())?;
 
             let dark_mode = 1;
             let _ = DwmSetWindowAttribute(

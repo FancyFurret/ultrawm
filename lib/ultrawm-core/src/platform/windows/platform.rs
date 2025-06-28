@@ -1,7 +1,5 @@
 use crate::platform::inteceptor::Interceptor;
-use crate::platform::windows::{
-    window_is_manageable, WindowsPlatformEvents, WindowsPlatformWindow,
-};
+use crate::platform::windows::{window_is_manageable, WindowsPlatformWindow};
 use crate::platform::{
     Bounds, CursorType, Display, DisplayId, MouseButton, PlatformImpl, PlatformResult,
     PlatformWindow, Position,

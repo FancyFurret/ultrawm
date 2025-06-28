@@ -46,6 +46,10 @@ impl NativeTransformHandler {
     ) -> WMOperationResult<()> {
         if drag_type == WindowDragType::Move {
             TilePreviewHandler::tile_on_drop(&mut self.preview, id, &position, wm)?;
+        } else if let WindowDragType::Resize(_) = drag_type {
+            let window = wm.get_window(id)?;
+            let bounds = window.platform_bounds();
+            wm.resize_window(id, &bounds)?;
         }
         Ok(())
     }
