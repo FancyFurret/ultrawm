@@ -1,3 +1,4 @@
+use crate::event_handlers::focus_on_hover_handler::FocusOnHoverHandler;
 use crate::event_handlers::mod_transform_handler::ModTransformHandler;
 use crate::event_handlers::native_transform_handler::NativeTransformHandler;
 use crate::event_handlers::resize_handle_handler::ResizeHandleHandler;
@@ -107,6 +108,7 @@ impl EventLoopWM {
             Box::new(NativeTransformHandler::new().await),
             Box::new(ResizeHandleHandler::new().await),
             Box::new(ModTransformHandler::new().await),
+            Box::new(FocusOnHoverHandler::new()),
         ]
     }
 }

@@ -96,6 +96,12 @@ impl UltraWMTray {
             |c, v| c.float_new_windows = v,
         )?;
 
+        tray_builder.register_config_check_item(
+            "Focus on Hover",
+            |c| c.focus_on_hover,
+            |c, v| c.focus_on_hover = v,
+        )?;
+
         tray_menu.append(&separator)?;
 
         tray_builder.register_item("Quit", || {

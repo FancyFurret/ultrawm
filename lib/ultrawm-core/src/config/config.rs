@@ -22,6 +22,8 @@ pub struct Config {
     pub partition_gap: u32,
     /// Whether to float windows by default when they are created
     pub float_new_windows: bool,
+    /// Whether to focus windows when the mouse hovers over them
+    pub focus_on_hover: bool,
     /// The number of frames per second for the tile preview animation
     pub tile_preview_fps: u32,
     /// The duration of the tile preview animation in milliseconds
@@ -181,6 +183,10 @@ impl Config {
         Self::current().float_new_windows
     }
 
+    pub fn focus_on_hover() -> bool {
+        Self::current().focus_on_hover
+    }
+
     pub fn tile_preview_fps() -> u32 {
         Self::current().tile_preview_fps
     }
@@ -245,6 +251,7 @@ impl Default for Config {
             window_gap: 20,
             partition_gap: 40,
             float_new_windows: true,
+            focus_on_hover: true,
             tile_preview_fps: 240,
             tile_preview_animation_ms: 150,
             tile_preview_fade_animate: true,

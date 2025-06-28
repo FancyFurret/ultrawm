@@ -55,7 +55,7 @@ impl PlatformOverlayImpl for MacOSPlatformOverlay {
     }
 
     fn set_window_bounds(window_id: WindowId, bounds: Bounds) -> PlatformResult<()> {
-        run_on_main_thread_blocking(move |_| {
+        run_on_main_thread_blocking(move || {
             let ns_window = get_ns_window_from_id(window_id).unwrap();
             let cg_rect: CGRect = bounds.into();
             let new_frame = NSRect::new(

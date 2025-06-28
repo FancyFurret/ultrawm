@@ -6,9 +6,11 @@ use std::mem;
 use std::sync::atomic::Ordering;
 use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
+use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 use windows::Win32::UI::WindowsAndMessaging::{
-    DeferWindowPos, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsIconic,
-    SetWindowPos, HDWP, SWP_NOACTIVATE, SWP_NOZORDER,
+    BringWindowToTop, DeferWindowPos, GetForegroundWindow, GetWindowRect, GetWindowTextW,
+    GetWindowThreadProcessId, IsIconic, SetForegroundWindow, SetWindowPos, ShowWindow, HDWP,
+    SWP_NOACTIVATE, SWP_NOZORDER, SW_RESTORE,
 };
 
 #[derive(Debug)]
@@ -228,6 +230,55 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
             }
         }
 
+        Ok(())
+    }
+
+    /// Windows 11 makes this more difficult than it needs to be...
+    /// https://www.reddit.com/r/dotnet/comments/1da3uec/issue_with_setforegroundhandle_with_windows_11/
+    fn focus(&self) -> PlatformResult<()> {
+        unsafe {
+            // First, restore the window if it's minimized
+            ShowWindow(self.hwnd, SW_RESTORE)
+                .ok()
+                .map_err(|e| format!("Failed to restore window: {}", e))?;
+
+            // Get thread IDs
+            let current_thread_id = GetCurrentThreadId();
+            let foreground_window = GetForegroundWindow();
+            let foreground_thread_id = GetWindowThreadProcessId(foreground_window, None);
+            let dest_thread_id = GetWindowThreadProcessId(self.hwnd, None);
+
+            let attached_current = if current_thread_id != dest_thread_id {
+                AttachThreadInput(current_thread_id, dest_thread_id, true).as_bool()
+            } else {
+                false // Don't need to attach to ourselves
+            };
+
+            let attached_foreground = if foreground_thread_id != dest_thread_id {
+                AttachThreadInput(foreground_thread_id, dest_thread_id, true).as_bool()
+            } else {
+                false // Don't need to attach if already the same thread
+            };
+
+            // Bring window to foreground
+            BringWindowToTop(self.hwnd)
+                .map_err(|e| format!("Failed to bring window to top: {}", e))?;
+            SetForegroundWindow(self.hwnd)
+                .ok()
+                .map_err(|e| format!("Failed to set foreground window: {}", e))?;
+
+            // Detach threads
+            if attached_current {
+                AttachThreadInput(current_thread_id, dest_thread_id, false)
+                    .ok()
+                    .map_err(|e| format!("Failed to detach thread: {}", e))?;
+            }
+            if attached_foreground {
+                AttachThreadInput(foreground_thread_id, dest_thread_id, false)
+                    .ok()
+                    .map_err(|e| format!("Failed to detach thread: {}", e))?;
+            }
+        }
         Ok(())
     }
 }

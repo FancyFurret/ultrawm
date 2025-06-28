@@ -75,4 +75,5 @@ where
     fn visible(&self) -> bool;
 
     fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()>;
+    fn focus(&self) -> PlatformResult<()>;
 }

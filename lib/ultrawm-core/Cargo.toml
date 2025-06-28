@@ -25,6 +25,7 @@ objc2-foundation = "0.3.1"
 objc2-core-foundation = "0.3.1"
 objc2-quartz-core = "0.3.1"
 block2 = "0.6.1"
+osakit = "0.3.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.61.3", features = [
@@ -39,6 +40,7 @@ windows = { version = "0.61.3", features = [
     "Win32_UI_Accessibility",
     "Win32_System_Com",
     "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
     "UI_Composition",
     "UI_Composition_Desktop",
     "UI_Composition_Effects",

@@ -11,6 +11,8 @@ mod resize_handle_tracker;
 pub mod mod_transform_handler;
 mod mod_transform_tracker;
 
+pub mod focus_on_hover_handler;
+
 pub trait EventHandler {
     /// Returns true if events currently being handled
     fn handle_event(&mut self, event: &WMEvent, wm: &mut WindowManager) -> WMOperationResult<bool>;

@@ -133,4 +133,7 @@ impl PlatformWindowImpl for MockPlatformWindow {
         self.set_bounds_calls.lock().unwrap().push(bounds.clone());
         Ok(())
     }
+    fn focus(&self) -> PlatformResult<()> {
+        Ok(())
+    }
 }

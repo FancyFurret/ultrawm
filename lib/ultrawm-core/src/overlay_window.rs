@@ -1,5 +1,5 @@
 use crate::animation::{ease_in_out_cubic, Animator};
-use crate::event_loop_main::run_on_main_thread_blocking;
+use crate::event_loop_main::get_event_loop_blocking;
 use crate::platform::{Bounds, PlatformOverlay, PlatformOverlayImpl, PlatformResult, WindowId};
 use log::{error, warn};
 use skia_safe::{surfaces, Color, Paint, PaintStyle, RRect, Rect, Surface};
@@ -84,7 +84,7 @@ impl OverlayWindow {
                 .with_resizable(false);
 
             let config_clone_2 = config_clone.clone();
-            let window = run_on_main_thread_blocking(move |event_loop| {
+            let window = get_event_loop_blocking(move |event_loop| {
                 let window = match event_loop.create_window(attributes) {
                     Ok(w) => w,
                     Err(e) => {

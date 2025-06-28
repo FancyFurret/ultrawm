@@ -1,68 +1,104 @@
 use crate::UltraWMResult;
-use log::trace;
+use std::cell::RefCell;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::time::Duration;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
+use winit::platform::pump_events::{EventLoopExtPumpEvents, PumpStatus};
 use winit::window::{Window, WindowId};
 
 #[allow(clippy::type_complexity)]
 pub enum MainThreadMessage {
     RunOnMainThread {
+        task: Box<dyn FnOnce() + Send>,
+    },
+    GetEventLoop {
         task: Box<dyn FnOnce(&ActiveEventLoop) + Send>,
     },
     Shutdown,
 }
 
-pub static EVENT_LOOP_PROXY: std::sync::OnceLock<EventLoopProxy<MainThreadMessage>> =
+static MAIN_THREAD_TASK_SENDER: std::sync::OnceLock<Sender<MainThreadMessage>> =
     std::sync::OnceLock::new();
+
+static EVENT_LOOP_PROXY: std::sync::OnceLock<EventLoopProxy<MainThreadMessage>> =
+    std::sync::OnceLock::new();
+
+thread_local! {
+    static MAIN_THREAD_TASK_RECEIVER: RefCell<Option<Receiver<MainThreadMessage>>> = RefCell::new(None);
+}
 
 pub async fn run_on_main_thread<F, R>(f: F) -> R
 where
-    F: FnOnce(&ActiveEventLoop) -> R + Send + 'static,
+    F: FnOnce() -> R + Send + 'static,
     R: Send + 'static,
 {
-    // Ensure we have the proxy
-    let proxy = EVENT_LOOP_PROXY
+    let s = MAIN_THREAD_TASK_SENDER
         .get()
-        .expect("Event loop has not been started yet")
-        .clone();
+        .expect("Event loop has not been started yet");
+    let (result_tx, result_rx) = tokio::sync::oneshot::channel::<R>();
 
-    // Channel to get the result back.
-    let (tx, rx) = tokio::sync::oneshot::channel::<R>();
-
-    // Wrap the user closure so that it executes on the main thread and sends
-    // the result back.
-    let task = Box::new(move |event_loop: &ActiveEventLoop| {
-        let result = f(event_loop);
-        let _ = tx.send(result);
+    let task = Box::new(move || {
+        let result = f();
+        let _ = result_tx.send(result);
     });
 
-    // Send the message – ignore errors because they can only happen if the
-    // event loop already exited.
-    let _ = proxy.send_event(MainThreadMessage::RunOnMainThread { task });
+    s.send(MainThreadMessage::RunOnMainThread { task })
+        .expect("Failed to send task to main thread");
 
-    // Await the response.
-    rx.await.expect("run_on_main_thread task was cancelled")
+    result_rx
+        .await
+        .expect("run_on_main_thread task was cancelled")
 }
 
 pub fn run_on_main_thread_blocking<F, R>(f: F) -> R
 where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    let s = MAIN_THREAD_TASK_SENDER
+        .get()
+        .expect("Event loop has not been started yet");
+
+    let (result_tx, result_rx) = std::sync::mpsc::channel::<R>();
+
+    let task = Box::new(move || {
+        let result = f();
+        let _ = result_tx.send(result);
+    });
+
+    s.send(MainThreadMessage::RunOnMainThread { task })
+        .expect("Failed to send task to main thread");
+
+    result_rx
+        .recv()
+        .expect("run_on_main_thread task was cancelled")
+}
+
+pub fn get_event_loop_blocking<F, R>(f: F) -> R
+where
     F: FnOnce(&ActiveEventLoop) -> R + Send + 'static,
     R: Send + 'static,
 {
-    let (tx, rx) = std::sync::mpsc::channel();
     let proxy = EVENT_LOOP_PROXY
         .get()
-        .expect("Event loop has not been started yet")
-        .clone();
+        .expect("Event loop has not been started yet");
 
-    let task = Box::new(move |event_loop: &ActiveEventLoop| {
-        let result = f(event_loop);
-        let _ = tx.send(result);
+    let (result_tx, result_rx) = std::sync::mpsc::channel::<R>();
+
+    let task = Box::new(move |e: &ActiveEventLoop| {
+        let result = f(e);
+        let _ = result_tx.send(result);
     });
 
-    let _ = proxy.send_event(MainThreadMessage::RunOnMainThread { task });
-    rx.recv().expect("run_on_main_thread task was cancelled")
+    proxy
+        .send_event(MainThreadMessage::GetEventLoop { task })
+        .unwrap_or_else(|_| panic!("Failed to send event loop"));
+
+    result_rx
+        .recv()
+        .expect("get_event_loop_blocking task was cancelled")
 }
 
 pub struct EventLoopMain {}
@@ -70,23 +106,68 @@ pub struct EventLoopMain {}
 impl EventLoopMain {
     pub fn run() -> UltraWMResult<()> {
         // Create the event loop with our custom user-event type.
-        let event_loop = EventLoop::with_user_event().build().unwrap();
-        // Store the proxy so that other threads can send messages.
+        let mut event_loop = EventLoop::with_user_event().build().unwrap();
+
         EVENT_LOOP_PROXY
             .set(event_loop.create_proxy())
             .map_err(|_| "Event loop proxy already initialized")?;
-        event_loop.set_control_flow(ControlFlow::Wait);
 
+        let (task_tx, task_rx) = channel();
+        MAIN_THREAD_TASK_SENDER
+            .set(task_tx)
+            .map_err(|_| "Main thread tasks already initialized")?;
+
+        MAIN_THREAD_TASK_RECEIVER.with(|cell| {
+            *cell.borrow_mut() = Some(task_rx);
+        });
+
+        event_loop.set_control_flow(ControlFlow::Wait);
         let mut app = App::default();
-        event_loop
-            .run_app(&mut app)
-            .map_err(|_| "Failed to start event loop")?;
+
+        loop {
+            let exit = event_loop.pump_app_events(Some(Duration::ZERO), &mut app);
+            if matches!(exit, PumpStatus::Exit(_)) {
+                break;
+            }
+
+            // Handle main thread messages ourselves instead of through winit
+            // This prevents issues where we may trigger a new window event
+            // while winit is already processing one
+            if Self::process_main_thread_tasks() {
+                break;
+            }
+
+            std::thread::sleep(Duration::from_millis(1));
+        }
+
         Ok(())
     }
 
+    fn process_main_thread_tasks() -> bool {
+        let mut shutdown = false;
+        MAIN_THREAD_TASK_RECEIVER.with(|cell| {
+            if let Some(task_rx) = cell.borrow_mut().as_mut() {
+                while let Ok(message) = task_rx.try_recv() {
+                    match message {
+                        MainThreadMessage::RunOnMainThread { task } => {
+                            task();
+                        }
+                        MainThreadMessage::Shutdown => {
+                            shutdown = true;
+                            return;
+                        }
+                        _ => (),
+                    }
+                }
+            }
+        });
+
+        shutdown
+    }
+
     pub fn shutdown() {
-        if let Some(proxy) = EVENT_LOOP_PROXY.get() {
-            let _ = proxy.send_event(MainThreadMessage::Shutdown);
+        if let Some(s) = MAIN_THREAD_TASK_SENDER.get() {
+            let _ = s.send(MainThreadMessage::Shutdown);
         }
     }
 }
@@ -106,19 +187,16 @@ impl ApplicationHandler<MainThreadMessage> for App {
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: MainThreadMessage) {
         match event {
-            MainThreadMessage::RunOnMainThread { task } => {
+            MainThreadMessage::GetEventLoop { task } => {
                 task(event_loop);
             }
-            MainThreadMessage::Shutdown => {
-                event_loop.exit();
-            }
+            _ => (),
         }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
-                trace!("The close button was pressed; stopping");
                 event_loop.exit();
             }
             _ => (),

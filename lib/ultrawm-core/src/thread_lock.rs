@@ -1,7 +1,5 @@
 use std::{cell::RefCell, sync::Arc, thread::ThreadId};
 
-use winit::event_loop::ActiveEventLoop;
-
 use crate::event_loop_main::run_on_main_thread;
 
 pub struct MainThreadLock<T: 'static> {
@@ -22,10 +20,10 @@ unsafe impl<T> Sync for MainThreadLock<T> {}
 impl<T> MainThreadLock<T> {
     pub async fn new<F>(init: F) -> Self
     where
-        F: FnOnce(&ActiveEventLoop) -> T + Send + 'static,
+        F: FnOnce() -> T + Send + 'static,
     {
-        run_on_main_thread(move |event_loop| {
-            let inner = init(event_loop);
+        run_on_main_thread(move || {
+            let inner = init();
             Self {
                 inner: Arc::new(RefCell::new(Some(inner))),
                 thread_id: std::thread::current().id(),
@@ -43,7 +41,7 @@ impl<T> MainThreadLock<T> {
             accessor(&self.inner.borrow().as_ref().unwrap())
         } else {
             let lock = self.clone();
-            run_on_main_thread(move |_| accessor(&lock.inner.borrow().as_ref().unwrap())).await
+            run_on_main_thread(move || accessor(&lock.inner.borrow().as_ref().unwrap())).await
         }
     }
 
@@ -66,7 +64,7 @@ impl<T> MainThreadLock<T> {
             accessor(&mut self.inner.borrow_mut().as_mut().unwrap())
         } else {
             let lock = self.clone();
-            run_on_main_thread(move |_| accessor(&mut lock.inner.borrow_mut().as_mut().unwrap()))
+            run_on_main_thread(move || accessor(&mut lock.inner.borrow_mut().as_mut().unwrap()))
                 .await
         }
     }
@@ -99,7 +97,7 @@ impl<T> Drop for MainThreadLock<T> {
         if Arc::strong_count(&self.inner) == 1 && self.thread_id != std::thread::current().id() {
             let lock = self.clone();
             tokio::spawn(async move {
-                run_on_main_thread(move |_| {
+                run_on_main_thread(move || {
                     let data = lock.inner.borrow_mut().take().unwrap();
                     drop(data);
                 })

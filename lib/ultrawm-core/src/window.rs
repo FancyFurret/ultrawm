@@ -97,6 +97,10 @@ impl Window {
             size: bounds,
         }
     }
+
+    pub fn focus(&self) -> PlatformResult<()> {
+        self.platform_window.borrow().focus()
+    }
 }
 
 #[cfg(test)]
