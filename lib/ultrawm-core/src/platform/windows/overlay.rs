@@ -50,8 +50,8 @@ impl PlatformOverlayImpl for WindowsPlatformOverlay {
     fn set_window_bounds(window_id: WindowId, bounds: Bounds) -> PlatformResult<()> {
         unsafe {
             SetWindowPos(
-                HWND(window_id as isize),
-                HWND_TOPMOST,
+                HWND(window_id as *mut _),
+                Some(HWND_TOPMOST),
                 bounds.position.x,
                 bounds.position.y,
                 bounds.size.width as i32,
@@ -66,7 +66,7 @@ impl PlatformOverlayImpl for WindowsPlatformOverlay {
     fn set_window_opacity(window_id: WindowId, opacity: f32) -> PlatformResult<()> {
         unsafe {
             SetLayeredWindowAttributes(
-                HWND(window_id as isize),
+                HWND(window_id as *mut _),
                 COLORREF(0),
                 (opacity * 255.0) as u8,
                 LWA_ALPHA,
@@ -77,7 +77,7 @@ impl PlatformOverlayImpl for WindowsPlatformOverlay {
     }
 
     fn render_to_window(image: &Image, window_id: WindowId) -> PlatformResult<()> {
-        let hwnd = HWND(window_id as _);
+        let hwnd = HWND(window_id as *mut _);
 
         // Get the image pixels
         let Some(pixmap) = image.peek_pixels() else {
@@ -88,7 +88,7 @@ impl PlatformOverlayImpl for WindowsPlatformOverlay {
         let skia_pixels = pixmap.addr() as *const u8;
 
         unsafe {
-            let hdc = GetDC(hwnd);
+            let hdc = GetDC(Some(hwnd));
             let bmi = BITMAPINFO {
                 bmiHeader: BITMAPINFOHEADER {
                     biSize: size_of::<BITMAPINFOHEADER>() as u32,
@@ -123,7 +123,7 @@ impl PlatformOverlayImpl for WindowsPlatformOverlay {
                 error!("Failed to render image to window");
                 return Err("Failed to render image to window".into());
             }
-            ReleaseDC(hwnd, hdc);
+            ReleaseDC(Some(hwnd), hdc);
         }
 
         Ok(())

@@ -25,8 +25,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use winit::keyboard::KeyCode;
 
 static EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
-static WIN_EVENT_HOOKS: Mutex<Vec<HWINEVENTHOOK>> = Mutex::new(Vec::new());
-static LOW_LEVEL_HOOKS: Mutex<Vec<HHOOK>> = Mutex::new(Vec::new());
+static WIN_EVENT_HOOKS: Mutex<Vec<isize>> = Mutex::new(Vec::new());
+static LOW_LEVEL_HOOKS: Mutex<Vec<isize>> = Mutex::new(Vec::new());
 
 pub struct WindowsPlatformEvents;
 
@@ -68,21 +68,24 @@ unsafe impl PlatformEventsImpl for WindowsPlatformEvents {
                 0,
                 WINEVENT_OUTOFCONTEXT,
             );
-            if hook.0 == 0 {
+            if hook.0.is_null() {
                 return Err(format!("Could not set win event hook for event {}", event).into());
             }
-            WIN_EVENT_HOOKS.lock().unwrap().push(hook);
+            WIN_EVENT_HOOKS.lock().unwrap().push(hook.0 as isize);
         }
 
         // Set up low-level mouse hook
         let mouse_hook = SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_hook_proc), None, 0)
             .map_err(|e| format!("Could not set mouse hook: {:?}", e))?;
-        LOW_LEVEL_HOOKS.lock().unwrap().push(mouse_hook);
+        LOW_LEVEL_HOOKS.lock().unwrap().push(mouse_hook.0 as isize);
 
         // Set up low-level keyboard hook
         let keyboard_hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook_proc), None, 0)
             .map_err(|e| format!("Could not set keyboard hook: {:?}", e))?;
-        LOW_LEVEL_HOOKS.lock().unwrap().push(keyboard_hook);
+        LOW_LEVEL_HOOKS
+            .lock()
+            .unwrap()
+            .push(keyboard_hook.0 as isize);
 
         Ok(())
     }
@@ -92,7 +95,7 @@ unsafe impl PlatformEventsImpl for WindowsPlatformEvents {
 
         let mut win_hooks = WIN_EVENT_HOOKS.lock().unwrap();
         for &hook in win_hooks.iter() {
-            if UnhookWinEvent(hook).0 == 0 {
+            if UnhookWinEvent(HWINEVENTHOOK(hook as *mut _)).0 == 0 {
                 errors.push(format!("Failed to unhook WinEvent hook {:?}", hook));
             }
         }
@@ -100,7 +103,7 @@ unsafe impl PlatformEventsImpl for WindowsPlatformEvents {
 
         let mut low_level_hooks = LOW_LEVEL_HOOKS.lock().unwrap();
         for &hook in low_level_hooks.iter() {
-            if UnhookWindowsHookEx(hook).is_err() {
+            if UnhookWindowsHookEx(HHOOK(hook as *mut _)).is_err() {
                 errors.push(format!("Failed to unhook low-level hook {:?}", hook));
             }
         }
@@ -200,7 +203,10 @@ unsafe extern "system" fn mouse_hook_proc(
 
     // Check if we should ignore this event due to simulated click
     if button.is_some() {
-        if Interceptor::pop_ignore_click() {
+        if Interceptor::pop_ignore_click(
+            button.clone().unwrap(),
+            matches!(event, WMEvent::MouseUp(_, _)),
+        ) {
             return CallNextHookEx(None, n_code, w_param, l_param);
         }
     }

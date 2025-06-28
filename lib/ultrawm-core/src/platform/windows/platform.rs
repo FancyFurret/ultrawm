@@ -7,7 +7,8 @@ use crate::platform::{
     PlatformWindow, Position,
 };
 use std::sync::atomic::{AtomicI32, AtomicIsize, Ordering};
-use windows::Win32::Foundation::{BOOL, HWND, LPARAM, POINT, RECT};
+use windows::core::BOOL;
+use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
     EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFOEXW,
 };
@@ -30,7 +31,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 pub struct WindowsPlatform;
 
 static CURRENT_CURSOR_TYPE: AtomicI32 = AtomicI32::new(-1);
-pub static WINDOW_BATCH: AtomicIsize = AtomicIsize::new(-1);
+pub static WINDOW_BATCH: AtomicIsize = AtomicIsize::new(0);
 
 impl PlatformImpl for WindowsPlatform {
     fn list_visible_windows() -> PlatformResult<Vec<PlatformWindow>> {
@@ -129,22 +130,22 @@ impl PlatformImpl for WindowsPlatform {
 
     fn start_window_bounds_batch(window_count: u32) -> PlatformResult<()> {
         let hdswp = unsafe { BeginDeferWindowPos(window_count as i32) }.unwrap();
-        WINDOW_BATCH.store(hdswp.0, Ordering::Relaxed);
+        WINDOW_BATCH.store(hdswp.0 as isize, Ordering::Relaxed);
         Ok(())
     }
     fn end_window_bounds_batch() -> PlatformResult<()> {
-        let hdswp = WINDOW_BATCH.load(Ordering::Relaxed);
-        if hdswp <= 0 {
+        let hdswp_val = WINDOW_BATCH.load(Ordering::Relaxed);
+        if hdswp_val == 0 {
             return Ok(()); // No batch in progress
         }
 
-        unsafe { EndDeferWindowPos(HDWP(hdswp)) }.unwrap();
-        WINDOW_BATCH.store(-1, Ordering::Relaxed);
+        unsafe { EndDeferWindowPos(HDWP(hdswp_val as *mut _)) }.unwrap();
+        WINDOW_BATCH.store(0, Ordering::Relaxed);
         Ok(())
     }
 
     fn simulate_mouse_click(position: Position, button: MouseButton) -> PlatformResult<()> {
-        Interceptor::ignore_next_clicks(2);
+        Interceptor::ignore_next_click(button.clone());
 
         unsafe {
             // Get screen dimensions for absolute positioning
@@ -227,7 +228,7 @@ impl PlatformImpl for WindowsPlatform {
 
 unsafe fn get_foreground_window() -> Option<HWND> {
     let hwnd = GetForegroundWindow();
-    if hwnd.0 != 0 {
+    if !hwnd.0.is_null() {
         Some(hwnd)
     } else {
         None

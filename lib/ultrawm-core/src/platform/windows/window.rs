@@ -26,6 +26,9 @@ impl Clone for WindowsPlatformWindow {
     }
 }
 
+unsafe impl Send for WindowsPlatformWindow {}
+unsafe impl Sync for WindowsPlatformWindow {}
+
 impl WindowsPlatformWindow {
     pub fn new(hwnd: HWND) -> PlatformResult<Self> {
         Ok(Self {
@@ -201,7 +204,7 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
         unsafe {
             if hdswp > 0 {
                 DeferWindowPos(
-                    HDWP(hdswp),
+                    HDWP(hdswp as *mut _),
                     self.hwnd,
                     None,
                     adjusted_x,
