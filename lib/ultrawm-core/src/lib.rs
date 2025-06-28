@@ -15,28 +15,24 @@ use std::{process, thread};
 
 mod animation;
 pub mod config;
-mod drag_handler;
-mod drag_tracker;
+mod event_handlers;
 mod event_loop_main;
 pub mod event_loop_wm;
 mod layouts;
-mod modified_mouse_keybind_tracker;
+mod mod_mouse_keybind_tracker;
 mod overlay_window;
 mod partition;
 pub mod platform;
 mod resize_handle;
-mod resize_handle_tracker;
-mod resize_handler;
 mod serialization;
 mod thread_lock;
 pub mod tile_preview_handler;
 mod tile_result;
 mod window;
-mod window_area_handler;
-mod window_area_tracker;
 mod wm;
 mod workspace;
 
+use crate::platform::input_state::InputState;
 pub use config::Config;
 
 static GLOBAL_EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
@@ -76,6 +72,13 @@ pub fn start() -> UltraWMResult<()> {
     // Store the dispatcher globally for later use
     GLOBAL_EVENT_DISPATCHER.set(dispatcher.clone()).unwrap();
 
+    unsafe {
+        PlatformEvents::initialize(dispatcher)?;
+    }
+
+    Interceptor::initialize()?;
+    InputState::initialize();
+
     // Create a channel to signal when main thread is ready
     let (main_ready_tx, main_ready_rx) = mpsc::channel();
 
@@ -99,12 +102,6 @@ pub fn start() -> UltraWMResult<()> {
             process::exit(1);
         })
     });
-
-    unsafe {
-        PlatformEvents::initialize(dispatcher)?;
-    }
-
-    Interceptor::initialize()?;
 
     // Signal that we're about to start the main event loop
     if main_ready_tx.send(()).is_err() {

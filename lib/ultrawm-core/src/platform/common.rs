@@ -110,6 +110,16 @@ impl MouseButtons {
     }
 }
 
+impl FromIterator<MouseButton> for MouseButtons {
+    fn from_iter<T: IntoIterator<Item = MouseButton>>(iter: T) -> Self {
+        let mut buttons = Self::new();
+        for button in iter {
+            buttons.add(&button);
+        }
+        buttons
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Keys {
     keys: HashSet<KeyCode>,
@@ -152,6 +162,16 @@ impl Keys {
 
     pub fn iter(&self) -> impl Iterator<Item = &KeyCode> {
         self.keys.iter()
+    }
+}
+
+impl FromIterator<KeyCode> for Keys {
+    fn from_iter<T: IntoIterator<Item = KeyCode>>(iter: T) -> Self {
+        let mut keys = Self::new();
+        for key in iter {
+            keys.add(&key);
+        }
+        keys
     }
 }
 

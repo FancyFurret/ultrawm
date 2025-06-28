@@ -1,4 +1,4 @@
-use crate::config::{ModifiedMouseKeybind, MouseKeybind};
+use crate::config::{ModMouseKeybind, MouseKeybind};
 use log::{trace, warn};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -41,14 +41,14 @@ pub struct Config {
     /// Resizes windows as handles are dragged
     pub live_window_resize: bool,
     /// Bindings handle resize actions
-    pub resize_handle_resize_bindings: HandleResizeBindings,
+    pub resize_handle_bindings: ResizeHandleBindings,
     /// Bindings for window area actions (tile, slide, etc.)
-    pub window_area_bindings: WindowAreaBindings,
+    pub mod_transform_bindings: ModTransformBindings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct HandleResizeBindings {
+pub struct ResizeHandleBindings {
     /// Bindings for resizing the left or top window (e.g., LMB)
     pub resize_before: MouseKeybind,
     /// Bindings for resizing the right or bottom window (e.g., RMB)
@@ -61,7 +61,7 @@ pub struct HandleResizeBindings {
     pub resize_after_symmetric: MouseKeybind,
 }
 
-impl Default for HandleResizeBindings {
+impl Default for ResizeHandleBindings {
     fn default() -> Self {
         Self {
             resize_before: vec!["lmb"].into(),
@@ -75,14 +75,14 @@ impl Default for HandleResizeBindings {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct WindowAreaBindings {
-    pub tile: ModifiedMouseKeybind,
-    pub resize: ModifiedMouseKeybind,
-    pub resize_symmetric: ModifiedMouseKeybind,
-    pub slide: ModifiedMouseKeybind,
+pub struct ModTransformBindings {
+    pub tile: ModMouseKeybind,
+    pub resize: ModMouseKeybind,
+    pub resize_symmetric: ModMouseKeybind,
+    pub slide: ModMouseKeybind,
 }
 
-impl Default for WindowAreaBindings {
+impl Default for ModTransformBindings {
     fn default() -> Self {
         Self {
             tile: vec!["ctrl+lmb", "bmb+lmb"].into(),
@@ -217,8 +217,8 @@ impl Config {
         Self::current().live_window_resize
     }
 
-    pub fn get_window_area_bindings(&self) -> &WindowAreaBindings {
-        &self.window_area_bindings
+    pub fn get_window_area_bindings(&self) -> &ModTransformBindings {
+        &self.mod_transform_bindings
     }
 
     /// Save the current config to a file
@@ -254,8 +254,8 @@ impl Default for Config {
             resize_handle_color: (40, 40, 40),
             resize_handle_opacity: 0.8,
             live_window_resize: true,
-            resize_handle_resize_bindings: HandleResizeBindings::default(),
-            window_area_bindings: WindowAreaBindings::default(),
+            resize_handle_bindings: ResizeHandleBindings::default(),
+            mod_transform_bindings: ModTransformBindings::default(),
         }
     }
 }

@@ -1,6 +1,6 @@
 use log::warn;
 use resvg::tiny_skia::{Pixmap, Transform};
-use resvg::usvg::{Options, TreeParsing};
+use resvg::usvg::Options;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem};
@@ -222,13 +222,12 @@ fn load_svg_icon() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let options = Options::default();
     let rtree = resvg::usvg::Tree::from_data(svg_data.as_bytes(), &options)?;
 
-    let size = rtree.view_box.rect.size();
+    let size = rtree.size();
     let (width, height) = (size.width() as u32, size.height() as u32);
 
     let mut pixmap = Pixmap::new(width, height).ok_or("Failed to create pixmap")?;
 
-    let tree = resvg::Tree::from_usvg(&rtree);
-    tree.render(Transform::default(), &mut pixmap.as_mut());
+    resvg::render(&rtree, Transform::default(), &mut pixmap.as_mut());
 
     Ok(pixmap.data().to_vec())
 }

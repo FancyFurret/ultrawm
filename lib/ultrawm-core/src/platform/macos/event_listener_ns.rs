@@ -1,23 +1,26 @@
 use crate::platform::macos::event_listener_ax::EventListenerAX;
 use crate::platform::{PlatformResult, ProcessId};
-use icrate::block2::{Block, ConcreteBlock};
-use icrate::objc2::msg_send;
-use icrate::objc2::rc::Id;
-use icrate::AppKit::{
-    NSApplicationLoad, NSRunningApplication, NSWorkspace, NSWorkspaceApplicationKey,
+use block2::{Block, StackBlock};
+use log::{error, warn};
+use objc2::rc::Retained;
+use objc2::runtime::{NSObjectProtocol, ProtocolObject};
+use objc2_app_kit::NSRunningApplication;
+use objc2_app_kit::NSWorkspace;
+use objc2_app_kit::NSWorkspaceApplicationKey;
+use objc2_app_kit::{
     NSWorkspaceDidLaunchApplicationNotification, NSWorkspaceDidTerminateApplicationNotification,
 };
-use icrate::Foundation::{NSNotification, NSNotificationName, NSObject, NSOperationQueue};
-use log::{error, warn};
+use objc2_foundation::NSOperationQueue;
+use objc2_foundation::{NSNotification, NSNotificationName};
 use std::cell::RefCell;
 use std::ptr::NonNull;
 use std::rc::Rc;
 
-type EventHandlerBlock = Block<(NonNull<NSNotification>,), ()>;
+type EventHandlerBlock = Block<dyn Fn(NonNull<NSNotification>) -> ()>;
 
 pub struct EventListenerNS {
     listener_ax: Rc<RefCell<EventListenerAX>>,
-    observers: Vec<Id<NSObject>>,
+    observers: Vec<Retained<ProtocolObject<dyn NSObjectProtocol>>>,
 }
 
 impl EventListenerNS {
@@ -27,11 +30,9 @@ impl EventListenerNS {
             observers: Vec::new(),
         }));
 
-        unsafe {
-            NSApplicationLoad();
-
+        {
             let state = listener.clone();
-            let block = ConcreteBlock::new(move |notification: NonNull<NSNotification>| {
+            let block = StackBlock::new(move |notification: NonNull<NSNotification>| {
                 if let Err(e) = state.borrow().handle_event(notification) {
                     error!("Error handling NS event: {:?}", e);
                 }
@@ -54,13 +55,13 @@ impl EventListenerNS {
                 .userInfo()
                 .ok_or("Could not get user info")?;
 
-            let app = Id::cast::<NSRunningApplication>(
+            let app = Retained::cast_unchecked::<NSRunningApplication>(
                 user_info
                     .objectForKey(NSWorkspaceApplicationKey)
                     .ok_or("Could not get application")?,
             );
 
-            let pid: i32 = msg_send![app.as_ref(), processIdentifier];
+            let pid = app.processIdentifier();
             let name = notification.as_ref().name();
 
             if name.isEqualToString(NSWorkspaceDidLaunchApplicationNotification) {

@@ -14,7 +14,7 @@ use crate::platform::{Bounds, PlatformWindowImpl, Position, WindowId};
 use crate::resize_handle::{HandleOrientation, ResizeHandle, ResizeMode};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
-use log::{error, info};
+use log::{info, warn};
 use std::cmp;
 use std::collections::HashMap;
 
@@ -438,7 +438,7 @@ impl WindowLayout for ContainerTree {
                 return tree;
             }
 
-            error!("Failed to deserialize saved layout, starting from scratch");
+            warn!("Failed to deserialize saved layout, starting from scratch");
         }
 
         let root_bounds = Self::get_root_bounds(&bounds);
@@ -623,7 +623,7 @@ impl WindowLayout for ContainerTree {
         &mut self,
         handle: &ResizeHandle,
         position: &Position,
-        mode: ResizeMode,
+        mode: &ResizeMode,
     ) -> bool {
         // Find the container that owns this handle
         let container = match self.find_container_for_handle(handle.id) {

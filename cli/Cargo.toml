@@ -9,10 +9,10 @@ path = "src/main.rs"
 
 [dependencies]
 ultrawm-core = { path = "../lib/ultrawm-core" }
-ctrlc = "3.4"
-tray-icon = "0.14"
-resvg = "0.37"
+ctrlc = "3.4.7"
+tray-icon = "0.21.0"
+resvg = "0.45.1"
 clap = { version = "4.5.40", features = ["derive"] }
-log = "0.4"
-colored = "2.1"
-open = "5.0"
+log = "0.4.27"
+colored = "3.0.0"
+open = "5.3.2"

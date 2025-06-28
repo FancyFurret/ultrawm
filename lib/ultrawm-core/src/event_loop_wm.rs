@@ -1,10 +1,11 @@
-use crate::drag_handler::WindowMoveHandler;
-use crate::resize_handler::WindowResizeHandler;
-use crate::window_area_handler::WindowAreaHandler;
+use crate::event_handlers::mod_transform_handler::ModTransformHandler;
+use crate::event_handlers::native_transform_handler::NativeTransformHandler;
+use crate::event_handlers::resize_handle_handler::ResizeHandleHandler;
+use crate::event_handlers::EventHandler;
 use crate::wm::WMError;
 use crate::{
     event_loop_main::EventLoopMain,
-    platform::{inteceptor::Interceptor, EventBridge, WMEvent},
+    platform::{input_state::InputState, inteceptor::Interceptor, EventBridge, WMEvent},
     wm::WindowManager,
     UltraWMResult,
 };
@@ -31,9 +32,8 @@ impl EventLoopWM {
 
         let mut wm = WindowManager::new()?;
 
-        let mut move_handler = WindowMoveHandler::new().await;
-        let mut resize_handler = WindowResizeHandler::new().await;
-        let mut window_area_handler = WindowAreaHandler::new().await;
+        let mut handlers = Self::create_handlers().await;
+        let mut current_handler: Option<usize> = None;
 
         while let Some(event) = bridge.next_event().await {
             if matches!(event, WMEvent::Shutdown) {
@@ -42,14 +42,14 @@ impl EventLoopWM {
 
             if matches!(event, WMEvent::ConfigChanged) {
                 info!("Reloading config...");
-                move_handler = WindowMoveHandler::new().await;
-                resize_handler = WindowResizeHandler::new().await;
-                window_area_handler = WindowAreaHandler::new().await;
+                handlers = Self::create_handlers().await;
+                current_handler = None;
                 wm.config_changed().unwrap_or_else(|e| {
                     error!("Could not reload config: {e}");
                 });
             }
 
+            InputState::handle_event(&event);
             Interceptor::handle_event(&event).unwrap_or_else(|e| {
                 error!("Interceptor error: {e}");
             });
@@ -72,20 +72,23 @@ impl EventLoopWM {
                 _ => {}
             }
 
-            let mut handled = move_handler
-                .handle_event(&event, &mut wm)
-                .unwrap_or_else(|e| Self::handle_error(e));
-
-            if !handled {
-                handled = window_area_handler
+            if let Some(index) = current_handler.clone() {
+                let handled = handlers[index]
                     .handle_event(&event, &mut wm)
                     .unwrap_or_else(|e| Self::handle_error(e));
-            }
-
-            if !handled {
-                resize_handler
-                    .handle_event(&event, &mut wm)
-                    .unwrap_or_else(|e| Self::handle_error(e));
+                if !handled {
+                    current_handler = None;
+                }
+            } else {
+                for (index, handler) in handlers.iter_mut().enumerate() {
+                    let handled = handler
+                        .handle_event(&event, &mut wm)
+                        .unwrap_or_else(|e| Self::handle_error(e));
+                    if handled {
+                        current_handler = Some(index);
+                        break;
+                    }
+                }
             }
         }
 
@@ -97,5 +100,13 @@ impl EventLoopWM {
     fn handle_error(error: WMOperationError) -> bool {
         error!("Error: {error}");
         false
+    }
+
+    async fn create_handlers() -> Vec<Box<dyn EventHandler>> {
+        vec![
+            Box::new(NativeTransformHandler::new().await),
+            Box::new(ResizeHandleHandler::new().await),
+            Box::new(ModTransformHandler::new().await),
+        ]
     }
 }

@@ -28,7 +28,7 @@ fn main() {
         .allowlist_var("kAX.*")
         .allowlist_type("AX.*")
         .blocklist_type("CF.*")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings");
 

@@ -1,6 +1,7 @@
 use crate::layouts::ResizeDirection;
 use crate::platform::{
-    Bounds, MouseButton, Platform, PlatformImpl, PlatformWindowImpl, Position, WMEvent, WindowId,
+    input_state::InputState, Bounds, MouseButton, Platform, PlatformImpl, PlatformWindowImpl,
+    Position, WMEvent, WindowId,
 };
 use crate::window::WindowRef;
 use crate::wm::WindowManager;
@@ -29,23 +30,25 @@ struct DragContext {
 }
 
 #[derive(Debug)]
-pub struct WindowDragTracker {
-    left_mouse_down: bool,
+pub struct NativeTransformTracker {
     current_drag: Option<DragContext>,
 }
 
-impl WindowDragTracker {
+impl NativeTransformTracker {
     pub fn new() -> Self {
-        Self {
-            left_mouse_down: false,
-            current_drag: None,
-        }
+        Self { current_drag: None }
+    }
+
+    pub fn active(&self) -> bool {
+        self.current_drag.is_some()
     }
 
     pub fn handle_event(&mut self, event: &WMEvent, wm: &WindowManager) -> Option<WindowDragEvent> {
         match event {
             WMEvent::WindowTransformStarted(id) => {
-                if !self.left_mouse_down || self.current_drag.is_some() {
+                if !InputState::mouse_button_pressed(&MouseButton::Left)
+                    || self.current_drag.is_some()
+                {
                     return None;
                 }
 
@@ -60,12 +63,7 @@ impl WindowDragTracker {
                     ),
                 });
             }
-            WMEvent::MouseDown(_, MouseButton::Left) => {
-                self.left_mouse_down = true;
-            }
             WMEvent::MouseUp(pos, MouseButton::Left) => {
-                self.left_mouse_down = false;
-
                 if self.current_drag.is_none() {
                     return None;
                 }
@@ -204,7 +202,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(90, 100, 210, 200); // Left edge moved left
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::Left);
     }
 
@@ -213,7 +211,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(100, 100, 210, 200); // Right edge moved right
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::Right);
     }
 
@@ -222,7 +220,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(100, 90, 200, 210); // Top edge moved up
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::Top);
     }
 
@@ -231,7 +229,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(100, 100, 200, 210); // Bottom edge moved down
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::Bottom);
     }
 
@@ -240,7 +238,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(90, 90, 210, 210); // Top-left corner moved
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::TopLeft);
     }
 
@@ -249,7 +247,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(100, 90, 210, 210); // Top-right corner moved
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::TopRight);
     }
 
@@ -258,7 +256,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(90, 100, 210, 210); // Bottom-left corner moved
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::BottomLeft);
     }
 
@@ -267,7 +265,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(100, 100, 210, 210); // Bottom-right corner moved
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::BottomRight);
     }
 
@@ -276,7 +274,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(100, 100, 200, 200); // No change
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::Right); // Default fallback
     }
 
@@ -286,7 +284,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(90, 90, 190, 190); // All edges changed
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         // Should default to Right since it doesn't match any specific pattern
         assert_eq!(direction, ResizeDirection::Right);
     }
@@ -296,7 +294,7 @@ mod tests {
         let old = Bounds::new(100, 100, 0, 0);
         let new = Bounds::new(100, 100, 50, 50);
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::BottomRight);
     }
 
@@ -305,7 +303,7 @@ mod tests {
         let old = Bounds::new(-100, -100, 200, 200);
         let new = Bounds::new(-110, -100, 210, 200); // Left edge moved left
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::Left);
     }
 
@@ -314,7 +312,7 @@ mod tests {
         let old = Bounds::new(1000, 1000, 2000, 2000);
         let new = Bounds::new(1000, 1000, 2000, 2100); // Bottom edge moved
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::Bottom);
     }
 
@@ -322,8 +320,7 @@ mod tests {
 
     #[test]
     fn test_window_drag_tracker_new() {
-        let tracker = WindowDragTracker::new();
-        assert_eq!(tracker.left_mouse_down, false);
+        let tracker = NativeTransformTracker::new();
         assert!(tracker.current_drag.is_none());
     }
 
@@ -342,7 +339,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(100, 100, 300, 200); // Only width increased
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::Right);
     }
 
@@ -351,7 +348,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(100, 100, 200, 300); // Only height increased
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::Bottom);
     }
 
@@ -360,7 +357,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(120, 100, 180, 200); // Width decreased from left
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::Left);
     }
 
@@ -369,7 +366,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(100, 120, 200, 180); // Height decreased from top
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::Top);
     }
 
@@ -378,7 +375,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(150, 150, 200, 200); // Only position changed, size same
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         // This represents a complex case where position changed but size didn't
         // Should fall through to default
         assert_eq!(direction, ResizeDirection::Right);
@@ -390,7 +387,7 @@ mod tests {
         let old = Bounds::new(100, 100, 200, 200);
         let new = Bounds::new(100, 100, 201, 200); // Tiny width increase
 
-        let direction = WindowDragTracker::calculate_resize_direction(&old, &new);
+        let direction = NativeTransformTracker::calculate_resize_direction(&old, &new);
         assert_eq!(direction, ResizeDirection::Right);
     }
 

@@ -4,7 +4,7 @@ use crate::platform::macos::{
     ObserveResult, ObserveResultExt,
 };
 use crate::platform::{
-    EventDispatcher, PlatformError, PlatformEvent, PlatformResult, PlatformWindowImpl, ProcessId,
+    EventDispatcher, PlatformError, PlatformResult, PlatformWindowImpl, ProcessId, WMEvent,
     WindowId,
 };
 use application_services::accessibility_ui::{AXNotification, AXObserver, AXUIElement};
@@ -135,8 +135,7 @@ impl EventListenerAX {
         if notification == notification::application_activated() {
             let focused_window = element.focused_window()?;
             let window = MacOSPlatformWindow::new(focused_window)?;
-            self.dispatcher
-                .send(PlatformEvent::WindowFocused(window.id()));
+            self.dispatcher.send(WMEvent::WindowFocused(window.id()));
             return Ok(());
         } else if notification == notification::application_shown() {
             for window in element.windows()? {
@@ -145,8 +144,7 @@ impl EventListenerAX {
                 }
 
                 let window = MacOSPlatformWindow::new(window)?;
-                self.dispatcher
-                    .send(PlatformEvent::WindowShown(window.id()));
+                self.dispatcher.send(WMEvent::WindowShown(window.id()));
             }
             return Ok(());
         } else if notification == notification::application_hidden() {
@@ -156,8 +154,7 @@ impl EventListenerAX {
                 }
 
                 let window = MacOSPlatformWindow::new(window)?;
-                self.dispatcher
-                    .send(PlatformEvent::WindowHidden(window.id()));
+                self.dispatcher.send(WMEvent::WindowHidden(window.id()));
             }
             return Ok(());
         }
@@ -173,24 +170,24 @@ impl EventListenerAX {
         };
 
         let event = if notification == notification::focused_window_changed() {
-            PlatformEvent::WindowFocused(window.id())
+            WMEvent::WindowFocused(window.id())
         } else if notification == notification::window_created() {
             let result = self.observe_window(&window.element);
             if result.is_err() {
                 return result.handle_observe_error();
             }
 
-            PlatformEvent::WindowOpened(window)
+            WMEvent::WindowOpened(window)
         } else if notification == notification::window_miniaturized() {
-            PlatformEvent::WindowHidden(window.id())
+            WMEvent::WindowHidden(window.id())
         } else if notification == notification::window_deminiaturized() {
-            PlatformEvent::WindowShown(window.id())
+            WMEvent::WindowShown(window.id())
         } else if notification == notification::window_moved() {
-            PlatformEvent::WindowTransformStarted(window.id()) // TODO: Too many times
+            WMEvent::WindowTransformStarted(window.id()) // TODO: Too many times
         } else if notification == notification::window_resized() {
-            PlatformEvent::WindowTransformStarted(window.id())
+            WMEvent::WindowTransformStarted(window.id())
         } else if notification == notification::element_destroyed() {
-            PlatformEvent::WindowClosed(window.id())
+            WMEvent::WindowClosed(window.id())
         } else {
             warn!("Unknown notification: {:?}", notification);
             return Ok(());

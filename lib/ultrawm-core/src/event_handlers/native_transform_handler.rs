@@ -1,42 +1,27 @@
-use crate::drag_tracker::{WindowDragEvent, WindowDragTracker, WindowDragType};
+use crate::event_handlers::native_transform_tracker::{
+    NativeTransformTracker, WindowDragEvent, WindowDragType,
+};
+use crate::event_handlers::EventHandler;
 use crate::event_loop_wm::WMOperationResult;
 use crate::platform::{Position, WMEvent, WindowId};
 use crate::tile_preview_handler::TilePreviewHandler;
 use crate::wm::WindowManager;
 
-pub struct WindowMoveHandler {
+pub struct NativeTransformHandler {
     preview: TilePreviewHandler,
-    drag_tracker: WindowDragTracker,
+    tracker: NativeTransformTracker,
 }
 
-impl WindowMoveHandler {
+impl NativeTransformHandler {
     pub async fn new() -> Self {
         Self {
             preview: TilePreviewHandler::new().await,
-            drag_tracker: WindowDragTracker::new(),
+            tracker: NativeTransformTracker::new(),
         }
     }
 
     pub fn overlay_shown(&self) -> bool {
         self.preview.is_shown()
-    }
-
-    pub fn handle_event(
-        &mut self,
-        event: &WMEvent,
-        wm: &mut WindowManager,
-    ) -> WMOperationResult<bool> {
-        match self.drag_tracker.handle_event(&event, &wm) {
-            Some(WindowDragEvent::Drag(id, position, drag_type)) => {
-                self.drag(id, position, drag_type, wm)?;
-                Ok(true)
-            }
-            Some(WindowDragEvent::End(id, position, drag_type)) => {
-                self.drop(id, position, drag_type, wm)?;
-                Ok(true)
-            }
-            _ => Ok(false),
-        }
     }
 
     fn drag(
@@ -63,5 +48,21 @@ impl WindowMoveHandler {
             TilePreviewHandler::tile_on_drop(&mut self.preview, id, &position, wm)?;
         }
         Ok(())
+    }
+}
+
+impl EventHandler for NativeTransformHandler {
+    fn handle_event(&mut self, event: &WMEvent, wm: &mut WindowManager) -> WMOperationResult<bool> {
+        match self.tracker.handle_event(&event, &wm) {
+            Some(WindowDragEvent::Drag(id, position, drag_type)) => {
+                self.drag(id, position, drag_type, wm)?;
+                Ok(true)
+            }
+            Some(WindowDragEvent::End(id, position, drag_type)) => {
+                self.drop(id, position, drag_type, wm)?;
+                Ok(true)
+            }
+            _ => Ok(self.tracker.active()),
+        }
     }
 }

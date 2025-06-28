@@ -1,3 +1,4 @@
+use crate::platform::inteceptor::Interceptor;
 use crate::platform::windows::{
     window_is_manageable, WindowsPlatformEvents, WindowsPlatformWindow,
 };
@@ -143,8 +144,7 @@ impl PlatformImpl for WindowsPlatform {
     }
 
     fn simulate_mouse_click(position: Position, button: MouseButton) -> PlatformResult<()> {
-        // Tell the event system to ignore the next 2 mouse events (down + up)
-        WindowsPlatformEvents::ignore_next_simulated_clicks(2);
+        Interceptor::ignore_next_clicks(2);
 
         unsafe {
             // Get screen dimensions for absolute positioning

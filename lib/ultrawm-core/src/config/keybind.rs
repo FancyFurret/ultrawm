@@ -50,7 +50,7 @@ impl<T: KeybindVariant> Into<Keybind<T>> for Vec<&str> {
 }
 
 pub type MouseKeybind = Keybind<MouseKeybindVariant>;
-pub type ModifiedMouseKeybind = Keybind<ModifiedMouseKeybindVariant>;
+pub type ModMouseKeybind = Keybind<ModifiedMouseKeybindVariant>;
 
 pub trait KeybindVariant: 'static {
     fn validate<E: serde::de::Error>(combo: &InputCombo) -> Result<(), E>

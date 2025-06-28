@@ -1,21 +1,39 @@
+use crate::platform::inteceptor::Interceptor;
 use crate::platform::macos::ffi::run_loop_mode;
-use crate::platform::{EventDispatcher, MouseButton, PlatformEvent, PlatformResult, Position};
-use core_foundation::runloop::CFRunLoop;
+use crate::platform::{EventDispatcher, MouseButton, PlatformResult, Position, WMEvent};
+use core_foundation::runloop::{CFRunLoop, CFRunLoopSource};
 use core_graphics::event::{
     CGEvent, CGEventFlags, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
-    CGEventType, EventField,
+    CGEventType, CallbackResult, EventField,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
 use winit::keyboard::KeyCode;
 
 pub struct EventListenerCG {
     _event_tap: CGEventTap<'static>,
+    _source: CFRunLoopSource,
 }
 
 // Track the current modifier flags state
 static CURRENT_MODIFIER_FLAGS: AtomicU64 = AtomicU64::new(0);
 
 impl EventListenerCG {
+    // Helper function to get keyboard keycode from event
+    fn get_keyboard_keycode(event: &CGEvent) -> i64 {
+        event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE)
+    }
+
+    // Helper function to get mouse button from event
+    fn get_mouse_button_from_event(event: &CGEvent) -> Option<MouseButton> {
+        let button_number = event.get_integer_value_field(EventField::MOUSE_EVENT_BUTTON_NUMBER);
+        match button_number {
+            2 => Some(MouseButton::Middle),
+            3 => Some(MouseButton::Button4),
+            4 => Some(MouseButton::Button5),
+            _ => None,
+        }
+    }
+
     pub fn run(dispatcher: EventDispatcher) -> PlatformResult<Self> {
         let mask = vec![
             CGEventType::MouseMoved,
@@ -27,84 +45,137 @@ impl EventListenerCG {
             CGEventType::RightMouseDragged,
             CGEventType::OtherMouseUp,
             CGEventType::OtherMouseDown,
+            CGEventType::OtherMouseDragged,
             CGEventType::KeyDown,
             CGEventType::KeyUp,
             CGEventType::FlagsChanged,
         ];
 
         let tap = CGEventTap::new(
-            CGEventTapLocation::Session,
+            CGEventTapLocation::HID,
             CGEventTapPlacement::HeadInsertEventTap,
             CGEventTapOptions::Default,
             mask,
             move |_proxy, event_type, event| {
-                Self::handle_event(&dispatcher, event_type, event);
-                Some(event.clone())
+                if Self::handle_event(&dispatcher, event_type, event) {
+                    return CallbackResult::Drop;
+                }
+                CallbackResult::Keep
             },
         )?;
 
-        let loop_source = tap.mach_port.create_runloop_source(0)?;
+        let loop_source = tap.mach_port().create_runloop_source(0)?;
         CFRunLoop::get_current().add_source(&loop_source, run_loop_mode::common_modes());
 
         tap.enable();
 
-        Ok(Self { _event_tap: tap })
+        Ok(Self {
+            _event_tap: tap,
+            _source: loop_source,
+        })
     }
 
-    fn handle_event(dispatcher: &EventDispatcher, event_type: CGEventType, event: &CGEvent) {
+    fn handle_event(
+        dispatcher: &EventDispatcher,
+        event_type: CGEventType,
+        event: &CGEvent,
+    ) -> bool {
         let location = event.location();
         let position = Position {
             x: location.x as i32,
             y: location.y as i32,
         };
 
-        let e = match event_type {
-            CGEventType::MouseMoved => PlatformEvent::MouseMoved(position),
-            CGEventType::LeftMouseDown => PlatformEvent::MouseDown(position, MouseButton::Left),
-            CGEventType::LeftMouseUp => PlatformEvent::MouseUp(position, MouseButton::Left),
-            CGEventType::LeftMouseDragged => PlatformEvent::MouseMoved(position),
-            CGEventType::RightMouseDown => PlatformEvent::MouseDown(position, MouseButton::Right),
-            CGEventType::RightMouseUp => PlatformEvent::MouseUp(position, MouseButton::Right),
+        let (e, button) = match event_type {
+            CGEventType::MouseMoved => (WMEvent::MouseMoved(position), None),
+            CGEventType::LeftMouseDown => (
+                WMEvent::MouseDown(position, MouseButton::Left),
+                Some(MouseButton::Left),
+            ),
+            CGEventType::LeftMouseUp => (
+                WMEvent::MouseUp(position, MouseButton::Left),
+                Some(MouseButton::Left),
+            ),
+            CGEventType::LeftMouseDragged => {
+                (WMEvent::MouseMoved(position), Some(MouseButton::Left))
+            }
+            CGEventType::RightMouseDown => (
+                WMEvent::MouseDown(position, MouseButton::Right),
+                Some(MouseButton::Right),
+            ),
+            CGEventType::RightMouseUp => (
+                WMEvent::MouseUp(position, MouseButton::Right),
+                Some(MouseButton::Right),
+            ),
+            CGEventType::RightMouseDragged => (WMEvent::MouseMoved(position), None),
             CGEventType::OtherMouseDown => {
-                let button = event.get_integer_value_field(EventField::MOUSE_EVENT_BUTTON_NUMBER);
-                if button == 2 {
-                    PlatformEvent::MouseDown(position, MouseButton::Middle)
+                if let Some(mouse_button) = Self::get_mouse_button_from_event(event) {
+                    (
+                        WMEvent::MouseDown(position, mouse_button.clone()),
+                        Some(mouse_button),
+                    )
                 } else {
-                    return;
+                    return false;
                 }
             }
             CGEventType::OtherMouseUp => {
-                let button = event.get_integer_value_field(EventField::MOUSE_EVENT_BUTTON_NUMBER);
-                if button == 2 {
-                    PlatformEvent::MouseUp(position, MouseButton::Middle)
+                if let Some(mouse_button) = Self::get_mouse_button_from_event(event) {
+                    (
+                        WMEvent::MouseUp(position, mouse_button.clone()),
+                        Some(mouse_button),
+                    )
                 } else {
-                    return;
+                    return false;
+                }
+            }
+            CGEventType::OtherMouseDragged => {
+                if let Some(_) = Self::get_mouse_button_from_event(event) {
+                    (WMEvent::MouseMoved(position), None)
+                } else {
+                    return false;
                 }
             }
             CGEventType::KeyDown => {
-                let keycode = event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE);
+                let keycode = Self::get_keyboard_keycode(event);
                 if let Some(keycode) = map_cg_keycode_to_winit(keycode as u16) {
-                    PlatformEvent::KeyDown(keycode)
+                    (WMEvent::KeyDown(keycode), None)
                 } else {
-                    return;
+                    return false;
                 }
             }
             CGEventType::KeyUp => {
-                let keycode = event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE);
+                let keycode = Self::get_keyboard_keycode(event);
                 if let Some(keycode) = map_cg_keycode_to_winit(keycode as u16) {
-                    PlatformEvent::KeyUp(keycode)
+                    (WMEvent::KeyUp(keycode), None)
                 } else {
-                    return;
+                    return false;
                 }
             }
             CGEventType::FlagsChanged => {
                 Self::handle_flags_changed(dispatcher, event);
-                return;
+                return false;
             }
-            _ => return,
+            _ => return false,
         };
 
+        if matches!(e, WMEvent::MouseDown(_, _) | WMEvent::MouseUp(_, _)) {
+            if Interceptor::pop_ignore_click(
+                button.clone().unwrap(),
+                matches!(e, WMEvent::MouseUp(_, _)),
+            ) {
+                return false;
+            }
+        }
+
         dispatcher.send(e);
+
+        if let Some(button) = button {
+            if Interceptor::should_intercept_button(&button) {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn handle_flags_changed(dispatcher: &EventDispatcher, event: &CGEvent) {
@@ -117,33 +188,33 @@ impl EventListenerCG {
 
         if changed_flags & CGEventFlags::CGEventFlagControl.bits() != 0 {
             if new_flags & CGEventFlags::CGEventFlagControl.bits() != 0 {
-                dispatcher.send(PlatformEvent::KeyDown(KeyCode::ControlLeft));
+                dispatcher.send(WMEvent::KeyDown(KeyCode::ControlLeft));
             } else {
-                dispatcher.send(PlatformEvent::KeyUp(KeyCode::ControlLeft));
+                dispatcher.send(WMEvent::KeyUp(KeyCode::ControlLeft));
             }
         }
 
         if changed_flags & CGEventFlags::CGEventFlagShift.bits() != 0 {
             if new_flags & CGEventFlags::CGEventFlagShift.bits() != 0 {
-                dispatcher.send(PlatformEvent::KeyDown(KeyCode::ShiftLeft));
+                dispatcher.send(WMEvent::KeyDown(KeyCode::ShiftLeft));
             } else {
-                dispatcher.send(PlatformEvent::KeyUp(KeyCode::ShiftLeft));
+                dispatcher.send(WMEvent::KeyUp(KeyCode::ShiftLeft));
             }
         }
 
         if changed_flags & CGEventFlags::CGEventFlagAlternate.bits() != 0 {
             if new_flags & CGEventFlags::CGEventFlagAlternate.bits() != 0 {
-                dispatcher.send(PlatformEvent::KeyDown(KeyCode::AltLeft));
+                dispatcher.send(WMEvent::KeyDown(KeyCode::AltLeft));
             } else {
-                dispatcher.send(PlatformEvent::KeyUp(KeyCode::AltLeft));
+                dispatcher.send(WMEvent::KeyUp(KeyCode::AltLeft));
             }
         }
 
         if changed_flags & CGEventFlags::CGEventFlagCommand.bits() != 0 {
             if new_flags & CGEventFlags::CGEventFlagCommand.bits() != 0 {
-                dispatcher.send(PlatformEvent::KeyDown(KeyCode::SuperLeft));
+                dispatcher.send(WMEvent::KeyDown(KeyCode::SuperLeft));
             } else {
-                dispatcher.send(PlatformEvent::KeyUp(KeyCode::SuperLeft));
+                dispatcher.send(WMEvent::KeyUp(KeyCode::SuperLeft));
             }
         }
     }

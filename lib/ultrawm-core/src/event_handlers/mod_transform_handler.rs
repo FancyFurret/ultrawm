@@ -1,64 +1,39 @@
+use crate::event_handlers::mod_transform_tracker::{
+    ModTransformDragEvent, ModTransformTracker, ModTransformType,
+};
+use crate::event_handlers::EventHandler;
 use crate::event_loop_wm::{WMOperationError, WMOperationResult};
 use crate::layouts::container_tree::ResizeDirection;
 use crate::platform::traits::PlatformImpl;
 use crate::platform::{Bounds, CursorType, Platform, Position, WMEvent, WindowId};
 use crate::tile_preview_handler::TilePreviewHandler;
-use crate::window_area_tracker::{WindowAreaDragEvent, WindowAreaDragType, WindowAreaTracker};
 use crate::wm::WindowManager;
 use log::warn;
 
-pub struct WindowAreaHandler {
+pub struct ModTransformHandler {
     preview: TilePreviewHandler,
-    tracker: WindowAreaTracker,
+    tracker: ModTransformTracker,
     resize_direction: Option<ResizeDirection>,
     drag_start_position: Option<Position>,
     drag_start_bounds: Option<Bounds>,
 }
 
-impl WindowAreaHandler {
+impl ModTransformHandler {
     pub async fn new() -> Self {
         Self {
             preview: TilePreviewHandler::new().await,
-            tracker: WindowAreaTracker::new(),
+            tracker: ModTransformTracker::new(),
             resize_direction: None,
             drag_start_position: None,
             drag_start_bounds: None,
         }
     }
 
-    pub fn handle_event(
-        &mut self,
-        event: &WMEvent,
-        wm: &mut WindowManager,
-    ) -> WMOperationResult<bool> {
-        let events = self.tracker.handle_event(event, wm);
-        let mut handled = false;
-
-        for drag_event in events {
-            match drag_event {
-                WindowAreaDragEvent::Start(id, pos, drag_type) => {
-                    self.start(id, pos, drag_type, wm)?;
-                    handled = true;
-                }
-                WindowAreaDragEvent::Drag(id, pos, drag_type) => {
-                    self.drag(id, pos, drag_type, wm)?;
-                    handled = true;
-                }
-                WindowAreaDragEvent::End(id, pos, drag_type) => {
-                    self.drop(id, pos, drag_type, wm)?;
-                    handled = true;
-                }
-            }
-        }
-
-        Ok(handled)
-    }
-
     fn start(
         &mut self,
         id: WindowId,
         pos: Position,
-        drag_type: WindowAreaDragType,
+        drag_type: ModTransformType,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
         let window = wm.get_window(id)?;
@@ -70,8 +45,8 @@ impl WindowAreaHandler {
 
         // Set appropriate cursor for the drag type
         let cursor_type = match drag_type {
-            WindowAreaDragType::Tile | WindowAreaDragType::Slide => CursorType::Move,
-            WindowAreaDragType::Resize | WindowAreaDragType::ResizeSymmetric => {
+            ModTransformType::Tile | ModTransformType::Slide => CursorType::Move,
+            ModTransformType::Resize | ModTransformType::ResizeSymmetric => {
                 let direction = Self::resize_direction(&bounds, &pos);
                 self.resize_direction = Some(direction);
                 Self::cursor_for_resize_direction(direction)
@@ -88,7 +63,7 @@ impl WindowAreaHandler {
         &mut self,
         id: WindowId,
         pos: Position,
-        drag_type: WindowAreaDragType,
+        drag_type: ModTransformType,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
         let start_pos = match &self.drag_start_position {
@@ -101,14 +76,14 @@ impl WindowAreaHandler {
         };
         let window = wm.get_window(id)?;
 
-        if drag_type == WindowAreaDragType::Tile {
+        if drag_type == ModTransformType::Tile {
             self.preview.update_preview(id, &pos, wm);
         } else {
             self.preview.hide();
         }
 
         match drag_type {
-            WindowAreaDragType::Tile => {
+            ModTransformType::Tile => {
                 let dx = pos.x - start_pos.x;
                 let dy = pos.y - start_pos.y;
                 let mut new_bounds = start_bounds.clone();
@@ -116,7 +91,7 @@ impl WindowAreaHandler {
                 new_bounds.position.y += dy;
                 let _ = window.set_bounds_immediate(new_bounds);
             }
-            WindowAreaDragType::Resize => {
+            ModTransformType::Resize => {
                 if let Some(direction) = self.resize_direction {
                     let new_bounds =
                         Self::calculate_resize_bounds(&start_bounds, &start_pos, &pos, direction);
@@ -124,7 +99,7 @@ impl WindowAreaHandler {
                         .map_err(WMOperationError::Resize)?;
                 }
             }
-            WindowAreaDragType::ResizeSymmetric => {
+            ModTransformType::ResizeSymmetric => {
                 if let Some(direction) = self.resize_direction {
                     let new_bounds = Self::calculate_resize_bounds_symmetric(
                         &start_bounds,
@@ -136,7 +111,7 @@ impl WindowAreaHandler {
                         .map_err(WMOperationError::Resize)?;
                 }
             }
-            WindowAreaDragType::Slide => {
+            ModTransformType::Slide => {
                 let dx = pos.x - start_pos.x;
                 let dy = pos.y - start_pos.y;
                 let mut new_bounds = start_bounds.clone();
@@ -301,17 +276,17 @@ impl WindowAreaHandler {
         &mut self,
         id: WindowId,
         pos: Position,
-        drag_type: WindowAreaDragType,
+        drag_type: ModTransformType,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
         match drag_type {
-            WindowAreaDragType::Tile => {
+            ModTransformType::Tile => {
                 self.preview.tile_on_drop(id, &pos, wm)?;
             }
-            WindowAreaDragType::Resize | WindowAreaDragType::ResizeSymmetric => {
+            ModTransformType::Resize | ModTransformType::ResizeSymmetric => {
                 self.resize_direction = None;
             }
-            WindowAreaDragType::Slide => {}
+            ModTransformType::Slide => {}
         }
 
         self.drag_start_position = None;
@@ -323,5 +298,27 @@ impl WindowAreaHandler {
         });
 
         Ok(())
+    }
+}
+
+impl EventHandler for ModTransformHandler {
+    fn handle_event(&mut self, event: &WMEvent, wm: &mut WindowManager) -> WMOperationResult<bool> {
+        let events = self.tracker.handle_event(event, wm);
+
+        for drag_event in events {
+            match drag_event {
+                ModTransformDragEvent::Start(id, pos, drag_type) => {
+                    self.start(id, pos, drag_type, wm)?
+                }
+                ModTransformDragEvent::Drag(id, pos, drag_type) => {
+                    self.drag(id, pos, drag_type, wm)?
+                }
+                ModTransformDragEvent::End(id, pos, drag_type) => {
+                    self.drop(id, pos, drag_type, wm)?
+                }
+            }
+        }
+
+        Ok(self.tracker.active())
     }
 }

@@ -1,14 +1,14 @@
 use crate::event_loop_main::run_on_main_thread_blocking;
 use crate::overlay_window::OverlayWindowConfig;
 use crate::platform::{Bounds, PlatformOverlayImpl, PlatformResult, WindowId};
-use icrate::AppKit::{
-    NSView, NSViewHeightSizable, NSViewWidthSizable, NSVisualEffectBlendingModeBehindWindow,
-    NSVisualEffectMaterialHUDWindow, NSVisualEffectStateActive, NSVisualEffectView, NSWindow,
+use objc2::rc::Retained;
+use objc2::{MainThreadMarker, MainThreadOnly};
+use objc2_app_kit::{
+    NSAutoresizingMaskOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
+    NSVisualEffectState, NSVisualEffectView, NSWindow,
 };
-use icrate::CoreAnimation::CALayer;
-use icrate::Foundation::{CGPoint, CGRect, CGSize, NSRect};
-use objc2::rc::Id;
-use objc2::{msg_send_id, ClassType};
+use objc2_core_foundation::{CGPoint, CGRect, CGSize};
+use objc2_foundation::NSRect;
 use skia_safe::Image;
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::Window;
@@ -30,7 +30,7 @@ fn get_ns_window_pointer(window: &Window) -> PlatformResult<*const NSWindow> {
             let ns_view = &*ns_view;
             let ns_window = ns_view.window();
             match ns_window {
-                Some(window) => Ok(Id::as_ptr(&window)),
+                Some(window) => Ok(Retained::as_ptr(&window)),
                 None => Err("Failed to get NSWindow from NSView".into()),
             }
         }
@@ -55,17 +55,15 @@ impl PlatformOverlayImpl for MacOSPlatformOverlay {
     }
 
     fn set_window_bounds(window_id: WindowId, bounds: Bounds) -> PlatformResult<()> {
-        unsafe {
-            run_on_main_thread_blocking(move |_| {
-                let ns_window = get_ns_window_from_id(window_id).unwrap();
-                let cg_rect: CGRect = bounds.into();
-                let new_frame = NSRect::new(
-                    CGPoint::new(cg_rect.origin.x, cg_rect.origin.y),
-                    CGSize::new(cg_rect.size.width, cg_rect.size.height),
-                );
-                ns_window.setFrame_display(new_frame, true);
-            });
-        }
+        run_on_main_thread_blocking(move |_| {
+            let ns_window = get_ns_window_from_id(window_id).unwrap();
+            let cg_rect: CGRect = bounds.into();
+            let new_frame = NSRect::new(
+                CGPoint::new(cg_rect.origin.x, cg_rect.origin.y),
+                CGSize::new(cg_rect.size.width, cg_rect.size.height),
+            );
+            ns_window.setFrame_display(new_frame, true);
+        });
         Ok(())
     }
     fn set_window_opacity(window_id: WindowId, opacity: f32) -> PlatformResult<()> {
@@ -106,17 +104,21 @@ impl PlatformOverlayImpl for MacOSPlatformOverlay {
                     rect.origin.x = 0.0;
                     rect.origin.y = 0.0;
 
+                    let mtm = MainThreadMarker::new().unwrap();
                     let effect_view =
-                        NSVisualEffectView::initWithFrame(NSVisualEffectView::alloc(), rect);
-                    effect_view.setBlendingMode(NSVisualEffectBlendingModeBehindWindow);
-                    effect_view.setState(NSVisualEffectStateActive);
+                        NSVisualEffectView::initWithFrame(NSVisualEffectView::alloc(mtm), rect);
+                    effect_view.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
+                    effect_view.setState(NSVisualEffectState::Active);
                     effect_view.setWantsLayer(true);
-                    effect_view.setAutoresizingMask(NSViewWidthSizable | NSViewHeightSizable);
+                    effect_view.setAutoresizingMask(
+                        NSAutoresizingMaskOptions::ViewWidthSizable
+                            | NSAutoresizingMaskOptions::ViewHeightSizable,
+                    );
                     if config.blur {
-                        effect_view.setMaterial(NSVisualEffectMaterialHUDWindow);
+                        effect_view.setMaterial(NSVisualEffectMaterial::HUDWindow);
                     }
 
-                    let layer: Id<CALayer> = msg_send_id![&effect_view, layer];
+                    let layer = effect_view.layer().unwrap();
                     layer.setCornerRadius(15.0);
 
                     // Get the content view and add the effect view

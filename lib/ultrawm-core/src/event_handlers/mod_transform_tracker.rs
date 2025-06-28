@@ -1,5 +1,5 @@
-use crate::config::WindowAreaBindings;
-use crate::modified_mouse_keybind_tracker::{KeybindEvent, ModifiedMouseKeybindTracker};
+use crate::config::ModTransformBindings;
+use crate::mod_mouse_keybind_tracker::{KeybindEvent, ModMouseKeybindTracker};
 use crate::platform::{Bounds, Position, WMEvent, WindowId};
 use crate::window::WindowRef;
 use crate::wm::WindowManager;
@@ -7,14 +7,14 @@ use crate::Config;
 use std::fmt::Debug;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum WindowAreaDragEvent {
-    Start(WindowId, Position, WindowAreaDragType),
-    Drag(WindowId, Position, WindowAreaDragType),
-    End(WindowId, Position, WindowAreaDragType),
+pub enum ModTransformDragEvent {
+    Start(WindowId, Position, ModTransformType),
+    Drag(WindowId, Position, ModTransformType),
+    End(WindowId, Position, ModTransformType),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum WindowAreaDragType {
+pub enum ModTransformType {
     Resize,
     ResizeSymmetric,
     Slide,
@@ -26,38 +26,34 @@ struct DragContext {
     window: WindowRef,
     start_position: Position,
     start_bounds: Bounds,
-    drag_type: WindowAreaDragType,
+    drag_type: ModTransformType,
 }
 
-pub struct WindowAreaTracker {
-    bindings: WindowAreaBindings,
-    tile_binding: ModifiedMouseKeybindTracker,
-    resize_binding: ModifiedMouseKeybindTracker,
-    resize_symmetric_binding: ModifiedMouseKeybindTracker,
-    slide_binding: ModifiedMouseKeybindTracker,
+pub struct ModTransformTracker {
+    bindings: ModTransformBindings,
+    tile_binding: ModMouseKeybindTracker,
+    resize_binding: ModMouseKeybindTracker,
+    resize_symmetric_binding: ModMouseKeybindTracker,
+    slide_binding: ModMouseKeybindTracker,
     tile_drag: Option<DragContext>,
     resize_drag: Option<DragContext>,
     resize_symmetric_drag: Option<DragContext>,
     slide_drag: Option<DragContext>,
 }
 
-impl WindowAreaTracker {
+impl ModTransformTracker {
     pub fn new() -> Self {
         let config = Config::current();
         Self {
-            bindings: config.window_area_bindings.clone(),
-            tile_binding: ModifiedMouseKeybindTracker::new(
-                config.window_area_bindings.tile.clone(),
+            bindings: config.mod_transform_bindings.clone(),
+            tile_binding: ModMouseKeybindTracker::new(config.mod_transform_bindings.tile.clone()),
+            resize_binding: ModMouseKeybindTracker::new(
+                config.mod_transform_bindings.resize.clone(),
             ),
-            resize_binding: ModifiedMouseKeybindTracker::new(
-                config.window_area_bindings.resize.clone(),
+            resize_symmetric_binding: ModMouseKeybindTracker::new(
+                config.mod_transform_bindings.resize_symmetric.clone(),
             ),
-            resize_symmetric_binding: ModifiedMouseKeybindTracker::new(
-                config.window_area_bindings.resize_symmetric.clone(),
-            ),
-            slide_binding: ModifiedMouseKeybindTracker::new(
-                config.window_area_bindings.slide.clone(),
-            ),
+            slide_binding: ModMouseKeybindTracker::new(config.mod_transform_bindings.slide.clone()),
             tile_drag: None,
             resize_drag: None,
             resize_symmetric_drag: None,
@@ -65,38 +61,45 @@ impl WindowAreaTracker {
         }
     }
 
+    pub fn active(&self) -> bool {
+        self.tile_binding.mod_held()
+            || self.resize_binding.mod_held()
+            || self.resize_symmetric_binding.mod_held()
+            || self.slide_binding.mod_held()
+    }
+
     pub fn handle_event(
         &mut self,
         event: &WMEvent,
         wm: &WindowManager,
-    ) -> Vec<WindowAreaDragEvent> {
+    ) -> Vec<ModTransformDragEvent> {
         // Call all bindings so they can track their state properly, collect and filter results
-        let mut events: Vec<WindowAreaDragEvent> = vec![
+        let mut events: Vec<ModTransformDragEvent> = vec![
             Self::handle_binding(
                 event,
                 &mut self.tile_binding,
-                WindowAreaDragType::Tile,
+                ModTransformType::Tile,
                 wm,
                 &mut self.tile_drag,
             ),
             Self::handle_binding(
                 event,
                 &mut self.resize_binding,
-                WindowAreaDragType::Resize,
+                ModTransformType::Resize,
                 wm,
                 &mut self.resize_drag,
             ),
             Self::handle_binding(
                 event,
                 &mut self.resize_symmetric_binding,
-                WindowAreaDragType::ResizeSymmetric,
+                ModTransformType::ResizeSymmetric,
                 wm,
                 &mut self.resize_symmetric_drag,
             ),
             Self::handle_binding(
                 event,
                 &mut self.slide_binding,
-                WindowAreaDragType::Slide,
+                ModTransformType::Slide,
                 wm,
                 &mut self.slide_drag,
             ),
@@ -107,9 +110,9 @@ impl WindowAreaTracker {
 
         // Sort events so End events come before Start events
         events.sort_by_key(|event| match event {
-            WindowAreaDragEvent::End(_, _, _) => 0,
-            WindowAreaDragEvent::Drag(_, _, _) => 1,
-            WindowAreaDragEvent::Start(_, _, _) => 2,
+            ModTransformDragEvent::End(_, _, _) => 0,
+            ModTransformDragEvent::Drag(_, _, _) => 1,
+            ModTransformDragEvent::Start(_, _, _) => 2,
         });
 
         events
@@ -117,11 +120,11 @@ impl WindowAreaTracker {
 
     fn handle_binding(
         event: &WMEvent,
-        binding: &mut ModifiedMouseKeybindTracker,
-        drag_type: WindowAreaDragType,
+        binding: &mut ModMouseKeybindTracker,
+        drag_type: ModTransformType,
         wm: &WindowManager,
         current_drag: &mut Option<DragContext>,
-    ) -> Option<WindowAreaDragEvent> {
+    ) -> Option<ModTransformDragEvent> {
         match binding.handle_event(event) {
             Some(KeybindEvent::Start(pos)) => {
                 let window = wm
@@ -137,18 +140,22 @@ impl WindowAreaTracker {
                     drag_type: drag_type.clone(),
                 });
 
-                Some(WindowAreaDragEvent::Start(window.id(), pos, drag_type))
+                Some(ModTransformDragEvent::Start(window.id(), pos, drag_type))
             }
             Some(KeybindEvent::Drag(pos)) => {
                 if let Some(drag) = current_drag {
-                    Some(WindowAreaDragEvent::Drag(drag.window.id(), pos, drag_type))
+                    Some(ModTransformDragEvent::Drag(
+                        drag.window.id(),
+                        pos,
+                        drag_type,
+                    ))
                 } else {
                     None
                 }
             }
             Some(KeybindEvent::End(pos)) => {
                 if let Some(drag) = current_drag.take() {
-                    Some(WindowAreaDragEvent::End(
+                    Some(ModTransformDragEvent::End(
                         drag.window.id(),
                         pos,
                         drag.drag_type,

@@ -1,3 +1,4 @@
+use crate::platform::inteceptor::Interceptor;
 use crate::platform::windows::{window_is_manageable, WindowsPlatformWindow};
 use crate::platform::{
     EventDispatcher, MouseButton, PlatformEventsImpl, PlatformResult, PlatformWindowImpl, Position,
@@ -24,9 +25,6 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use winit::keyboard::KeyCode;
 
 static EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
-static INTERCEPT_BUTTONS: LazyLock<Mutex<HashSet<MouseButton>>> =
-    LazyLock::new(|| Mutex::new(HashSet::new()));
-static IGNORE_NEXT_CLICKS: AtomicU64 = AtomicU64::new(0);
 static WIN_EVENT_HOOKS: Mutex<Vec<HWINEVENTHOOK>> = Mutex::new(Vec::new());
 static LOW_LEVEL_HOOKS: Mutex<Vec<HHOOK>> = Mutex::new(Vec::new());
 
@@ -119,24 +117,6 @@ unsafe impl PlatformEventsImpl for WindowsPlatformEvents {
 
         Ok(())
     }
-
-    fn intercept_button(button: MouseButton, intercept: bool) -> PlatformResult<()> {
-        if let Ok(mut intercept_buttons) = INTERCEPT_BUTTONS.lock() {
-            if intercept {
-                intercept_buttons.insert(button);
-            } else {
-                intercept_buttons.remove(&button);
-            }
-        }
-        Ok(())
-    }
-}
-
-impl WindowsPlatformEvents {
-    pub fn ignore_next_simulated_clicks(count: u64) {
-        let current = IGNORE_NEXT_CLICKS.load(Ordering::SeqCst);
-        IGNORE_NEXT_CLICKS.store(current + count, Ordering::SeqCst);
-    }
 }
 
 unsafe extern "system" fn win_event_hook_proc(
@@ -220,9 +200,7 @@ unsafe extern "system" fn mouse_hook_proc(
 
     // Check if we should ignore this event due to simulated click
     if button.is_some() {
-        let current_ignore_count = IGNORE_NEXT_CLICKS.load(Ordering::SeqCst);
-        if current_ignore_count > 0 {
-            IGNORE_NEXT_CLICKS.store(current_ignore_count - 1, Ordering::SeqCst);
+        if Interceptor::pop_ignore_click() {
             return CallNextHookEx(None, n_code, w_param, l_param);
         }
     }
@@ -231,10 +209,8 @@ unsafe extern "system" fn mouse_hook_proc(
 
     // Check if we should intercept this specific button before calling next hook
     if let Some(button) = button.as_ref() {
-        if let Ok(intercept_buttons) = INTERCEPT_BUTTONS.lock() {
-            if intercept_buttons.contains(button) {
-                return LRESULT(1);
-            }
+        if Interceptor::should_intercept_button(&button) {
+            return LRESULT(1);
         }
     }
 

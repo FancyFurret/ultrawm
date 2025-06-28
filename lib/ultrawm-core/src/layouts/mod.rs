@@ -65,7 +65,7 @@ pub trait WindowLayout: Debug {
         &mut self,
         _handle: &ResizeHandle,
         _position: &Position,
-        _mode: ResizeMode,
+        _mode: &ResizeMode,
     ) -> bool {
         false
     }

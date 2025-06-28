@@ -2,10 +2,10 @@ use crate::config::Config;
 use crate::layouts::{ContainerTree, LayoutError};
 use crate::partition::{Partition, PartitionId};
 use crate::platform::{
-    Bounds, MouseButtons, Platform, PlatformImpl, PlatformResult, PlatformWindow,
-    PlatformWindowImpl, Position, WindowId,
+    Bounds, Platform, PlatformImpl, PlatformResult, PlatformWindow, PlatformWindowImpl, Position,
+    WindowId,
 };
-use crate::resize_handle::ResizeHandle;
+use crate::resize_handle::{ResizeHandle, ResizeMode};
 use crate::serialization::{extract_workspace_layout, load_layout, save_layout};
 use crate::tile_result::InsertResult;
 use crate::window::{Window, WindowRef};
@@ -320,10 +320,10 @@ impl WindowManager {
         &mut self,
         handle: &ResizeHandle,
         position: &Position,
-        buttons: &MouseButtons,
+        mode: &ResizeMode,
     ) -> WMResult<()> {
         if let Ok(workspace) = self.get_workspace_at_position_mut(position) {
-            if workspace.resize_handle_moved(handle, position, buttons) {
+            if workspace.resize_handle_moved(handle, position, mode) {
                 workspace.flush_windows()?;
                 self.try_save_layout();
             }

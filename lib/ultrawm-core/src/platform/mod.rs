@@ -4,6 +4,7 @@ pub use traits::*;
 
 mod common;
 mod event_bridge;
+pub mod input_state;
 pub mod inteceptor;
 pub(crate) mod traits;
 

@@ -1,7 +1,5 @@
 use crate::platform::traits::PlatformImpl;
-use crate::platform::{
-    MouseButton, Platform, PlatformEvents, PlatformEventsImpl, PlatformResult, WMEvent,
-};
+use crate::platform::{MouseButton, Platform, PlatformResult, WMEvent};
 use log::error;
 use std::collections::{HashMap, HashSet};
 use std::sync::{LazyLock, Mutex};
@@ -15,6 +13,11 @@ static BUTTON_STATES: LazyLock<Mutex<HashMap<crate::platform::MouseButton, bool>
 
 static HANDLED_BUTTONS: LazyLock<Mutex<HashSet<MouseButton>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
+
+static INTERCEPT_BUTTONS: LazyLock<Mutex<HashSet<MouseButton>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+static IGNORE_NEXT_CLICK: LazyLock<Mutex<Option<MouseButton>>> = LazyLock::new(|| Mutex::new(None));
 
 #[derive(Debug)]
 pub struct InterceptionRequest {
@@ -32,7 +35,7 @@ impl InterceptionRequest {
             let count = button_counts.entry(button.clone()).or_insert(0);
             if *count == 0 {
                 // First request for this button - start intercepting
-                if let Err(e) = PlatformEvents::intercept_button(button.clone(), true) {
+                if let Err(e) = Interceptor::intercept_button(button.clone(), true) {
                     error!("Failed to start intercepting button: {e:?}");
                 }
             }
@@ -54,7 +57,7 @@ impl InterceptionRequest {
                 if *count == 0 {
                     // No more requests for this button - stop intercepting
                     button_counts.remove(button);
-                    if let Err(e) = PlatformEvents::intercept_button(button.clone(), false) {
+                    if let Err(e) = Interceptor::intercept_button(button.clone(), false) {
                         error!("Failed to stop intercepting button: {e:?}");
                     }
                 }
@@ -78,8 +81,8 @@ pub struct Interceptor;
 impl Interceptor {
     pub fn initialize() -> PlatformResult<()> {
         // Always intercept mouse modifiers
-        PlatformEvents::intercept_button(MouseButton::Button4, true)?;
-        PlatformEvents::intercept_button(MouseButton::Button5, true)?;
+        Interceptor::intercept_button(MouseButton::Button4, true)?;
+        Interceptor::intercept_button(MouseButton::Button5, true)?;
         BUTTON_REQUEST_COUNTS
             .lock()
             .unwrap()
@@ -145,5 +148,48 @@ impl Interceptor {
                 handled.insert(button.clone());
             }
         }
+    }
+
+    pub fn ignore_next_click(button: MouseButton) {
+        if let Ok(mut ignore_next_click) = IGNORE_NEXT_CLICK.lock() {
+            *ignore_next_click = Some(button);
+        }
+    }
+
+    fn intercept_button(button: MouseButton, intercept: bool) -> PlatformResult<()> {
+        if let Ok(mut intercept_buttons) = INTERCEPT_BUTTONS.lock() {
+            if intercept {
+                intercept_buttons.insert(button);
+            } else {
+                intercept_buttons.remove(&button);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn pop_ignore_click(button: MouseButton, up: bool) -> bool {
+        if let Ok(mut ignore_next_click) = IGNORE_NEXT_CLICK.lock() {
+            if let Some(ignore_button) = ignore_next_click.as_ref() {
+                if ignore_button != &button {
+                    return false;
+                }
+
+                if up {
+                    *ignore_next_click = None;
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn should_intercept_button(button: &MouseButton) -> bool {
+        if let Ok(intercept_buttons) = INTERCEPT_BUTTONS.lock() {
+            if intercept_buttons.contains(button) {
+                return true;
+            }
+        }
+
+        false
     }
 }

@@ -18,8 +18,6 @@ where
     /// This function should only be called from the main thread. It is not thread safe.
     unsafe fn initialize(dispatcher: EventDispatcher) -> PlatformResult<()>;
     unsafe fn finalize() -> PlatformResult<()>;
-
-    fn intercept_button(button: MouseButton, intercept: bool) -> PlatformResult<()>;
 }
 
 pub trait PlatformImpl

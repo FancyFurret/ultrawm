@@ -1,21 +1,20 @@
 use std::collections::HashSet;
 
-use crate::config::ModifiedMouseKeybind;
+use crate::config::ModMouseKeybind;
 use crate::platform::{
+    input_state::InputState,
     inteceptor::{InterceptionRequest, Interceptor},
-    Keys, MouseButton, MouseButtons, Position, WMEvent,
+    MouseButton, Position, WMEvent,
 };
 use log::error;
 
 /// Tracks modifier keys and handles event interception
-pub struct ModifiedMouseKeybindTracker {
-    current_keys: Keys,
-    current_buttons: MouseButtons,
+pub struct ModMouseKeybindTracker {
     interception_request: Option<InterceptionRequest>,
     active: bool,
     moved: bool,
     started: bool,
-    keybind: ModifiedMouseKeybind,
+    keybind: ModMouseKeybind,
     included_buttons: HashSet<MouseButton>,
 }
 
@@ -25,11 +24,9 @@ pub enum KeybindEvent {
     End(Position),
 }
 
-impl ModifiedMouseKeybindTracker {
-    pub fn new(keybind: ModifiedMouseKeybind) -> Self {
+impl ModMouseKeybindTracker {
+    pub fn new(keybind: ModMouseKeybind) -> Self {
         Self {
-            current_keys: Keys::new(),
-            current_buttons: MouseButtons::new(),
             interception_request: None,
             active: false,
             moved: false,
@@ -46,23 +43,11 @@ impl ModifiedMouseKeybindTracker {
 
     pub fn handle_event(&mut self, event: &WMEvent) -> Option<KeybindEvent> {
         match event {
-            WMEvent::KeyDown(key) => {
-                self.current_keys.add(key);
+            WMEvent::KeyDown(_) | WMEvent::KeyUp(_) => {
                 self.update_interception_state();
                 None
             }
-            WMEvent::KeyUp(key) => {
-                self.current_keys.remove(key);
-                self.update_interception_state();
-                None
-            }
-            WMEvent::MouseDown(pos, button) => {
-                self.current_buttons.add(button);
-                self.update_interception_state();
-                self.update_keybind_state(pos)
-            }
-            WMEvent::MouseUp(pos, button) => {
-                self.current_buttons.remove(button);
+            WMEvent::MouseDown(pos, _) | WMEvent::MouseUp(pos, _) => {
                 self.update_interception_state();
                 self.update_keybind_state(pos)
             }
@@ -85,9 +70,10 @@ impl ModifiedMouseKeybindTracker {
     }
 
     fn update_interception_state(&mut self) {
-        let should_intercept = self
-            .keybind
-            .modifiers_match(&self.current_keys, &self.current_buttons);
+        let should_intercept = self.keybind.modifiers_match(
+            &InputState::pressed_keys(),
+            &InputState::pressed_mouse_buttons(),
+        );
 
         if should_intercept && self.interception_request.is_none() {
             match Interceptor::request_interception(self.included_buttons.clone()) {
@@ -104,9 +90,7 @@ impl ModifiedMouseKeybindTracker {
     }
 
     fn update_keybind_state(&mut self, position: &Position) -> Option<KeybindEvent> {
-        let active = self
-            .keybind
-            .matches(&self.current_keys, &self.current_buttons);
+        let active = InputState::binding_matches(&self.keybind);
         if active && !self.active {
             self.active = true;
             // Don't send Start event yet - wait for mouse movement
@@ -118,5 +102,9 @@ impl ModifiedMouseKeybindTracker {
         } else {
             None
         }
+    }
+
+    pub fn mod_held(&self) -> bool {
+        self.interception_request.is_some()
     }
 }
