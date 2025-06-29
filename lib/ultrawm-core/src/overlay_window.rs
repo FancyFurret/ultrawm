@@ -219,15 +219,13 @@ impl OverlayWindowAnimator {
     fn handle_command(&mut self, cmd: OverlayWindowCommand, running: &mut bool) {
         match cmd {
             OverlayWindowCommand::Show => {
+                self.set_visible(true);
                 if self.config.fade_animation_ms == 0 {
-                    self.set_visible(true);
                     self.set_opacity(1.0);
-                    let _ = self.render();
                 } else {
-                    self.set_visible(true);
                     self.start_fade(1.0, self.config.fade_animation_ms);
-                    let _ = self.render();
                 }
+                let _ = self.render();
             }
             OverlayWindowCommand::Hide => {
                 if self.config.fade_animation_ms == 0 {

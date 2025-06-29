@@ -11,9 +11,10 @@ use windows::Win32::Graphics::Gdi::{
     GetDC, ReleaseDC, SetDIBitsToDevice, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetWindowLongW, SetLayeredWindowAttributes, SetWindowLongW, SetWindowPos, ShowWindow,
-    GWL_EXSTYLE, GWL_STYLE, HWND_TOPMOST, LWA_ALPHA, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SW_SHOW,
-    WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    GetWindowLongW, SetLayeredWindowAttributes, SetWindowLongW, SetWindowPos,
+    ShowWindow, GWL_EXSTYLE, GWL_STYLE,
+    LWA_ALPHA, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SW_SHOW, WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    WS_EX_TOPMOST, WS_POPUP,
 };
 use winit::platform::windows::{CornerPreference, WindowExtWindows};
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -51,12 +52,12 @@ impl PlatformOverlayImpl for WindowsPlatformOverlay {
         unsafe {
             SetWindowPos(
                 HWND(window_id as *mut _),
-                Some(HWND_TOPMOST),
+                None,
                 bounds.position.x,
                 bounds.position.y,
                 bounds.size.width as i32,
                 bounds.size.height as i32,
-                SWP_NOACTIVATE | SWP_NOOWNERZORDER,
+                SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER,
             )
             .map_err(|err| err.to_string())?;
         }

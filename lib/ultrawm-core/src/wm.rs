@@ -390,15 +390,22 @@ impl WindowManager {
         // Sort by floating status first (floating windows always have priority), then by window order
         all_windows.sort_by_key(|w| {
             let order_index = self.window_order.get_index_of(&w.id()).unwrap_or(0);
-            let is_floating = !w.tiled();
-            (is_floating, order_index)
+            (w.floating(), order_index)
         });
 
         // Find the last window (highest priority) that contains the position
-        all_windows
+        let found = all_windows
             .into_iter()
             .rev()
-            .find(|w| w.bounds().contains(position))
+            .find(|w| w.bounds().contains(position))?;
+
+        if found.tiled() {
+            if self.resize_handle_at_position_internal(position).is_some() {
+                return None;
+            }
+        }
+
+        Some(found)
     }
 
     /// If the position is on the edge a window, that window is returned.
@@ -441,6 +448,16 @@ impl WindowManager {
 
     /// Finds the first drag handle that contains the given position (if any).
     pub fn resize_handle_at_position(&self, position: &Position) -> Option<ResizeHandle> {
+        if let Some(window) = self.find_window_at_position(position) {
+            if window.floating() {
+                return None;
+            }
+        }
+
+        self.resize_handle_at_position_internal(position)
+    }
+
+    fn resize_handle_at_position_internal(&self, position: &Position) -> Option<ResizeHandle> {
         let thickness = Config::resize_handle_width() as i32;
         self.resize_handles(position)
             .into_iter()
