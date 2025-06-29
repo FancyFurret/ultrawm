@@ -100,13 +100,20 @@ impl TilePreviewHandler {
                 .map_err(|e| WMOperationError::Move(e))?;
         } else {
             // Move the window back to its original position
-            let window = wm.get_window(id)?;
-            let tiled_bounds = window.bounds().clone();
-            window.set_bounds(tiled_bounds);
-            window
-                .flush()
-                .map_err(|e| WMOperationError::Move(e.into()))?;
+            self.cancel(id, wm)?;
         }
+        Ok(())
+    }
+
+    pub fn cancel(&mut self, id: WindowId, wm: &mut WindowManager) -> WMOperationResult<()> {
+        self.hide();
+        // Move the window back to its original position
+        let window = wm.get_window(id)?;
+        let tiled_bounds = window.bounds().clone();
+        window.set_bounds(tiled_bounds);
+        window
+            .flush()
+            .map_err(|e| WMOperationError::Move(e.into()))?;
         Ok(())
     }
 }

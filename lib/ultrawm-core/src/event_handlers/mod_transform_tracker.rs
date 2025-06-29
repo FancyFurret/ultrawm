@@ -16,7 +16,7 @@ pub enum ModTransformDragEvent {
     Start(WindowId, Position, ModTransformType),
     Drag(WindowId, Position, ModTransformType),
     End(WindowId, Position, ModTransformType),
-    Cancel(WindowId, Position, ModTransformType),
+    Cancel(WindowId, ModTransformType),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -214,7 +214,7 @@ impl ModTransformTracker {
         // Sort events so End events come before Start events
         events.sort_by_key(|event| match event {
             ModTransformDragEvent::End(_, _, _) => 0,
-            ModTransformDragEvent::Cancel(_, _, _) => 1,
+            ModTransformDragEvent::Cancel(_, _) => 1,
             ModTransformDragEvent::Drag(_, _, _) => 2,
             ModTransformDragEvent::Start(_, _, _) => 3,
         });
@@ -270,11 +270,10 @@ impl ModTransformTracker {
                     None
                 }
             }
-            Some(KeybindEvent::Cancel(pos)) => {
+            Some(KeybindEvent::Cancel()) => {
                 if let Some(drag) = current_drag.take() {
                     Some(ModTransformDragEvent::Cancel(
                         drag.window.id(),
-                        pos,
                         drag.drag_type,
                     ))
                 } else {

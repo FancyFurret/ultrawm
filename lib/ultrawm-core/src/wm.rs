@@ -169,7 +169,7 @@ impl WindowManager {
         }
 
         if Config::float_new_windows() {
-            let workspace = self.get_workspace_at_position_mut(&window.bounds().position)?;
+            let workspace = self.get_workspace_at_bounds_mut(&window.bounds())?;
             workspace.float_window(&window)?;
             self.float_window(window.id())?;
         } else {

@@ -240,7 +240,28 @@ impl ModTransformHandler {
         Ok(())
     }
 
-    fn end(&mut self, drag_type: ModTransformType) {
+    fn cancel(
+        &mut self,
+        id: WindowId,
+        drag_type: ModTransformType,
+        wm: &mut WindowManager,
+    ) -> WMOperationResult<()> {
+        match drag_type {
+            ModTransformType::Tile => {
+                let window = wm.get_window(id)?;
+                if window.floating() {
+                    window.update_bounds();
+                }
+
+                self.preview.cancel(id, wm)?;
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    fn finalize(&mut self, drag_type: ModTransformType) {
         match drag_type {
             ModTransformType::Resize(_) | ModTransformType::ResizeSymmetric(_) => {
                 self.resize_direction = None;
@@ -248,6 +269,7 @@ impl ModTransformHandler {
             _ => {}
         }
 
+        self.preview.hide();
         self.drag_start_position = None;
         self.drag_start_bounds = None;
 
@@ -272,10 +294,11 @@ impl EventHandler for ModTransformHandler {
                 }
                 ModTransformDragEvent::End(id, pos, drag_type) => {
                     self.drop(id, pos, drag_type.clone(), wm)?;
-                    self.end(drag_type);
+                    self.finalize(drag_type);
                 }
-                ModTransformDragEvent::Cancel(_, _, drag_type) => {
-                    self.end(drag_type);
+                ModTransformDragEvent::Cancel(id, drag_type) => {
+                    self.cancel(id, drag_type.clone(), wm)?;
+                    self.finalize(drag_type);
                 }
             }
         }

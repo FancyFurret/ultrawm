@@ -7,6 +7,7 @@ use crate::platform::{
     MouseButton, Position, WMEvent,
 };
 use log::error;
+use winit::keyboard::KeyCode;
 
 /// Tracks modifier keys and handles event interception
 pub struct ModMouseKeybindTracker {
@@ -22,7 +23,7 @@ pub enum KeybindEvent {
     Start(Position),
     Drag(Position),
     End(Position),
-    Cancel(Position),
+    Cancel(),
 }
 
 impl ModMouseKeybindTracker {
@@ -46,9 +47,20 @@ impl ModMouseKeybindTracker {
         match event {
             WMEvent::KeyDown(_) | WMEvent::KeyUp(_) => {
                 self.update_interception_state();
+
+                let escape_pressed = InputState::key_pressed(&KeyCode::Escape);
+                if escape_pressed && self.active {
+                    self.active = false;
+                    self.started = false;
+                    return Some(KeybindEvent::Cancel());
+                }
                 None
             }
-            WMEvent::MouseDown(pos, _) | WMEvent::MouseUp(pos, _) => {
+            WMEvent::MouseDown(pos, _) => {
+                self.update_interception_state();
+                self.update_keybind_state(event, pos)
+            }
+            WMEvent::MouseUp(pos, _) => {
                 self.update_interception_state();
                 self.update_keybind_state(event, pos)
             }
@@ -71,10 +83,11 @@ impl ModMouseKeybindTracker {
     }
 
     fn update_interception_state(&mut self) {
+        let escape_pressed = InputState::key_pressed(&KeyCode::Escape);
         let should_intercept = self.keybind.modifiers_match(
             &InputState::pressed_keys(),
             &InputState::pressed_mouse_buttons(),
-        );
+        ) && !escape_pressed;
 
         if should_intercept && self.interception_request.is_none() {
             match Interceptor::request_interception(self.included_buttons.clone()) {
@@ -96,18 +109,25 @@ impl ModMouseKeybindTracker {
         position: &Position,
     ) -> Option<KeybindEvent> {
         let active = InputState::binding_matches(&self.keybind);
-        if active && !self.active {
+        let any_mouse_down = InputState::mouse_button_pressed(&MouseButton::Left)
+            || InputState::mouse_button_pressed(&MouseButton::Middle)
+            || InputState::mouse_button_pressed(&MouseButton::Right);
+
+        if active && !self.active && matches!(event, WMEvent::MouseDown(_, _)) {
+            // If our binding now matches due to a mouse down, activate
             self.active = true;
             // Don't send Start event yet - wait for mouse movement
             None
-        } else if !active && self.active {
+        } else if self.active && !active && matches!(event, WMEvent::MouseDown(_, _)) {
+            // If another button was pressed, cancel
             self.active = false;
-            self.started = false; // Reset for next time
-                                  // If binding ends due to mouse down (button added), it's a cancel
-            match event {
-                WMEvent::MouseDown(_, _) => Some(KeybindEvent::Cancel(position.clone())),
-                _ => Some(KeybindEvent::End(position.clone())),
-            }
+            self.started = false;
+            Some(KeybindEvent::Cancel())
+        } else if self.active && !active && !any_mouse_down {
+            // If all buttons have been released, end
+            self.active = false;
+            self.started = false;
+            Some(KeybindEvent::End(position.clone()))
         } else {
             None
         }

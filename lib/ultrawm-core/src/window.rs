@@ -75,7 +75,11 @@ impl Window {
     }
 
     pub fn update_bounds(&self) {
-        self.bounds.replace(self.platform_bounds());
+        let bounds = Bounds {
+            size: self.platform_window().size(),
+            position: self.platform_window().position(),
+        };
+        self.bounds.replace(bounds);
     }
 
     /// Set the position of the raw window, without updating it's managed/tiled position.

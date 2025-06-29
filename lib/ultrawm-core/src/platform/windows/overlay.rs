@@ -11,10 +11,9 @@ use windows::Win32::Graphics::Gdi::{
     GetDC, ReleaseDC, SetDIBitsToDevice, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetWindowLongW, SetLayeredWindowAttributes, SetWindowLongW, SetWindowPos,
-    ShowWindow, GWL_EXSTYLE, GWL_STYLE,
-    LWA_ALPHA, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SW_SHOW, WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-    WS_EX_TOPMOST, WS_POPUP,
+    GetWindowLongW, SetLayeredWindowAttributes, SetWindowLongW, SetWindowPos, ShowWindow,
+    GWL_EXSTYLE, GWL_STYLE, LWA_ALPHA, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SW_SHOW,
+    WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 use winit::platform::windows::{CornerPreference, WindowExtWindows};
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
