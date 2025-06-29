@@ -136,4 +136,7 @@ impl PlatformWindowImpl for MockPlatformWindow {
     fn focus(&self) -> PlatformResult<()> {
         Ok(())
     }
+    fn set_always_on_top(&self, _always_on_top: bool) -> PlatformResult<()> {
+        Ok(())
+    }
 }

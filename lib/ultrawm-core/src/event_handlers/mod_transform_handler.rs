@@ -44,12 +44,13 @@ impl ModTransformHandler {
         self.drag_start_bounds = Some(bounds.clone());
 
         // Set appropriate cursor for the drag type
-        let cursor_type = match drag_type {
-            ModTransformType::Tile | ModTransformType::Slide => CursorType::Move,
-            ModTransformType::Resize | ModTransformType::ResizeSymmetric => {
-                let direction = Self::resize_direction(&bounds, &pos);
-                self.resize_direction = Some(direction);
-                Self::cursor_for_resize_direction(direction)
+        let cursor_type = match &drag_type {
+            ModTransformType::Tile | ModTransformType::Float | ModTransformType::Slide => {
+                CursorType::Move
+            }
+            ModTransformType::Resize(direction) | ModTransformType::ResizeSymmetric(direction) => {
+                self.resize_direction = Some(*direction);
+                Self::cursor_for_resize_mode(*direction)
             }
         };
 
@@ -89,27 +90,23 @@ impl ModTransformHandler {
                 let mut new_bounds = start_bounds.clone();
                 new_bounds.position.x += dx;
                 new_bounds.position.y += dy;
-                let _ = window.set_bounds_immediate(new_bounds);
+                let _ = window.set_preview_bounds(new_bounds);
             }
-            ModTransformType::Resize => {
-                if let Some(direction) = self.resize_direction {
-                    let new_bounds =
-                        Self::calculate_resize_bounds(&start_bounds, &start_pos, &pos, direction);
-                    wm.resize_window(id, &new_bounds)
-                        .map_err(WMOperationError::Resize)?;
+            ModTransformType::Float => {
+                if window.tiled() {
+                    wm.float_window(window.id())?;
                 }
-            }
-            ModTransformType::ResizeSymmetric => {
-                if let Some(direction) = self.resize_direction {
-                    let new_bounds = Self::calculate_resize_bounds_symmetric(
-                        &start_bounds,
-                        &start_pos,
-                        &pos,
-                        direction,
-                    );
-                    wm.resize_window(id, &new_bounds)
-                        .map_err(WMOperationError::Resize)?;
-                }
+
+                let dx = pos.x - start_pos.x;
+                let dy = pos.y - start_pos.y;
+                let mut new_bounds = start_bounds.clone();
+                new_bounds.position.x += dx;
+                new_bounds.position.y += dy;
+                window.set_bounds(new_bounds);
+                window.flush().unwrap_or_else(|e| {
+                    warn!("Failed to flush window: {}", e);
+                });
+                wm.update_floating_window(window.id())?;
             }
             ModTransformType::Slide => {
                 let dx = pos.x - start_pos.x;
@@ -119,85 +116,39 @@ impl ModTransformHandler {
                 new_bounds.position.y += dy;
                 wm.resize_window(id, &new_bounds)
                     .map_err(WMOperationError::Resize)?;
+
+                if window.floating() {
+                    wm.update_floating_window(window.id())?;
+                }
+            }
+            ModTransformType::Resize(direction) => {
+                let new_bounds =
+                    Self::calculate_resize_bounds(&start_bounds, &start_pos, &pos, direction);
+                wm.resize_window(id, &new_bounds)
+                    .map_err(WMOperationError::Resize)?;
+            }
+            ModTransformType::ResizeSymmetric(direction) => {
+                let new_bounds = Self::calculate_resize_bounds_symmetric(
+                    &start_bounds,
+                    &start_pos,
+                    &pos,
+                    direction,
+                );
+                wm.resize_window(id, &new_bounds)
+                    .map_err(WMOperationError::Resize)?;
             }
         }
 
         Ok(())
     }
 
-    fn resize_direction(bounds: &Bounds, pos: &Position) -> ResizeDirection {
-        if let Some(dir) = Self::detect_corner_wedge(bounds, pos) {
-            return dir;
-        }
-        Self::detect_edge(bounds, pos)
-    }
-
-    fn cursor_for_resize_direction(direction: ResizeDirection) -> CursorType {
+    fn cursor_for_resize_mode(direction: ResizeDirection) -> CursorType {
         match direction {
             ResizeDirection::Top | ResizeDirection::Bottom => CursorType::ResizeNorth,
             ResizeDirection::Left | ResizeDirection::Right => CursorType::ResizeEast,
             ResizeDirection::TopLeft | ResizeDirection::BottomRight => CursorType::ResizeNorthWest,
             ResizeDirection::TopRight | ResizeDirection::BottomLeft => CursorType::ResizeNorthEast,
         }
-    }
-
-    fn detect_corner_wedge(bounds: &Bounds, pos: &Position) -> Option<ResizeDirection> {
-        let left = bounds.position.x;
-        let right = bounds.position.x + bounds.size.width as i32;
-        let top = bounds.position.y;
-        let bottom = bounds.position.y + bounds.size.height as i32;
-        let w = bounds.size.width as f32;
-        let h = bounds.size.height as f32;
-        let corner_w = (w * 0.25).round() as i32;
-        let corner_h = (h * 0.25).round() as i32;
-
-        // Top-left
-        if pos.x >= left && pos.x < left + corner_w && pos.y >= top && pos.y < top + corner_h {
-            return Some(ResizeDirection::TopLeft);
-        }
-        // Top-right
-        if pos.x <= right && pos.x > right - corner_w && pos.y >= top && pos.y < top + corner_h {
-            return Some(ResizeDirection::TopRight);
-        }
-        // Bottom-left
-        if pos.x >= left && pos.x < left + corner_w && pos.y <= bottom && pos.y > bottom - corner_h
-        {
-            return Some(ResizeDirection::BottomLeft);
-        }
-        // Bottom-right
-        if pos.x <= right
-            && pos.x > right - corner_w
-            && pos.y <= bottom
-            && pos.y > bottom - corner_h
-        {
-            return Some(ResizeDirection::BottomRight);
-        }
-        None
-    }
-
-    fn detect_edge(bounds: &Bounds, pos: &Position) -> ResizeDirection {
-        let left = bounds.position.x;
-        let right = bounds.position.x + bounds.size.width as i32;
-        let top = bounds.position.y;
-        let bottom = bounds.position.y + bounds.size.height as i32;
-        let left_dist = (pos.x - left).abs();
-        let right_dist = (pos.x - right).abs();
-        let top_dist = (pos.y - top).abs();
-        let bottom_dist = (pos.y - bottom).abs();
-        let mut min_dist = left_dist;
-        let mut dir = ResizeDirection::Left;
-        if right_dist < min_dist {
-            min_dist = right_dist;
-            dir = ResizeDirection::Right;
-        }
-        if top_dist < min_dist {
-            min_dist = top_dist;
-            dir = ResizeDirection::Top;
-        }
-        if bottom_dist < min_dist {
-            dir = ResizeDirection::Bottom;
-        }
-        dir
     }
 
     fn calculate_resize_bounds(
@@ -283,10 +234,18 @@ impl ModTransformHandler {
             ModTransformType::Tile => {
                 self.preview.tile_on_drop(id, &pos, wm)?;
             }
-            ModTransformType::Resize | ModTransformType::ResizeSymmetric => {
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    fn end(&mut self, drag_type: ModTransformType) {
+        match drag_type {
+            ModTransformType::Resize(_) | ModTransformType::ResizeSymmetric(_) => {
                 self.resize_direction = None;
             }
-            ModTransformType::Slide => {}
+            _ => {}
         }
 
         self.drag_start_position = None;
@@ -296,8 +255,6 @@ impl ModTransformHandler {
         Platform::reset_cursor().unwrap_or_else(|e| {
             warn!("Failed to reset cursor: {}", e);
         });
-
-        Ok(())
     }
 }
 
@@ -314,7 +271,11 @@ impl EventHandler for ModTransformHandler {
                     self.drag(id, pos, drag_type, wm)?
                 }
                 ModTransformDragEvent::End(id, pos, drag_type) => {
-                    self.drop(id, pos, drag_type, wm)?
+                    self.drop(id, pos, drag_type.clone(), wm)?;
+                    self.end(drag_type);
+                }
+                ModTransformDragEvent::Cancel(_, _, drag_type) => {
+                    self.end(drag_type);
                 }
             }
         }

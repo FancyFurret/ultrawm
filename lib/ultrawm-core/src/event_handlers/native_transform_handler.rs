@@ -31,6 +31,13 @@ impl NativeTransformHandler {
         drag_type: WindowDragType,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
+        let window = wm.get_window(id)?;
+        if window.floating() {
+            window.update_bounds();
+            wm.update_floating_window(window.id())?;
+            return Ok(());
+        }
+
         if drag_type == WindowDragType::Move {
             self.preview.update_preview(id, &position, wm);
         }
@@ -44,6 +51,11 @@ impl NativeTransformHandler {
         drag_type: WindowDragType,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
+        let window = wm.get_window(id)?;
+        if window.floating() {
+            return Ok(());
+        }
+
         if drag_type == WindowDragType::Move {
             TilePreviewHandler::tile_on_drop(&mut self.preview, id, &position, wm)?;
         } else if let WindowDragType::Resize(_) = drag_type {

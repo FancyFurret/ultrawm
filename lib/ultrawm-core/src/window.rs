@@ -5,11 +5,27 @@ use std::rc::Rc;
 
 pub type WindowRef = Rc<Window>;
 
-#[derive(Debug)]
 pub struct Window {
     bounds: RefCell<Bounds>,
+    bounds_dirty: RefCell<bool>,
+    always_on_top: RefCell<bool>,
+    always_on_top_dirty: RefCell<bool>,
     platform_window: RefCell<PlatformWindow>,
-    dirty: RefCell<bool>,
+    floating: RefCell<bool>,
+}
+
+impl std::fmt::Debug for Window {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Window")
+            .field("id", &self.id())
+            .field("title", &self.title())
+            .field("bounds", &*self.bounds.borrow())
+            .field("floating", &self.floating())
+            .field("always_on_top", &*self.always_on_top.borrow())
+            .field("bounds_dirty", &*self.bounds_dirty.borrow())
+            .field("always_on_top_dirty", &*self.always_on_top_dirty.borrow())
+            .finish()
+    }
 }
 
 impl Window {
@@ -19,13 +35,34 @@ impl Window {
                 position: platform_window.position(),
                 size: platform_window.size(),
             }),
+            bounds_dirty: RefCell::new(false),
+            always_on_top: RefCell::new(false),
+            always_on_top_dirty: RefCell::new(false),
             platform_window: RefCell::new(platform_window),
-            dirty: RefCell::new(false),
+            floating: RefCell::new(false),
         }
     }
 
     pub fn id(&self) -> WindowId {
         self.platform_window().id()
+    }
+
+    pub fn set_floating(&self, floating: bool) {
+        self.always_on_top.replace(floating);
+        self.always_on_top_dirty.replace(true);
+        self.floating.replace(floating);
+    }
+
+    pub fn floating(&self) -> bool {
+        self.floating.borrow().clone()
+    }
+
+    pub fn tiled(&self) -> bool {
+        !self.floating()
+    }
+
+    pub fn title(&self) -> String {
+        self.platform_window.borrow().title()
     }
 
     pub fn bounds(&self) -> Ref<Bounds> {
@@ -34,21 +71,17 @@ impl Window {
 
     pub fn set_bounds(&self, bounds: Bounds) {
         self.bounds.replace(bounds);
-        self.dirty.replace(true);
+        self.bounds_dirty.replace(true);
     }
 
-    pub fn set_bounds_immediate(&self, bounds: Bounds) -> PlatformResult<()> {
-        let mut bounds = bounds;
-        let config = Config::current();
+    pub fn update_bounds(&self) {
+        self.bounds.replace(self.platform_bounds());
+    }
 
-        // Apply gap (offset from screen edge)
-        bounds.position.x += config.window_gap as i32 / 2;
-        bounds.position.y += config.window_gap as i32 / 2;
-
-        bounds.size.width = bounds.size.width.saturating_sub(config.window_gap);
-        bounds.size.height = bounds.size.height.saturating_sub(config.window_gap);
-
-        self.platform_window.borrow().set_bounds(&bounds)?;
+    /// Set the position of the raw window, without updating it's managed/tiled position.
+    /// Useful for previewing a window location before it's finalized.
+    pub fn set_preview_bounds(&self, bounds: Bounds) -> PlatformResult<()> {
+        self.set_platform_bounds(bounds)?;
         Ok(())
     }
 
@@ -57,16 +90,21 @@ impl Window {
     }
 
     pub fn dirty(&self) -> bool {
-        self.dirty.borrow().clone()
+        self.bounds_dirty.borrow().clone() || self.always_on_top_dirty.borrow().clone()
     }
 
     pub fn flush(&self) -> PlatformResult<()> {
-        if !self.dirty() {
-            return Ok(());
+        if self.bounds_dirty.borrow().clone() {
+            self.bounds_dirty.replace(false);
+            self.set_platform_bounds(self.bounds.borrow().clone())?;
         }
 
-        self.dirty.replace(false);
-        self.set_bounds_immediate(self.bounds.borrow().clone())?;
+        if self.always_on_top_dirty.borrow().clone() {
+            let on_top = self.always_on_top.borrow().clone();
+            self.always_on_top_dirty.replace(false);
+            self.platform_window.borrow().set_always_on_top(on_top)?;
+        }
+
         Ok(())
     }
 
@@ -100,6 +138,22 @@ impl Window {
 
     pub fn focus(&self) -> PlatformResult<()> {
         self.platform_window.borrow().focus()
+    }
+
+    fn set_platform_bounds(&self, bounds: Bounds) -> PlatformResult<()> {
+        let mut bounds = bounds;
+        let config = Config::current();
+
+        // Apply gap (offset from screen edge)
+        if !self.floating() {
+            bounds.position.x += config.window_gap as i32 / 2;
+            bounds.position.y += config.window_gap as i32 / 2;
+
+            bounds.size.width = bounds.size.width.saturating_sub(config.window_gap);
+            bounds.size.height = bounds.size.height.saturating_sub(config.window_gap);
+        }
+
+        self.platform_window.borrow().set_bounds(&bounds)
     }
 }
 

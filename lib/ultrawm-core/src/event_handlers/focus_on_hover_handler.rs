@@ -3,7 +3,6 @@ use crate::event_handlers::EventHandler;
 use crate::event_loop_wm::WMOperationResult;
 use crate::platform::{Position, WMEvent, WindowId};
 use crate::wm::WindowManager;
-use log::error;
 
 pub struct FocusOnHoverHandler {
     enabled: bool,
@@ -20,42 +19,25 @@ impl FocusOnHoverHandler {
         }
     }
 
-    fn mouse_moved(&mut self, pos: &Position, wm: &WindowManager) -> WMOperationResult<()> {
+    fn mouse_moved(&mut self, pos: &Position, wm: &mut WindowManager) -> WMOperationResult<()> {
         if !self.enabled {
             return Ok(());
         }
 
         // Find the window at the current mouse position
-        let window_at_position = self.find_window_at_position(pos, wm);
+        let window_at_position = wm.find_window_at_position(pos);
 
         if let Some(window) = window_at_position {
             let window_id = window.id();
 
             // Only focus if it's a different window than the last focused one
             if self.last_focused_window != Some(window_id) {
-                window
-                    .focus()
-                    .unwrap_or_else(|e| error!("Could not focus window: {e}"));
+                wm.focus_window(window_id)?;
                 self.last_focused_window = Some(window_id);
             }
         }
 
         Ok(())
-    }
-
-    fn find_window_at_position(
-        &self,
-        position: &Position,
-        wm: &WindowManager,
-    ) -> Option<crate::window::WindowRef> {
-        // Find the topmost window that contains the position
-        for window in wm.all_windows() {
-            let bounds = window.window_bounds();
-            if bounds.contains(position) {
-                return Some(window.clone());
-            }
-        }
-        None
     }
 
     pub fn update_config(&mut self) {

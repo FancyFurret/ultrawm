@@ -45,7 +45,7 @@ impl ContainerTree {
 
     fn deserialize(
         bounds: Bounds,
-        windows: &Vec<WindowRef>,
+        available_windows: &Vec<WindowRef>,
         saved_layout: &serde_yaml::Value,
     ) -> Option<Self> {
         // Try to deserialize the saved layout
@@ -53,8 +53,10 @@ impl ContainerTree {
             serde_yaml::from_value(saved_layout.clone()).ok()?;
 
         // Create a map of available windows by ID
-        let available_windows: HashMap<WindowId, WindowRef> =
-            windows.iter().map(|w| (w.id(), w.clone())).collect();
+        let available_windows: HashMap<WindowId, WindowRef> = available_windows
+            .iter()
+            .map(|w| (w.id(), w.clone()))
+            .collect();
 
         let mut windows_map = HashMap::new();
         let root = deserialize_container(
@@ -418,39 +420,35 @@ impl ContainerTree {
 }
 
 impl WindowLayout for ContainerTree {
-    fn new(bounds: Bounds, windows: &Vec<WindowRef>) -> Self
+    fn new(bounds: Bounds) -> Self
     where
         Self: Sized,
     {
-        WindowLayout::new_from_saved(bounds, windows, None)
-    }
-
-    fn new_from_saved(
-        bounds: Bounds,
-        windows: &Vec<WindowRef>,
-        saved_layout: Option<&serde_yaml::Value>,
-    ) -> Self
-    where
-        Self: Sized,
-    {
-        if let Some(saved_layout) = saved_layout {
-            if let Some(tree) = Self::deserialize(bounds.clone(), windows, saved_layout) {
-                return tree;
-            }
-
-            warn!("Failed to deserialize saved layout, starting from scratch");
-        }
-
         let root_bounds = Self::get_root_bounds(&bounds);
         let root = Container::new_root(root_bounds);
         root.equalize_ratios();
         root.recalculate();
-
         Self {
             bounds,
             root,
             windows: HashMap::new(),
         }
+    }
+
+    fn deserialize(
+        bounds: Bounds,
+        available_windows: &Vec<WindowRef>,
+        saved_layout: &serde_yaml::Value,
+    ) -> Self
+    where
+        Self: Sized,
+    {
+        if let Some(tree) = Self::deserialize(bounds.clone(), available_windows, saved_layout) {
+            return tree;
+        }
+
+        warn!("Failed to deserialize saved layout, starting from scratch");
+        Self::new(bounds)
     }
 
     fn serialize(&self) -> serde_yaml::Value {
@@ -737,7 +735,7 @@ mod tests {
 
     fn create_tree_with_initial_windows(initial_windows: &Vec<WindowRef>) -> ContainerTree {
         let bounds = create_test_bounds();
-        let mut tree = ContainerTree::new(bounds, initial_windows);
+        let mut tree = ContainerTree::new(bounds);
 
         // Insert initial windows into the tree
         for (_, window) in initial_windows.iter().enumerate() {
@@ -861,8 +859,7 @@ mod tests {
     #[test]
     fn test_windows_map_updated_on_fill_root() {
         let bounds = create_test_bounds();
-        let initial_windows = vec![];
-        let mut tree = ContainerTree::new(bounds, &initial_windows);
+        let mut tree = ContainerTree::new(bounds);
 
         // Initially no windows
         assert_eq!(tree.windows.len(), 0);

@@ -10,7 +10,7 @@ use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 use windows::Win32::UI::WindowsAndMessaging::{
     BringWindowToTop, DeferWindowPos, GetForegroundWindow, GetWindowRect, GetWindowTextW,
     GetWindowThreadProcessId, IsIconic, SetForegroundWindow, SetWindowPos, ShowWindow, HDWP,
-    SWP_NOACTIVATE, SWP_NOZORDER, SW_RESTORE,
+    HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_RESTORE,
 };
 
 #[derive(Debug)]
@@ -278,6 +278,28 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
                     .ok()
                     .map_err(|e| format!("Failed to detach thread: {}", e))?;
             }
+        }
+        Ok(())
+    }
+
+    fn set_always_on_top(&self, always_on_top: bool) -> PlatformResult<()> {
+        unsafe {
+            let hwnd_insert_after = if always_on_top {
+                Some(HWND_TOPMOST)
+            } else {
+                Some(HWND_NOTOPMOST)
+            };
+
+            SetWindowPos(
+                self.hwnd,
+                hwnd_insert_after,
+                0, // x - ignored due to SWP_NOMOVE
+                0, // y - ignored due to SWP_NOMOVE
+                0, // width - ignored due to SWP_NOSIZE
+                0, // height - ignored due to SWP_NOSIZE
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            )
+            .map_err(|e| format!("Failed to set always on top: {}", e))?;
         }
         Ok(())
     }

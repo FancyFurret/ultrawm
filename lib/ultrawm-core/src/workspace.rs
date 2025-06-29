@@ -1,9 +1,10 @@
-use crate::layouts::{LayoutResult, WindowLayout};
+use crate::layouts::{LayoutError, LayoutResult, WindowLayout};
 use crate::platform::traits::PlatformImpl;
 use crate::platform::{Bounds, Platform, PlatformResult, Position, WindowId};
 use crate::resize_handle::{ResizeHandle, ResizeMode};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
+use log::warn;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -22,25 +23,25 @@ static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 impl Workspace {
     pub fn new<TLayout: WindowLayout + 'static>(
         bounds: Bounds,
-        windows: &Vec<WindowRef>,
         name: String,
-    ) -> Self {
-        Self::new_with_saved_layout::<TLayout>(bounds, windows, name, None)
-    }
-
-    pub fn new_with_saved_layout<TLayout: WindowLayout + 'static>(
-        bounds: Bounds,
-        windows: &Vec<WindowRef>,
-        name: String,
-        saved_layout: Option<&serde_yaml::Value>,
+        layout: Option<Box<TLayout>>,
+        floating: Option<HashMap<WindowId, WindowRef>>,
     ) -> Self {
         let id = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let layout = Box::new(TLayout::new_from_saved(bounds, windows, saved_layout));
+        let layout = layout.unwrap_or_else(|| Box::new(TLayout::new(bounds)));
+
         let windows = layout
             .windows()
             .iter()
             .map(|w| (w.id(), w.clone()))
             .collect();
+
+        if let Some(windows) = floating.as_ref() {
+            for (_, window) in windows {
+                window.set_floating(true);
+            }
+        }
+
         Self {
             id,
             name,
@@ -57,8 +58,16 @@ impl Workspace {
         &self.name
     }
 
+    pub fn windows(&self) -> &HashMap<WindowId, WindowRef> {
+        &self.windows
+    }
+
     pub fn has_window(&self, id: &WindowId) -> bool {
         self.windows.contains_key(id)
+    }
+
+    pub fn get_window(&self, id: &WindowId) -> Option<&WindowRef> {
+        self.windows.get(id)
     }
 
     pub fn get_tile_bounds(&self, window: &WindowRef, position: &Position) -> Option<Bounds> {
@@ -66,8 +75,12 @@ impl Workspace {
     }
 
     pub fn remove_window(&mut self, window: &WindowRef) -> LayoutResult<()> {
-        self.windows.remove(&window.id());
-        self.layout.remove_window(window)?;
+        let old = self.windows.remove(&window.id());
+        if old.is_some() {
+            if self.layout.windows().iter().any(|w| w.id() == window.id()) {
+                self.layout.remove_window(window)?;
+            }
+        }
         Ok(())
     }
 
@@ -88,12 +101,32 @@ impl Workspace {
         position: &Position,
     ) -> LayoutResult<InsertResult> {
         let action = self.layout.insert_window(window, position)?;
+        window.set_floating(false);
         self.windows.insert(window.id(), window.clone());
         Ok(action)
     }
 
+    pub fn float_window(&mut self, window: &WindowRef) -> LayoutResult<()> {
+        if self.windows.contains_key(&window.id()) && window.tiled() {
+            self.layout.remove_window(window)?
+        };
+
+        window.set_floating(true);
+        self.windows.insert(window.id(), window.clone());
+        Ok(())
+    }
+
     pub fn resize_window(&mut self, window: &WindowRef, bounds: &Bounds) -> LayoutResult<()> {
-        self.layout.resize_window(window, bounds)
+        if let Some(managed_window) = self.windows.get_mut(&window.id()) {
+            if managed_window.floating() {
+                window.set_bounds(bounds.clone());
+                Ok(())
+            } else {
+                self.layout.resize_window(window, bounds)
+            }
+        } else {
+            Err(LayoutError::WindowNotFound(window.id()))
+        }
     }
 
     pub fn flush_windows(&mut self) -> PlatformResult<()> {
@@ -126,5 +159,16 @@ impl Workspace {
     pub fn config_changed(&mut self) -> PlatformResult<()> {
         self.layout.config_changed();
         self.flush_windows()
+    }
+
+    pub fn cleanup(&mut self) {
+        for window in self.windows.values_mut() {
+            if window.floating() {
+                window.set_floating(false);
+                if window.flush().is_err() {
+                    warn!("Could not restore always on top state of window")
+                }
+            }
+        }
     }
 }

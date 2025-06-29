@@ -1,26 +1,42 @@
-use crate::platform::Bounds;
+use crate::layouts::ContainerTree;
+use crate::layouts::WindowLayout;
+use crate::partition::{Partition, PartitionId};
+use crate::platform::{Bounds, WindowId};
+use crate::window::WindowRef;
 use crate::wm::WindowManager;
+use crate::workspace::{Workspace, WorkspaceId};
 use crate::Config;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize)]
-struct SerializedWindowManager {
-    partitions: Vec<SerializedPartition>,
+pub struct SerializedWindowManager {
+    pub partitions: Vec<SerializedPartition>,
 }
 
 #[derive(Serialize, Deserialize)]
-struct SerializedPartition {
-    name: String,
-    bounds: Bounds,
-    workspaces: Vec<SerializedWorkspace>,
+pub struct SerializedPartition {
+    pub id: PartitionId,
+    pub name: String,
+    pub bounds: Bounds,
+    pub workspaces: Vec<SerializedWorkspace>,
 }
 
 #[derive(Serialize, Deserialize)]
-struct SerializedWorkspace {
-    name: String,
-    layout: serde_yaml::Value,
+pub struct SerializedWorkspace {
+    pub id: WorkspaceId,
+    pub name: String,
+    pub layout: serde_yaml::Value,
+    pub floating: Vec<SerializedWindow>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SerializedWindow {
+    pub id: WindowId,
+    pub title: String,
+    pub bounds: Bounds,
 }
 
 fn serialize_wm(wm: &WindowManager) -> serde_yaml::Value {
@@ -29,6 +45,7 @@ fn serialize_wm(wm: &WindowManager) -> serde_yaml::Value {
             .partitions()
             .iter()
             .map(|(_, partition)| SerializedPartition {
+                id: partition.id(),
                 name: partition.name().to_string(),
                 bounds: partition.bounds().clone(),
                 workspaces: partition
@@ -37,8 +54,19 @@ fn serialize_wm(wm: &WindowManager) -> serde_yaml::Value {
                     .map(|id| {
                         let workspace = wm.workspaces().get(id).unwrap();
                         SerializedWorkspace {
+                            id: workspace.id(),
                             name: workspace.name().to_string(),
                             layout: workspace.serialize(),
+                            floating: workspace
+                                .windows()
+                                .iter()
+                                .filter(|(_, window)| window.floating())
+                                .map(|(id, window)| SerializedWindow {
+                                    id: id.clone(),
+                                    title: window.title(),
+                                    bounds: window.bounds().clone(),
+                                })
+                                .collect(),
                         }
                     })
                     .collect(),
@@ -49,52 +77,65 @@ fn serialize_wm(wm: &WindowManager) -> serde_yaml::Value {
     serde_yaml::to_value(serialized).unwrap()
 }
 
-/// Extract layout data for a specific workspace from the loaded YAML
-pub fn extract_workspace_layout(
-    saved_data: &serde_yaml::Value,
-    partition_name: &str,
-    workspace_name: &str,
-) -> Option<serde_yaml::Value> {
-    // Navigate through the YAML structure to find the specific workspace layout
-    if let Some(partitions) = saved_data.get("partitions").and_then(|p| p.as_sequence()) {
-        for partition in partitions {
-            if let Some(name) = partition.get("name").and_then(|n| n.as_str()) {
-                if name == partition_name {
-                    if let Some(workspaces) =
-                        partition.get("workspaces").and_then(|w| w.as_sequence())
-                    {
-                        for workspace in workspaces {
-                            if let Some(ws_name) = workspace.get("name").and_then(|n| n.as_str()) {
-                                if ws_name == workspace_name {
-                                    return workspace.get("layout").cloned();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+pub fn deserialize_partition(
+    serialized: &SerializedPartition,
+    available_windows: &Vec<WindowRef>,
+) -> (Partition, HashMap<WorkspaceId, Workspace>) {
+    let mut partition = Partition::new(serialized.name.clone(), serialized.bounds.clone());
+    let mut workspaces = HashMap::new();
+
+    for serialized_workspace in &serialized.workspaces {
+        let workspace = deserialize_workspace(serialized_workspace, &partition, available_windows);
+        let id = workspace.id();
+        workspaces.insert(id, workspace);
+        partition.assign_workspace(id)
+    }
+
+    (partition, workspaces)
+}
+
+pub fn deserialize_workspace(
+    serialized: &SerializedWorkspace,
+    partition: &Partition,
+    available_windows: &Vec<WindowRef>,
+) -> Workspace {
+    let layout = Box::new(ContainerTree::deserialize(
+        partition.bounds().clone(),
+        available_windows,
+        &serialized.layout,
+    ));
+
+    let mut floating = HashMap::new();
+    for window in available_windows.iter() {
+        if serialized.floating.iter().any(|w| w.id == window.id()) {
+            floating.insert(window.id(), window.clone());
         }
     }
-    None
+
+    let workspace = Workspace::new::<ContainerTree>(
+        partition.bounds().clone(),
+        serialized.name.clone(),
+        Some(layout),
+        Some(floating),
+    );
+
+    workspace
 }
 
 /// Extract window IDs from saved layout for matching
-pub fn extract_window_ids(layout: &serde_yaml::Value) -> Vec<crate::platform::WindowId> {
+pub fn extract_window_ids(layout: &serde_yaml::Value) -> Vec<WindowId> {
     let mut window_ids = Vec::new();
     extract_window_ids_recursive(layout, &mut window_ids);
     window_ids
 }
 
-fn extract_window_ids_recursive(
-    value: &serde_yaml::Value,
-    window_ids: &mut Vec<crate::platform::WindowId>,
-) {
+fn extract_window_ids_recursive(value: &serde_yaml::Value, window_ids: &mut Vec<WindowId>) {
     match value {
         serde_yaml::Value::Mapping(map) => {
             // Check if this is a window object with an ID
             if let Some(id_value) = map.get(&serde_yaml::Value::String("id".to_string())) {
                 if let Some(id) = id_value.as_u64() {
-                    window_ids.push(id as crate::platform::WindowId);
+                    window_ids.push(id as WindowId);
                 }
             }
 
@@ -141,7 +182,7 @@ pub fn save_layout(wm: &WindowManager) -> Result<(), Box<dyn std::error::Error>>
 }
 
 /// Load layout from file if it exists
-pub fn load_layout() -> Result<Option<serde_yaml::Value>, Box<dyn std::error::Error>> {
+pub fn load_layout() -> Result<Option<SerializedWindowManager>, Box<dyn std::error::Error>> {
     if !Config::persistence() {
         return Ok(None);
     }
@@ -149,7 +190,7 @@ pub fn load_layout() -> Result<Option<serde_yaml::Value>, Box<dyn std::error::Er
     if let Some(path) = layout_file_path() {
         if path.exists() {
             let contents = fs::read_to_string(&path)?;
-            let layout: serde_yaml::Value = serde_yaml::from_str(&contents)?;
+            let layout: SerializedWindowManager = serde_yaml::from_str(&contents)?;
             return Ok(Some(layout));
         }
     }
@@ -262,47 +303,6 @@ mod tests {
             Value::Sequence(partitions),
         );
         Value::Mapping(root)
-    }
-
-    #[test]
-    fn test_extract_workspace_layout_found() {
-        let yaml = create_test_yaml();
-        let result = extract_workspace_layout(&yaml, "Main", "Workspace1");
-
-        assert!(result.is_some());
-        let layout = result.unwrap();
-        assert_eq!(
-            layout.get("type").and_then(|v| v.as_str()),
-            Some("container")
-        );
-    }
-
-    #[test]
-    fn test_extract_workspace_layout_not_found_partition() {
-        let yaml = create_test_yaml();
-        let result = extract_workspace_layout(&yaml, "NonExistent", "Workspace1");
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_extract_workspace_layout_not_found_workspace() {
-        let yaml = create_test_yaml();
-        let result = extract_workspace_layout(&yaml, "Main", "NonExistent");
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_extract_workspace_layout_empty_yaml() {
-        let yaml = Value::Mapping(Mapping::new());
-        let result = extract_workspace_layout(&yaml, "Main", "Workspace1");
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_extract_workspace_layout_malformed_yaml() {
-        let yaml = Value::String("not a valid structure".to_string());
-        let result = extract_workspace_layout(&yaml, "Main", "Workspace1");
-        assert!(result.is_none());
     }
 
     #[test]
@@ -487,11 +487,14 @@ mod tests {
     fn test_serialized_structures_serde() {
         // Test that our serialized structures can be serialized and deserialized
         let workspace = SerializedWorkspace {
+            id: 0,
             name: "Test Workspace".to_string(),
             layout: Value::String("test layout".to_string()),
+            floating: vec![],
         };
 
         let partition = SerializedPartition {
+            id: 0,
             name: "Test Partition".to_string(),
             bounds: Bounds::new(0, 0, 1920, 1080),
             workspaces: vec![workspace],

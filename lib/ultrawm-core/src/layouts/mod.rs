@@ -23,14 +23,14 @@ pub enum LayoutError {
 pub type LayoutResult<T> = Result<T, LayoutError>;
 
 pub trait WindowLayout: Debug {
-    fn new(bounds: Bounds, windows: &Vec<WindowRef>) -> Self
+    fn new(bounds: Bounds) -> Self
     where
         Self: Sized;
 
-    fn new_from_saved(
+    fn deserialize(
         bounds: Bounds,
-        windows: &Vec<WindowRef>,
-        saved_layout: Option<&serde_yaml::Value>,
+        available_windows: &Vec<WindowRef>,
+        saved_layout: &serde_yaml::Value,
     ) -> Self
     where
         Self: Sized;

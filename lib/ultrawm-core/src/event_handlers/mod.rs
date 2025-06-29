@@ -12,6 +12,7 @@ pub mod mod_transform_handler;
 mod mod_transform_tracker;
 
 pub mod focus_on_hover_handler;
+mod mod_mouse_keybind_tracker;
 
 pub trait EventHandler {
     /// Returns true if events currently being handled

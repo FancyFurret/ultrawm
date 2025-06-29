@@ -3,8 +3,8 @@ use crate::platform::PlatformError;
 use std::mem::size_of;
 use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetClassNameW, GetWindowLongW, IsWindowVisible, GWL_EXSTYLE, GWL_STYLE, WS_CAPTION, WS_CHILD,
-    WS_DISABLED, WS_EX_TOOLWINDOW, WS_OVERLAPPEDWINDOW,
+    GetClassNameW, GetWindowLongW, IsIconic, IsWindowVisible, GWL_EXSTYLE, GWL_STYLE, WS_CAPTION,
+    WS_CHILD, WS_DISABLED, WS_EX_TOOLWINDOW, WS_OVERLAPPEDWINDOW,
 };
 
 pub fn window_is_manageable(window: &WindowsPlatformWindow) -> ObserveResult {
@@ -13,6 +13,10 @@ pub fn window_is_manageable(window: &WindowsPlatformWindow) -> ObserveResult {
     unsafe {
         if !IsWindowVisible(hwnd).as_bool() {
             Err("Window is not visible")?
+        }
+
+        if IsIconic(hwnd).as_bool() {
+            Err("Window is minimized")?
         }
 
         let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;

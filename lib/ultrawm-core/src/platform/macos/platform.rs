@@ -208,8 +208,6 @@ impl PlatformImpl for MacOSPlatform {
     fn simulate_mouse_click(position: Position, button: MouseButton) -> PlatformResult<()> {
         Interceptor::ignore_next_click(button.clone());
 
-        println!("Simulatint mouse click {:?}", button);
-
         unsafe {
             let screen_pos =
                 core_graphics::geometry::CGPoint::new(position.x as f64, position.y as f64);

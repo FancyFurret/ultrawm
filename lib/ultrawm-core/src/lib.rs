@@ -19,7 +19,6 @@ mod event_handlers;
 mod event_loop_main;
 pub mod event_loop_wm;
 mod layouts;
-mod mod_mouse_keybind_tracker;
 mod overlay_window;
 mod partition;
 pub mod platform;
@@ -33,6 +32,7 @@ mod wm;
 mod workspace;
 
 use crate::platform::input_state::InputState;
+use crate::wm::WMError;
 pub use config::Config;
 
 static GLOBAL_EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
@@ -122,6 +122,7 @@ pub fn start() -> UltraWMResult<()> {
 pub enum UltraWMFatalError {
     Error(String),
     PlatformError(PlatformError),
+    WMError(WMError),
 }
 
 pub type UltraWMResult<T> = Result<T, UltraWMFatalError>;

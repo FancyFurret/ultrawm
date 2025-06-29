@@ -22,6 +22,7 @@ pub enum KeybindEvent {
     Start(Position),
     Drag(Position),
     End(Position),
+    Cancel(Position),
 }
 
 impl ModMouseKeybindTracker {
@@ -49,7 +50,7 @@ impl ModMouseKeybindTracker {
             }
             WMEvent::MouseDown(pos, _) | WMEvent::MouseUp(pos, _) => {
                 self.update_interception_state();
-                self.update_keybind_state(pos)
+                self.update_keybind_state(event, pos)
             }
             WMEvent::MouseMoved(pos) => {
                 if !self.active {
@@ -89,7 +90,11 @@ impl ModMouseKeybindTracker {
         }
     }
 
-    fn update_keybind_state(&mut self, position: &Position) -> Option<KeybindEvent> {
+    fn update_keybind_state(
+        &mut self,
+        event: &WMEvent,
+        position: &Position,
+    ) -> Option<KeybindEvent> {
         let active = InputState::binding_matches(&self.keybind);
         if active && !self.active {
             self.active = true;
@@ -98,7 +103,11 @@ impl ModMouseKeybindTracker {
         } else if !active && self.active {
             self.active = false;
             self.started = false; // Reset for next time
-            Some(KeybindEvent::End(position.clone()))
+                                  // If binding ends due to mouse down (button added), it's a cancel
+            match event {
+                WMEvent::MouseDown(_, _) => Some(KeybindEvent::Cancel(position.clone())),
+                _ => Some(KeybindEvent::End(position.clone())),
+            }
         } else {
             None
         }

@@ -3,6 +3,7 @@ use crate::event_handlers::mod_transform_handler::ModTransformHandler;
 use crate::event_handlers::native_transform_handler::NativeTransformHandler;
 use crate::event_handlers::resize_handle_handler::ResizeHandleHandler;
 use crate::event_handlers::EventHandler;
+use crate::window::Window;
 use crate::wm::WMError;
 use crate::{
     event_loop_main::EventLoopMain,
@@ -11,6 +12,7 @@ use crate::{
     UltraWMResult,
 };
 use log::{error, info, trace, warn};
+use std::rc::Rc;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -57,9 +59,10 @@ impl EventLoopWM {
 
             match &event {
                 WMEvent::WindowOpened(window) => {
-                    wm.track_window(window.clone()).unwrap_or_else(|_| {
-                        warn!("Could not track window");
-                    });
+                    wm.track_window(Rc::new(Window::new(window.clone())))
+                        .unwrap_or_else(|_| {
+                            warn!("Could not track window");
+                        });
                 }
                 WMEvent::WindowShown(_) => {
                     // TODO: If the window was hidden, then bring it back to where it was

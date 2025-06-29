@@ -1,20 +1,21 @@
 use crate::config::Config;
 use crate::layouts::{ContainerTree, LayoutError};
 use crate::partition::{Partition, PartitionId};
-use crate::platform::{
-    Bounds, Platform, PlatformImpl, PlatformResult, PlatformWindow, PlatformWindowImpl, Position,
-    WindowId,
-};
+use crate::platform::{Bounds, Platform, PlatformImpl, PlatformResult, Position, WindowId};
 use crate::resize_handle::{ResizeHandle, ResizeMode};
-use crate::serialization::{extract_workspace_layout, load_layout, save_layout};
+use crate::serialization::{deserialize_partition, load_layout, save_layout};
 use crate::tile_result::InsertResult;
 use crate::window::{Window, WindowRef};
 use crate::workspace::{Workspace, WorkspaceId};
 use crate::PlatformError;
+use indexmap::{IndexMap, IndexSet};
 use log::{error, warn};
 use std::collections::HashMap;
 use std::rc::Rc;
 use thiserror::Error;
+
+// Number of partitions to create per display
+const PARTITIONS_PER_DISPLAY: u32 = 2;
 
 #[derive(Debug, Error)]
 pub enum WMError {
@@ -38,23 +39,37 @@ pub type WMResult<T> = Result<T, WMError>;
 
 #[derive(Debug)]
 pub struct WindowManager {
-    windows: HashMap<WindowId, WindowRef>,
     partitions: HashMap<PartitionId, Partition>,
     workspaces: HashMap<WorkspaceId, Workspace>,
+    window_order: IndexSet<WindowId>,
 }
 
 impl WindowManager {
     pub fn new() -> PlatformResult<Self> {
         let displays = Platform::list_all_displays()?;
 
-        // For now, just make 1 partition per display. Will be configurable later.
-        let mut partitions: HashMap<PartitionId, Partition> = displays
-            .into_iter()
-            .map(|d| {
-                let partition = Partition::new(d.name, d.work_area);
-                (partition.id(), partition)
-            })
-            .collect();
+        let mut partitions: HashMap<PartitionId, Partition> = HashMap::new();
+        for display in displays {
+            let partition_width = display.work_area.size.width / PARTITIONS_PER_DISPLAY;
+
+            for i in 0..PARTITIONS_PER_DISPLAY {
+                let partition_bounds = Bounds::new(
+                    display.work_area.position.x + (i as i32 * partition_width as i32),
+                    display.work_area.position.y,
+                    partition_width,
+                    display.work_area.size.height,
+                );
+
+                let partition_name = if PARTITIONS_PER_DISPLAY == 1 {
+                    display.name.clone()
+                } else {
+                    format!("{}_partition_{}", display.name, i + 1)
+                };
+
+                let partition = Partition::new(partition_name, partition_bounds);
+                partitions.insert(partition.id(), partition);
+            }
+        }
 
         // Sort by window id so that re-running the WM is more stable
         let mut windows = Platform::list_visible_windows()?
@@ -62,49 +77,82 @@ impl WindowManager {
             .map(|w| Rc::new(Window::new(w.clone())))
             .collect::<Vec<_>>();
         windows.sort_by_key(|w| w.id());
-        let windows_map: HashMap<WindowId, WindowRef> =
-            windows.iter().map(|w| (w.id(), w.clone())).collect();
 
         // Try to load saved layout
         let saved_layout = match load_layout() {
             Ok(Some(layout)) => Some(layout),
             Ok(None) => None,
             Err(e) => {
-                error!("Failed to load saved layout: {}, creating new layout", e);
+                warn!("Failed to load saved layout: {}, creating new layout", e);
                 None
             }
         };
 
-        // Also for now, just make 1 workspace per partition. Will be configurable later.
-        let mut workspaces: HashMap<WorkspaceId, Workspace> = partitions
-            .values_mut()
-            .map(|partition| {
-                // Extract the specific layout data for this workspace
-                let workspace_layout = saved_layout.as_ref().and_then(|layout| {
-                    extract_workspace_layout(layout, partition.name(), "Default")
-                });
+        // If there is a saved layout, use it
+        let mut workspaces: HashMap<WorkspaceId, Workspace> = HashMap::new();
+        if let Some(layout) = saved_layout {
+            for serialized_partition in layout.partitions {
+                let (p, ws) = deserialize_partition(&serialized_partition, &windows);
+                let name = p.name();
+                if let Some(partition) = partitions.iter_mut().find(|(_, p)| p.name() == name) {
+                    partition.1.assign_workspace(p.current_workspace().unwrap());
+                }
 
-                let workspace = Workspace::new_with_saved_layout::<ContainerTree>(
-                    partition.bounds().clone(),
-                    &windows,
-                    "Default".to_string(),
-                    workspace_layout.as_ref(),
-                );
+                for (workspace_id, workspace) in ws {
+                    workspaces.insert(workspace_id, workspace);
+                }
+            }
+        } else {
+            // Also for now, just make 1 workspace per partition. Will be configurable later.
+            workspaces = partitions
+                .values_mut()
+                .map(|partition| {
+                    let workspace = Workspace::new::<ContainerTree>(
+                        partition.bounds().clone(),
+                        "Default".to_string(),
+                        None,
+                        None,
+                    );
 
-                partition.assign_workspace(workspace.id());
-                (workspace.id(), workspace)
-            })
-            .collect();
+                    partition.assign_workspace(workspace.id());
+                    (workspace.id(), workspace)
+                })
+                .collect();
+        }
 
+        let mut existing_windows = IndexMap::new();
         for workspace in workspaces.values_mut() {
+            for window in workspace.windows().values() {
+                existing_windows.insert(window.id(), window.clone());
+            }
+
             workspace.flush_windows()?;
         }
 
-        Ok(Self {
+        // Float any unused windows
+        let mut wm = Self {
             partitions,
             workspaces,
-            windows: windows_map,
-        })
+            window_order: IndexSet::new(),
+        };
+
+        for existing_window in existing_windows.values() {
+            if existing_window.floating() {
+                wm.float_window(existing_window.id()).unwrap_or_else(|e| {
+                    error!("Failed to float existing window: {e}");
+                })
+            }
+        }
+
+        for window in windows {
+            if wm.get_window(window.id()).is_err() {
+                wm.track_window(window.clone()).unwrap_or_else(|e| {
+                    error!("Failed to track window: {e}");
+                })
+            }
+        }
+
+        Ok(wm)
     }
 
     pub fn partitions(&self) -> &HashMap<PartitionId, Partition> {
@@ -115,15 +163,16 @@ impl WindowManager {
         &self.workspaces
     }
 
-    pub fn track_window(&mut self, window: PlatformWindow) -> WMResult<()> {
-        if self.windows.contains_key(&window.id()) {
+    pub fn track_window(&mut self, window: WindowRef) -> WMResult<()> {
+        if self.get_window(window.id()).is_ok() {
             return Ok(());
         }
 
-        let window = Rc::new(Window::new(window));
-        self.windows.insert(window.id(), window.clone());
-
-        if !Config::float_new_windows() {
+        if Config::float_new_windows() {
+            let workspace = self.get_workspace_at_position_mut(&window.bounds().position)?;
+            workspace.float_window(&window)?;
+            self.float_window(window.id())?;
+        } else {
             self.tile_window(window.id(), &window.bounds().position)?;
         }
 
@@ -132,6 +181,8 @@ impl WindowManager {
 
     pub fn tile_window(&mut self, id: WindowId, position: &Position) -> WMResult<()> {
         let window = self.get_window(id)?;
+        let was_floating = window.floating();
+        let old_bounds = window.bounds().clone();
 
         let old_workspace_id = self.get_workspace_with_window(&window).map(|w| w.id());
         let new_workspace_id = self.get_workspace_at_position(position)?.id();
@@ -142,24 +193,71 @@ impl WindowManager {
             .unwrap()
             .tile_window(&window, position)?;
 
-        if old_workspace_id.is_some() && old_workspace_id.unwrap() != new_workspace_id {
-            let old_workspace = self.workspaces.get_mut(&old_workspace_id.unwrap()).unwrap();
-            if let InsertResult::Swap(new_window) = result {
-                old_workspace.replace_window(&window, &new_window)?;
-            } else {
+        if let Some(id) = old_workspace_id {
+            // Handle the swap case where we need to float a window
+            if let InsertResult::Swap(new_window) = &result {
+                if was_floating {
+                    new_window.set_bounds(old_bounds);
+                    self.float_window(new_window.id())?;
+                } else {
+                    let old_workspace = self.workspaces.get_mut(&id).unwrap();
+                    old_workspace.replace_window(&window, &new_window)?;
+                }
+            } else if id != new_workspace_id {
+                let old_workspace = self.workspaces.get_mut(&id).unwrap();
                 old_workspace.remove_window(&window)?;
             }
+
+            // Flush the old workspace (get a fresh reference)
+            let old_workspace = self.workspaces.get_mut(&id).unwrap();
             old_workspace.flush_windows()?;
         }
 
         let new_workspace = self.workspaces.get_mut(&new_workspace_id).unwrap();
         new_workspace.flush_windows()?;
+        self.try_save_layout();
+        Ok(())
+    }
 
-        // Save layout after tiling
-        if let Err(e) = save_layout(self) {
-            warn!("Warning: Failed to save layout: {}", e);
+    pub fn focus_window(&mut self, id: WindowId) -> WMResult<()> {
+        let window = self.get_window(id)?;
+        window
+            .focus()
+            .unwrap_or_else(|e| error!("Could not focus window: {e}"));
+        self.move_to_top(id);
+        Ok(())
+    }
+
+    pub fn update_floating_window(&mut self, id: WindowId) -> WMResult<()> {
+        let window = self.get_window(id)?;
+        let bounds = window.window_bounds();
+        let old_workspace_id = self.get_workspace_with_window(&window).map(|w| w.id());
+        let new_workspace_id = self.get_workspace_at_bounds_mut(&bounds)?.id();
+        if old_workspace_id.is_some() && old_workspace_id.unwrap() != new_workspace_id {
+            let old_workspace = self.workspaces.get_mut(&old_workspace_id.unwrap()).unwrap();
+            old_workspace.remove_window(&window)?;
+
+            let new_workspace = self.workspaces.get_mut(&new_workspace_id).unwrap();
+            new_workspace.float_window(&window)?;
+            self.try_save_layout();
         }
 
+        Ok(())
+    }
+
+    pub fn float_window(&mut self, id: WindowId) -> WMResult<()> {
+        let window = self.get_window(id)?;
+        let workspace = if let Some(workspace) = self.get_workspace_with_window_mut(&window) {
+            workspace.remove_window(&window)?;
+            workspace
+        } else {
+            self.get_workspace_at_position_mut(&window.bounds().position)?
+        };
+
+        workspace.float_window(&window)?;
+        workspace.flush_windows()?;
+        self.move_to_top(window.id());
+        self.try_save_layout();
         Ok(())
     }
 
@@ -184,10 +282,13 @@ impl WindowManager {
     }
 
     pub fn get_window(&self, id: WindowId) -> WMResult<WindowRef> {
-        self.windows
-            .get(&id)
-            .cloned()
-            .ok_or(WMError::WindowNotFound(id))
+        for workspace in self.workspaces.values() {
+            if let Some(window) = workspace.windows().get(&id) {
+                return Ok(window.clone());
+            }
+        }
+
+        Err(WMError::WindowNotFound(id))
     }
 
     pub fn get_tile_bounds(&self, id: WindowId, position: &Position) -> Option<Bounds> {
@@ -205,29 +306,46 @@ impl WindowManager {
         None
     }
 
+    fn get_workspace_with_window_mut(&mut self, window: &WindowRef) -> Option<&mut Workspace> {
+        for workspace in self.workspaces.values_mut() {
+            if workspace.has_window(&window.id()) {
+                return Some(workspace);
+            }
+        }
+        None
+    }
     fn get_workspace_at_position(&self, position: &Position) -> WMResult<&Workspace> {
-        // First, determine which partition the position is in
         let partition = self
             .partitions
             .values()
             .find(|p| p.bounds().contains(&position))
             .ok_or(WMError::NoWorkspaceAtPosition(position.clone()))?;
 
-        // Then, get the workspace for that partition
         self.workspaces
             .get(&partition.current_workspace().unwrap())
             .ok_or(WMError::NoWorkspaceAtPosition(position.clone()))
     }
 
     fn get_workspace_at_position_mut(&mut self, position: &Position) -> WMResult<&mut Workspace> {
-        // First, determine which partition the position is in
         let partition = self
             .partitions
             .values()
             .find(|p| p.bounds().contains(&position))
             .ok_or(WMError::NoWorkspaceAtPosition(position.clone()))?;
 
-        // Then, get the workspace for that partition
+        Ok(self
+            .workspaces
+            .get_mut(&partition.current_workspace().unwrap())
+            .unwrap())
+    }
+
+    fn get_workspace_at_bounds_mut(&mut self, bounds: &Bounds) -> WMResult<&mut Workspace> {
+        let partition = self
+            .partitions
+            .values()
+            .find(|p| p.bounds().intersects(&bounds))
+            .ok_or(WMError::NoWorkspaceAtPosition(bounds.position.clone()))?;
+
         Ok(self
             .workspaces
             .get_mut(&partition.current_workspace().unwrap())
@@ -260,10 +378,34 @@ impl WindowManager {
         windows_in_partition
     }
 
+    /// Finds a window at the given position. This will return the top-most window/the floating window first.
+    pub fn find_window_at_position(&self, position: &Position) -> Option<WindowRef> {
+        let mut all_windows = Vec::new();
+
+        // Collect all windows from all workspaces
+        for workspace in self.workspaces.values() {
+            all_windows.extend(workspace.windows().values().cloned());
+        }
+
+        // Sort by floating status first (floating windows always have priority), then by window order
+        all_windows.sort_by_key(|w| {
+            let order_index = self.window_order.get_index_of(&w.id()).unwrap_or(0);
+            let is_floating = !w.tiled();
+            (is_floating, order_index)
+        });
+
+        // Find the last window (highest priority) that contains the position
+        all_windows
+            .into_iter()
+            .rev()
+            .find(|w| w.bounds().contains(position))
+    }
+
     /// If the position is on the edge a window, that window is returned.
     pub fn find_window_at_resize_edge(&self, position: &Position) -> Option<WindowRef> {
         let thickness = 15;
-        for window in self.windows.values() {
+        let workspace = self.get_workspace_at_position(position).ok()?;
+        for window in workspace.windows().values() {
             let bounds = window.window_bounds();
 
             let on_left_edge = (position.x - bounds.position.x).abs() <= thickness;
@@ -331,7 +473,15 @@ impl WindowManager {
         Ok(())
     }
 
+    fn move_to_top(&mut self, id: WindowId) {
+        self.window_order.shift_remove(&id);
+        self.window_order.insert(id);
+    }
+
     pub fn cleanup(&mut self) -> PlatformResult<()> {
+        for workspace in self.workspaces.values_mut() {
+            workspace.cleanup();
+        }
         Ok(())
     }
 
@@ -339,10 +489,6 @@ impl WindowManager {
         if let Err(e) = save_layout(self) {
             warn!("Failed to save layout: {e}");
         }
-    }
-
-    pub fn all_windows(&self) -> impl Iterator<Item = &WindowRef> {
-        self.windows.values()
     }
 
     pub fn config_changed(&mut self) -> PlatformResult<()> {

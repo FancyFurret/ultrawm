@@ -79,18 +79,18 @@ impl Default for ResizeHandleBindings {
 #[serde(default)]
 pub struct ModTransformBindings {
     pub tile: ModMouseKeybind,
+    pub float: ModMouseKeybind,
     pub resize: ModMouseKeybind,
     pub resize_symmetric: ModMouseKeybind,
-    pub slide: ModMouseKeybind,
 }
 
 impl Default for ModTransformBindings {
     fn default() -> Self {
         Self {
             tile: vec!["ctrl+lmb", "bmb+lmb"].into(),
+            float: vec!["ctrl+lmb+rmb", "bmb+lmb+rmb", "fmb+lmb"].into(),
             resize: vec!["ctrl+rmb", "bmb+rmb"].into(),
             resize_symmetric: vec!["ctrl+mmb", "bmb+mmb"].into(),
-            slide: vec!["ctrl+lmb+rmb", "bmb+lmb+rmb"].into(),
         }
     }
 }

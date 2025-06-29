@@ -76,4 +76,5 @@ where
 
     fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()>;
     fn focus(&self) -> PlatformResult<()>;
+    fn set_always_on_top(&self, always_on_top: bool) -> PlatformResult<()>;
 }
