@@ -16,6 +16,7 @@ pub struct ModTransformHandler {
     resize_direction: Option<ResizeDirection>,
     drag_start_position: Option<Position>,
     drag_start_bounds: Option<Bounds>,
+    drag_type: Option<ModTransformType>,
 }
 
 impl ModTransformHandler {
@@ -26,6 +27,7 @@ impl ModTransformHandler {
             resize_direction: None,
             drag_start_position: None,
             drag_start_bounds: None,
+            drag_type: None,
         }
     }
 
@@ -38,16 +40,38 @@ impl ModTransformHandler {
     ) -> WMOperationResult<()> {
         let window = wm.get_window(id)?;
         let bounds = window.bounds();
+        let floating = window.floating();
+        let tiled = !floating;
 
         // Store start position and bounds for this drag
         self.drag_start_position = Some(pos.clone());
         self.drag_start_bounds = Some(bounds.clone());
 
+        // Determine the drag type
+        if drag_type == ModTransformType::Tile
+            || (drag_type == ModTransformType::Shift && tiled)
+            || (drag_type == ModTransformType::Toggle && floating)
+        {
+            self.drag_type = Some(ModTransformType::Tile);
+        } else if drag_type == ModTransformType::Float
+            || (drag_type == ModTransformType::Shift && floating)
+            || (drag_type == ModTransformType::Toggle && tiled)
+        {
+            self.drag_type = Some(ModTransformType::Float);
+            if tiled {
+                wm.float_window(window.id())?;
+            }
+        } else {
+            self.drag_type = Some(drag_type.clone());
+        }
+
         // Set appropriate cursor for the drag type
         let cursor_type = match &drag_type {
-            ModTransformType::Tile | ModTransformType::Float | ModTransformType::Slide => {
-                CursorType::Move
-            }
+            ModTransformType::Tile
+            | ModTransformType::Float
+            | ModTransformType::Shift
+            | ModTransformType::Toggle
+            | ModTransformType::Slide => CursorType::Move,
             ModTransformType::Resize(direction) | ModTransformType::ResizeSymmetric(direction) => {
                 self.resize_direction = Some(*direction);
                 Self::cursor_for_resize_mode(*direction)
@@ -75,46 +99,23 @@ impl ModTransformHandler {
             Some(bounds) => bounds.clone(),
             None => return Ok(()), // No drag in progress
         };
+        let move_bounds = Self::calculate_move_bounds(&start_bounds, &start_pos, &pos);
         let window = wm.get_window(id)?;
-
-        if drag_type == ModTransformType::Tile {
-            self.preview.update_preview(id, &pos, wm);
-        } else {
-            self.preview.hide();
-        }
 
         match drag_type {
             ModTransformType::Tile => {
-                let dx = pos.x - start_pos.x;
-                let dy = pos.y - start_pos.y;
-                let mut new_bounds = start_bounds.clone();
-                new_bounds.position.x += dx;
-                new_bounds.position.y += dy;
-                let _ = window.set_preview_bounds(new_bounds);
+                self.preview.update_preview(id, &pos, wm);
+                let _ = window.set_preview_bounds(move_bounds.clone());
             }
             ModTransformType::Float => {
-                if window.tiled() {
-                    wm.float_window(window.id())?;
-                }
-
-                let dx = pos.x - start_pos.x;
-                let dy = pos.y - start_pos.y;
-                let mut new_bounds = start_bounds.clone();
-                new_bounds.position.x += dx;
-                new_bounds.position.y += dy;
-                window.set_bounds(new_bounds);
+                window.set_bounds(move_bounds.clone());
                 window.flush().unwrap_or_else(|e| {
                     warn!("Failed to flush window: {}", e);
                 });
                 wm.update_floating_window(window.id())?;
             }
             ModTransformType::Slide => {
-                let dx = pos.x - start_pos.x;
-                let dy = pos.y - start_pos.y;
-                let mut new_bounds = start_bounds.clone();
-                new_bounds.position.x += dx;
-                new_bounds.position.y += dy;
-                wm.resize_window(id, &new_bounds)
+                wm.resize_window(id, &move_bounds)
                     .map_err(WMOperationError::Resize)?;
 
                 if window.floating() {
@@ -137,6 +138,7 @@ impl ModTransformHandler {
                 wm.resize_window(id, &new_bounds)
                     .map_err(WMOperationError::Resize)?;
             }
+            _ => {}
         }
 
         Ok(())
@@ -149,6 +151,19 @@ impl ModTransformHandler {
             ResizeDirection::TopLeft | ResizeDirection::BottomRight => CursorType::ResizeNorthWest,
             ResizeDirection::TopRight | ResizeDirection::BottomLeft => CursorType::ResizeNorthEast,
         }
+    }
+
+    fn calculate_move_bounds(
+        start_bounds: &Bounds,
+        start_pos: &Position,
+        pos: &Position,
+    ) -> Bounds {
+        let dx = pos.x - start_pos.x;
+        let dy = pos.y - start_pos.y;
+        let mut new_bounds = start_bounds.clone();
+        new_bounds.position.x += dx;
+        new_bounds.position.y += dy;
+        new_bounds
     }
 
     fn calculate_resize_bounds(
@@ -230,11 +245,8 @@ impl ModTransformHandler {
         drag_type: ModTransformType,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
-        match drag_type {
-            ModTransformType::Tile => {
-                self.preview.tile_on_drop(id, &pos, wm)?;
-            }
-            _ => {}
+        if drag_type == ModTransformType::Tile {
+            self.preview.tile_on_drop(id, &pos, wm)?;
         }
 
         Ok(())
@@ -246,16 +258,12 @@ impl ModTransformHandler {
         drag_type: ModTransformType,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
-        match drag_type {
-            ModTransformType::Tile => {
-                let window = wm.get_window(id)?;
-                if window.floating() {
-                    window.update_bounds();
-                }
-
-                self.preview.cancel(id, wm)?;
+        let window = wm.get_window(id)?;
+        if drag_type == ModTransformType::Tile {
+            if window.floating() {
+                window.update_bounds();
             }
-            _ => {}
+            self.preview.cancel(id, wm)?;
         }
 
         Ok(())
@@ -272,6 +280,7 @@ impl ModTransformHandler {
         self.preview.hide();
         self.drag_start_position = None;
         self.drag_start_bounds = None;
+        self.drag_type = None;
 
         // Reset cursor to default
         Platform::reset_cursor().unwrap_or_else(|e| {
@@ -290,15 +299,20 @@ impl EventHandler for ModTransformHandler {
                     self.start(id, pos, drag_type, wm)?
                 }
                 ModTransformDragEvent::Drag(id, pos, drag_type) => {
-                    self.drag(id, pos, drag_type, wm)?
+                    self.drag(id, pos, self.drag_type.clone().unwrap_or(drag_type), wm)?
                 }
                 ModTransformDragEvent::End(id, pos, drag_type) => {
-                    self.drop(id, pos, drag_type.clone(), wm)?;
-                    self.finalize(drag_type);
+                    self.drop(
+                        id,
+                        pos,
+                        self.drag_type.clone().unwrap_or(drag_type.clone()),
+                        wm,
+                    )?;
+                    self.finalize(self.drag_type.clone().unwrap_or(drag_type.clone()));
                 }
                 ModTransformDragEvent::Cancel(id, drag_type) => {
-                    self.cancel(id, drag_type.clone(), wm)?;
-                    self.finalize(drag_type);
+                    self.cancel(id, self.drag_type.clone().unwrap_or(drag_type.clone()), wm)?;
+                    self.finalize(self.drag_type.clone().unwrap_or(drag_type.clone()));
                 }
             }
         }

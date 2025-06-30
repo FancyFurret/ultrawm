@@ -23,6 +23,8 @@ pub enum ModTransformDragEvent {
 pub enum ModTransformType {
     Tile,
     Float,
+    Shift,
+    Toggle,
     Slide,
     Resize(ResizeDirection),
     ResizeSymmetric(ResizeDirection),
@@ -40,10 +42,14 @@ pub struct ModTransformTracker {
     bindings: ModTransformBindings,
     tile_binding: ModMouseKeybindTracker,
     float_binding: ModMouseKeybindTracker,
+    shift_binding: ModMouseKeybindTracker,
+    toggle_binding: ModMouseKeybindTracker,
     resize_binding: ModMouseKeybindTracker,
     resize_symmetric_binding: ModMouseKeybindTracker,
     tile_drag: Option<DragContext>,
     float_drag: Option<DragContext>,
+    shift_drag: Option<DragContext>,
+    toggle_drag: Option<DragContext>,
     resize_drag: Option<DragContext>,
     resize_symmetric_drag: Option<DragContext>,
 }
@@ -137,6 +143,10 @@ impl ModTransformTracker {
             bindings: config.mod_transform_bindings.clone(),
             tile_binding: ModMouseKeybindTracker::new(config.mod_transform_bindings.tile.clone()),
             float_binding: ModMouseKeybindTracker::new(config.mod_transform_bindings.float.clone()),
+            shift_binding: ModMouseKeybindTracker::new(config.mod_transform_bindings.shift.clone()),
+            toggle_binding: ModMouseKeybindTracker::new(
+                config.mod_transform_bindings.toggle.clone(),
+            ),
             resize_binding: ModMouseKeybindTracker::new(
                 config.mod_transform_bindings.resize.clone(),
             ),
@@ -144,15 +154,19 @@ impl ModTransformTracker {
                 config.mod_transform_bindings.resize_symmetric.clone(),
             ),
             tile_drag: None,
+            float_drag: None,
+            shift_drag: None,
+            toggle_drag: None,
             resize_drag: None,
             resize_symmetric_drag: None,
-            float_drag: None,
         }
     }
 
     pub fn active(&self) -> bool {
         self.tile_binding.mod_held()
             || self.float_binding.mod_held()
+            || self.shift_binding.mod_held()
+            || self.toggle_binding.mod_held()
             || self.resize_binding.mod_held()
             || self.resize_symmetric_binding.mod_held()
     }
@@ -177,6 +191,20 @@ impl ModTransformTracker {
                 |_, _| ModTransformType::Float,
                 wm,
                 &mut self.float_drag,
+            ),
+            Self::handle_binding(
+                event,
+                &mut self.shift_binding,
+                |_, _| ModTransformType::Shift,
+                wm,
+                &mut self.shift_drag,
+            ),
+            Self::handle_binding(
+                event,
+                &mut self.toggle_binding,
+                |_, _| ModTransformType::Toggle,
+                wm,
+                &mut self.toggle_drag,
             ),
             Self::handle_binding(
                 event,

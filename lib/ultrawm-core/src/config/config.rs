@@ -78,17 +78,27 @@ impl Default for ResizeHandleBindings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ModTransformBindings {
+    /// Will tile the window
     pub tile: ModMouseKeybind,
+    /// Will float the window
     pub float: ModMouseKeybind,
+    /// Will move the window without changing its state
+    pub shift: ModMouseKeybind,
+    /// Will toggle the window between tiled and floating
+    pub toggle: ModMouseKeybind,
+    /// Will resize the window
     pub resize: ModMouseKeybind,
+    /// Will resize the window symmetrically
     pub resize_symmetric: ModMouseKeybind,
 }
 
 impl Default for ModTransformBindings {
     fn default() -> Self {
         Self {
-            tile: vec!["ctrl+lmb", "bmb+lmb"].into(),
-            float: vec!["ctrl+lmb+rmb", "bmb+lmb+rmb", "fmb+lmb"].into(),
+            tile: vec![].into(),
+            float: vec![].into(),
+            shift: vec!["ctrl+lmb", "bmb+lmb"].into(),
+            toggle: vec!["ctrl+lmb+rmb", "bmb+lmb+rmb", "fmb+lmb"].into(),
             resize: vec!["ctrl+rmb", "bmb+rmb"].into(),
             resize_symmetric: vec!["ctrl+mmb", "bmb+mmb"].into(),
         }
