@@ -1,6 +1,8 @@
 use crate::config::InputCombo;
 use crate::platform::{Keys, MouseButton, MouseButtons};
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::borrow::Cow;
 use std::marker::PhantomData;
 use winit::keyboard::KeyCode;
 
@@ -118,5 +120,14 @@ impl<'de, T: KeybindVariant> Deserialize<'de> for Keybind<T> {
             combos,
             _phantom: PhantomData,
         })
+    }
+}
+
+impl<T: KeybindVariant> JsonSchema for Keybind<T> {
+    fn schema_name() -> Cow<'static, str> {
+        "Keybind".into()
+    }
+    fn json_schema(gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        <Vec<String>>::json_schema(gen)
     }
 }

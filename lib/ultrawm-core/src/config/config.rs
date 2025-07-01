@@ -1,65 +1,67 @@
+use crate::config::config_serializer::serialize_config;
 use crate::config::{ModMouseKeybind, MouseKeybind};
 use log::{trace, warn};
 use once_cell::sync::Lazy;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::RwLock;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct Config {
     /// The path the config file was loaded from
     #[serde(skip)]
     pub config_path: Option<PathBuf>,
 
-    /// Whether to save your layout and load it on startup
+    /// Save and restore your window layout when UltraWM starts
     pub persistence: bool,
-    /// The number of pixels between windows
+    /// Space between windows in pixels (set to 0 for no gaps)
     pub window_gap: u32,
-    /// The number of pixels between the edge of the partition and the windows
+    /// Space between screen edges and windows in pixels
     pub partition_gap: u32,
-    /// Whether to float windows by default when they are created
+    /// New windows start as floating instead of automatically tiling
     pub float_new_windows: bool,
-    /// Whether to focus windows when the mouse hovers over them
+    /// Automatically focus windows when your mouse hovers over them
     pub focus_on_hover: bool,
     /// The number of frames per second for the tile preview animation
     pub tile_preview_fps: u32,
-    /// The duration of the tile preview animation in milliseconds
+    /// How long tile preview animations take in milliseconds
     pub tile_preview_animation_ms: u32,
-    /// Whether to animate the tile preview fade (opacity)
+    /// Enable fade in/out effects for tile previews
     pub tile_preview_fade_animate: bool,
-    /// Whether to animate the tile preview move (position/size)
+    /// Enable movement animations for tile previews
     pub tile_preview_move_animate: bool,
-    /// Whether to enable drag handles
+    /// Show transparent resize handles between tiled windows for easy resizing
     pub resize_handles: bool,
-    /// The width in pixels of the invisible drag handles between tiled windows
+    /// Width of the transparent resize handles in pixels
     pub resize_handle_width: u32,
-    /// Color of the drag handle highlight (RGB)
+    /// Color of the resize handles (red, green, blue from 0-255)
     pub resize_handle_color: (u8, u8, u8),
     /// Opacity of drag handle highlight (0.0 - 1.0)
     pub resize_handle_opacity: f32,
-    /// Resizes windows as handles are dragged
+    /// Update window sizes in real-time while dragging handles
     pub live_window_resize: bool,
-    /// Bindings handle resize actions
+    /// Mouse controls for resize handles
     pub resize_handle_bindings: ResizeHandleBindings,
-    /// Bindings for window area actions (tile, slide, etc.)
+    /// Mouse controls for moving and resizing windows with a modifier key
     pub mod_transform_bindings: ModTransformBindings,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct ResizeHandleBindings {
-    /// Bindings for resizing the left or top window (e.g., LMB)
+    /// Resize the window on the left or top side of the handle
     pub resize_before: MouseKeybind,
-    /// Bindings for resizing the right or bottom window (e.g., RMB)
+    /// Resize the window on the right or bottom side of the handle
     pub resize_after: MouseKeybind,
-    /// Bindings for resizing both sides evenly (e.g., MMB, LMB+RMB)
+    /// Resize both sides equally
     pub resize_evenly: MouseKeybind,
-    /// Bindings for symmetric resize of left/top (e.g., Shift+LMB)
+    /// Equally resize the sides of the left/top window
     pub resize_before_symmetric: MouseKeybind,
-    /// Bindings for symmetric resize of right/bottom (e.g., Shift+RMB)
+    /// Equally resize the sides of the right/bottom window
     pub resize_after_symmetric: MouseKeybind,
 }
 
@@ -75,20 +77,20 @@ impl Default for ResizeHandleBindings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct ModTransformBindings {
-    /// Will tile the window
+    /// Move the window into or around the tiled layout
     pub tile: ModMouseKeybind,
-    /// Will float the window
+    /// Make the window move freely without tiling
     pub float: ModMouseKeybind,
-    /// Will move the window without changing its state
+    /// Move the window around without changing its tiled/floating state
     pub shift: ModMouseKeybind,
-    /// Will toggle the window between tiled and floating
+    /// Switch between tiled and floating modes
     pub toggle: ModMouseKeybind,
-    /// Will resize the window
+    /// Resize the window from the corner or edge you're dragging
     pub resize: ModMouseKeybind,
-    /// Will resize the window symmetrically
+    /// Equally resize the sides of the window
     pub resize_symmetric: ModMouseKeybind,
 }
 
@@ -245,12 +247,7 @@ impl Config {
             fs::create_dir_all(parent)?;
         }
 
-        let header =
-            "# UltraWM Configuration File\n# This file contains your UltraWM settings.\n\n";
-        let serialized_config = serde_yaml::to_string(self)?;
-        let config_content = format!("{}{}", header, serialized_config);
-
-        fs::write(path, config_content)?;
+        serialize_config(self, path.to_str().unwrap())?;
         Ok(())
     }
 }

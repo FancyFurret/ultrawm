@@ -6,3 +6,5 @@ pub use keybind::*;
 
 mod config;
 pub use config::*;
+
+pub mod config_serializer;
