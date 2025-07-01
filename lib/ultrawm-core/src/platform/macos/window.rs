@@ -137,6 +137,12 @@ impl PlatformWindowImpl for MacOSPlatformWindow {
         self.osa_focus(process_name)?;
         Ok(())
     }
+
+    fn set_always_on_top(&self, _always_on_top: bool) -> PlatformResult<()> {
+        // TODO: This would require disabling SIP, injecting into Dock.app, and calling private APIs
+        // See Yabai as reference
+        Ok(())
+    }
 }
 
 impl MacOSPlatformWindow {
