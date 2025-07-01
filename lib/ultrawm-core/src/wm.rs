@@ -15,7 +15,8 @@ use std::rc::Rc;
 use thiserror::Error;
 
 // Number of partitions to create per display
-const PARTITIONS_PER_DISPLAY: u32 = 2;
+// Temporary
+const PARTITIONS_PER_DISPLAY: u32 = 1;
 
 #[derive(Debug, Error)]
 pub enum WMError {
