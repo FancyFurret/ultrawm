@@ -14,6 +14,7 @@ use std::time::Duration;
 use std::{process, thread};
 
 mod animation;
+mod coalescing_channel;
 pub mod config;
 mod event_handlers;
 mod event_loop_main;

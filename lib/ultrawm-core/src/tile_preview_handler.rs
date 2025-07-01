@@ -68,8 +68,8 @@ impl TilePreviewHandler {
 
     pub fn show_if_changed(&mut self, bounds: &Bounds) {
         if self.last_preview_bounds.as_ref() != Some(bounds) {
-            self.overlay.show();
             self.overlay.move_to(bounds);
+            self.overlay.show();
             self.last_preview_bounds = Some(bounds.clone());
         }
     }

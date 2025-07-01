@@ -74,8 +74,8 @@ impl ResizeHandleHandler {
                 .unwrap()
                 .preview_bounds(self.handle_width);
 
-            self.overlay.show();
             self.overlay.move_to(&preview_bounds);
+            self.overlay.show();
         } else if (handle_under_cursor.is_none()) && self.hover_resize_handle.is_some() {
             self.hover_resize_handle = None;
             if !self.tracker.active() {
@@ -88,8 +88,8 @@ impl ResizeHandleHandler {
 
     fn start(&mut self, handle: ResizeHandle, _pos: Position) -> WMOperationResult<()> {
         let preview_bounds = handle.preview_bounds(self.handle_width);
-        self.overlay.show();
         self.overlay.move_to(&preview_bounds);
+        self.overlay.show();
 
         Ok(())
     }
@@ -109,8 +109,8 @@ impl ResizeHandleHandler {
             preview_bounds.position.y = clamped_y - (preview_bounds.size.height as i32 / 2);
         }
 
-        self.overlay.show();
         self.overlay.move_to(&preview_bounds);
+        self.overlay.show();
 
         if Config::current().live_window_resize {
             if let Some(mode) = Self::get_mode() {

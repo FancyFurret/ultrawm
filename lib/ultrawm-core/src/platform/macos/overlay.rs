@@ -1,15 +1,20 @@
 use crate::event_loop_main::run_on_main_thread_blocking;
 use crate::overlay_window::OverlayWindowConfig;
 use crate::platform::{Bounds, PlatformOverlayImpl, PlatformResult, WindowId};
+use block2::StackBlock;
+use core_foundation::date::CFTimeInterval;
+use core_graphics::base::CGFloat;
 use objc2::rc::Retained;
 use objc2::{MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
-    NSAutoresizingMaskOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
-    NSVisualEffectState, NSVisualEffectView, NSWindow,
+    NSAnimatablePropertyContainer, NSAutoresizingMaskOptions, NSView, NSVisualEffectBlendingMode,
+    NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow,
 };
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_foundation::NSRect;
+use objc2_quartz_core::CATransaction;
 use skia_safe::Image;
+use std::time::Duration;
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::Window;
 
@@ -66,6 +71,7 @@ impl PlatformOverlayImpl for MacOSPlatformOverlay {
         });
         Ok(())
     }
+
     fn set_window_opacity(window_id: WindowId, opacity: f32) -> PlatformResult<()> {
         unsafe {
             let ns_window = get_ns_window_from_id(window_id)?;
@@ -73,6 +79,50 @@ impl PlatformOverlayImpl for MacOSPlatformOverlay {
             ns_window.setOpaque(false);
         }
         Ok(())
+    }
+
+    fn animate_window_bounds(
+        window_id: WindowId,
+        duration: Duration,
+        bounds: Bounds,
+    ) -> PlatformResult<bool> {
+        let duration_seconds = duration.as_secs_f64();
+        run_on_main_thread_blocking(move || unsafe {
+            let ns_window = get_ns_window_from_id(window_id).unwrap();
+            CATransaction::begin();
+            CATransaction::setAnimationDuration(duration_seconds as CFTimeInterval);
+            ns_window
+                .animator()
+                .setFrame_display_animate(bounds.into(), true, true);
+            CATransaction::commit();
+        });
+        Ok(true)
+    }
+
+    fn animate_window_opacity(
+        window_id: WindowId,
+        duration: Duration,
+        opacity: f32,
+    ) -> PlatformResult<bool> {
+        let duration_seconds = duration.as_secs_f64();
+        run_on_main_thread_blocking(move || unsafe {
+            let ns_window = get_ns_window_from_id(window_id.clone()).unwrap();
+            let completion_block = StackBlock::new(move || {
+                let ns_window = get_ns_window_from_id(window_id).unwrap();
+                if opacity < f32::EPSILON {
+                    ns_window.orderOut(None);
+                }
+            });
+            let completion_block = completion_block.copy();
+
+            ns_window.orderFront(None);
+            CATransaction::begin();
+            CATransaction::setAnimationDuration(duration_seconds as CFTimeInterval);
+            CATransaction::setCompletionBlock(Some(&completion_block));
+            ns_window.animator().setAlphaValue(opacity as CGFloat);
+            CATransaction::commit();
+        });
+        Ok(true)
     }
 
     fn render_to_window(_image: &Image, _window_id: WindowId) -> PlatformResult<()> {

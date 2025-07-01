@@ -1,4 +1,5 @@
 use skia_safe::Image;
+use std::time::Duration;
 use winit::window::Window;
 
 use crate::platform::PlatformWindow;
@@ -53,6 +54,22 @@ pub trait PlatformOverlayImpl {
     fn set_window_bounds(window_id: WindowId, bounds: Bounds) -> PlatformResult<()>;
 
     fn set_window_opacity(window_id: WindowId, opacity: f32) -> PlatformResult<()>;
+
+    fn animate_window_bounds(
+        _window_id: WindowId,
+        _duration: Duration,
+        _bounds: Bounds,
+    ) -> PlatformResult<bool> {
+        Ok(false)
+    }
+
+    fn animate_window_opacity(
+        _window_id: WindowId,
+        _duration: Duration,
+        _opacity: f32,
+    ) -> PlatformResult<bool> {
+        Ok(false)
+    }
 
     fn render_to_window(image: &Image, window_id: WindowId) -> PlatformResult<()>;
 

@@ -1,11 +1,13 @@
 use crate::animation::{ease_in_out_cubic, Animator};
+use crate::coalescing_channel::CoalescingAsyncChannel;
 use crate::event_loop_main::get_event_loop_blocking;
 use crate::platform::{Bounds, PlatformOverlay, PlatformOverlayImpl, PlatformResult, WindowId};
 use log::{error, warn};
 use skia_safe::{surfaces, Color, Paint, PaintStyle, RRect, Rect, Surface};
-use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
+use tokio::runtime::Runtime;
+use tokio::sync::mpsc;
 use winit::dpi::{LogicalSize, PhysicalPosition};
 use winit::window::{Window, WindowAttributes, WindowLevel};
 
@@ -42,7 +44,7 @@ pub enum OverlayWindowCommand {
 
 pub struct OverlayWindow {
     config: OverlayWindowConfig,
-    command_sender: Sender<OverlayWindowCommand>,
+    command_sender: mpsc::UnboundedSender<OverlayWindowCommand>,
     animator_thread: Option<thread::JoinHandle<()>>,
     shown: bool,
 }
@@ -51,17 +53,20 @@ pub struct OverlayWindowAnimator {
     window: Window,
     handle: WindowId,
     fade_animator: Animator<f32>,
+    native_fade_animation: bool,
     move_animator: Animator<Bounds>,
+    native_move_animation: bool,
     surface: Surface,
     last_size: (u32, u32),
     config: OverlayWindowConfig,
     visible: bool,
-    command_receiver: Receiver<OverlayWindowCommand>,
+    command_channel: CoalescingAsyncChannel<OverlayWindowCommand>,
 }
 
 impl OverlayWindow {
     pub async fn new(config: OverlayWindowConfig) -> Self {
-        let (tx, rx) = channel();
+        let command_channel = CoalescingAsyncChannel::new();
+        let command_sender = command_channel.sender();
 
         let config_clone = config.clone();
         let animator_thread = thread::spawn(move || {
@@ -115,26 +120,30 @@ impl OverlayWindow {
                     window,
                     handle,
                     fade_animator: Animator::new(0.0, 0.0, ease_in_out_cubic),
+                    native_fade_animation: false,
                     move_animator: Animator::new(
                         Bounds::default(),
                         Bounds::default(),
                         ease_in_out_cubic,
                     ),
+                    native_move_animation: false,
                     surface,
                     last_size: (0, 0),
                     config: config_clone,
                     visible: false,
-                    command_receiver: rx,
+                    command_channel,
                 };
 
-                animator.run_loop();
+                // Create a tokio runtime for the animator thread
+                let rt = Runtime::new().unwrap();
+                rt.block_on(animator.run_loop());
             }
         });
 
         Self {
             config,
             shown: false,
-            command_sender: tx,
+            command_sender,
             animator_thread: Some(animator_thread),
         }
     }
@@ -183,13 +192,16 @@ impl Drop for OverlayWindow {
 }
 
 impl OverlayWindowAnimator {
-    fn run_loop(&mut self) {
+    async fn run_loop(&mut self) {
         let mut running = true;
         let frame_duration = Duration::from_secs_f64(1.0 / self.config.animation_fps as f64);
         let mut last_frame_time = Instant::now();
 
         while running {
-            while let Ok(cmd) = self.command_receiver.try_recv() {
+            while let Some(cmd) = self
+                .command_channel
+                .try_coalesce(|cmd| matches!(cmd, OverlayWindowCommand::MoveTo(_)))
+            {
                 self.handle_command(cmd, &mut running);
             }
 
@@ -205,12 +217,11 @@ impl OverlayWindowAnimator {
                     self.animate_frame();
                     last_frame_time = now;
                 } else {
-                    thread::sleep(frame_duration - elapsed);
+                    tokio::time::sleep(frame_duration - elapsed).await;
                 }
             } else {
-                match self.command_receiver.recv() {
-                    Ok(cmd) => self.handle_command(cmd, &mut running),
-                    Err(_) => break,
+                if let Some(cmd) = self.command_channel.recv().await {
+                    self.handle_command(cmd, &mut running);
                 }
             }
         }
@@ -260,11 +271,36 @@ impl OverlayWindowAnimator {
         let _ = PlatformOverlay::set_window_bounds(self.handle, bounds);
     }
 
-    fn start_fade(&mut self, target_opacity: f32, duration_ms: u32) {
-        self.fade_animator.start(target_opacity, duration_ms);
+    fn start_fade(&mut self, opacity: f32, duration_ms: u32) {
+        let result = PlatformOverlay::animate_window_opacity(
+            self.handle,
+            Duration::from_millis(duration_ms as u64),
+            opacity,
+        );
+
+        if matches!(result, Err(_) | Ok(true)) {
+            self.native_fade_animation = true;
+        }
+
+        self.fade_animator.start(opacity, duration_ms);
     }
 
     fn start_move(&mut self, bounds: Bounds, duration_ms: u32) {
+        if !self.visible {
+            let _ = PlatformOverlay::set_window_bounds(self.handle, bounds.clone());
+            return;
+        }
+
+        let result = PlatformOverlay::animate_window_bounds(
+            self.handle,
+            Duration::from_millis(duration_ms as u64),
+            bounds.clone(),
+        );
+
+        if matches!(result, Err(_) | Ok(true)) {
+            self.native_move_animation = true;
+        }
+
         if *self.fade_animator.current_value() < f32::EPSILON {
             self.move_animator
                 .start_from(bounds.clone(), bounds, duration_ms);
@@ -284,7 +320,9 @@ impl OverlayWindowAnimator {
 
         if self.fade_animator.is_animating() {
             if let Some(new_opacity) = self.fade_animator.update() {
-                self.set_opacity(new_opacity);
+                if !self.native_fade_animation {
+                    self.set_opacity(new_opacity);
+                }
 
                 if !self.fade_animator.is_animating() && new_opacity == 0.0 {
                     self.set_visible(false);
@@ -294,7 +332,9 @@ impl OverlayWindowAnimator {
 
         if self.move_animator.is_animating() {
             if let Some(bounds) = self.move_animator.update() {
-                self.set_bounds(bounds);
+                if !self.native_move_animation {
+                    self.set_bounds(bounds);
+                }
             }
         }
 
