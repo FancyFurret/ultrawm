@@ -210,20 +210,60 @@ impl<'a> TrayBuilder<'a> {
 }
 
 fn load_svg_icon() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    // Use white icon on Windows, black on other platforms
+    let fill_color = if cfg!(target_os = "windows") {
+        "white"
+    } else {
+        "black"
+    };
+
     // language=SVG
-    let svg_data = r#"
+    let svg_data = format!(
+        r#"
         <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <mask id="cutout">
-              <rect x="0" y="0" width="32" height="32" fill="white"/>
-              <rect x="6" y="6" width="8" height="20" fill="black"/>
-              <rect x="17" y="6" width="9" height="9" fill="black"/>
-              <rect x="17" y="17" width="9" height="9" fill="black"/>
-            </mask>
-          </defs>
-          
-          <rect x="2" y="2" width="28" height="28" rx="5" ry="5" fill="white" mask="url(#cutout)"/>
-        </svg>"#;
+          <path fill="{}" fill-rule="evenodd"
+            d="
+              M 2 8
+              a 6 6 0 0 1 6 -6
+              h 16
+              a 6 6 0 0 1 6 6
+              v 16
+              a 6 6 0 0 1 -6 6
+              h -16
+              a 6 6 0 0 1 -6 -6
+              z
+              M 6 7
+              a 1 1 0 0 1 1 -1
+              h 6
+              a 1 1 0 0 1 1 1
+              v 18
+              a 1 1 0 0 1 -1 1
+              h -6
+              a 1 1 0 0 1 -1 -1
+              z
+              M 18 7
+              a 1 1 0 0 1 1 -1
+              h 6
+              a 1 1 0 0 1 1 1
+              v 6
+              a 1 1 0 0 1 -1 1
+              h -6
+              a 1 1 0 0 1 -1 -1
+              z
+              M 18 19
+              a 1 1 0 0 1 1 -1
+              h 6
+              a 1 1 0 0 1 1 1
+              v 6
+              a 1 1 0 0 1 -1 1
+              h -6
+              a 1 1 0 0 1 -1 -1
+              z
+            "
+          />
+        </svg>"#,
+        fill_color
+    );
 
     let options = Options::default();
     let rtree = resvg::usvg::Tree::from_data(svg_data.as_bytes(), &options)?;
