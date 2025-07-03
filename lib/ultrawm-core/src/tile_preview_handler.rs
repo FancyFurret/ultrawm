@@ -110,6 +110,7 @@ impl TilePreviewHandler {
         // Move the window back to its original position
         let window = wm.get_window(id)?;
         let tiled_bounds = window.bounds().clone();
+        window.update_bounds();
         window.set_bounds(tiled_bounds);
         window
             .flush()
