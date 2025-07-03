@@ -44,6 +44,7 @@ pub struct WindowManager {
     workspaces: HashMap<WorkspaceId, Workspace>,
     window_order: IndexSet<WindowId>,
     animation_thread: WorkspaceAnimationThread,
+    minimized_windows: HashMap<WindowId, WindowRef>,
 }
 
 impl WindowManager {
@@ -139,6 +140,7 @@ impl WindowManager {
             animation_thread: WorkspaceAnimationThread::new(WorkspaceAnimationConfig {
                 animation_fps: Config::window_tile_fps(),
             }),
+            minimized_windows: HashMap::new(),
         };
 
         for existing_window in existing_windows.values() {
@@ -173,6 +175,15 @@ impl WindowManager {
             return Ok(());
         }
 
+        if self.minimized_windows.contains_key(&window.id()) {
+            return Ok(());
+        }
+
+        if !window.visible() {
+            self.minimized_windows.insert(window.id(), window.clone());
+            return Ok(());
+        }
+
         if Config::float_new_windows() {
             let workspace = self.get_workspace_at_bounds_mut(&window.bounds())?;
             workspace.float_window(&window)?;
@@ -181,6 +192,17 @@ impl WindowManager {
             self.tile_window(window.id(), &window.bounds().position)?;
         }
 
+        Ok(())
+    }
+
+    pub fn unhide_window(&mut self, id: WindowId) -> WMResult<()> {
+        if !self.minimized_windows.contains_key(&id) {
+            return Ok(());
+        }
+
+        let window = self.minimized_windows.remove(&id).unwrap();
+        window.update_bounds();
+        self.track_window(window)?;
         Ok(())
     }
 
@@ -291,8 +313,9 @@ impl WindowManager {
 
     pub fn remove_window(&mut self, id: WindowId) -> WMResult<()> {
         let window = self.get_window(id)?;
-        let workspace = self.get_workspace_for_window_mut(&id)?;
+        self.minimized_windows.insert(id, window.clone());
 
+        let workspace = self.get_workspace_for_window_mut(&id)?;
         workspace.remove_window(&window)?;
         self.animated_flush()?;
         self.try_save_layout();

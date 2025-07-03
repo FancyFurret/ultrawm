@@ -19,6 +19,7 @@ impl std::fmt::Debug for Window {
         f.debug_struct("Window")
             .field("id", &self.id())
             .field("title", &self.title())
+            .field("visible", &self.visible())
             .field("bounds", &*self.bounds.borrow())
             .field("floating", &self.floating())
             .field("always_on_top", &*self.always_on_top.borrow())
@@ -63,6 +64,10 @@ impl Window {
 
     pub fn title(&self) -> String {
         self.platform_window.borrow().title()
+    }
+
+    pub fn visible(&self) -> bool {
+        self.platform_window.borrow().visible()
     }
 
     pub fn bounds(&self) -> Ref<Bounds> {

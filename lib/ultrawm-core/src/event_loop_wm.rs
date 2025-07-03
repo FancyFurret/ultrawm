@@ -60,12 +60,14 @@ impl EventLoopWM {
             match &event {
                 WMEvent::WindowOpened(window) => {
                     wm.track_window(Rc::new(Window::new(window.clone())))
-                        .unwrap_or_else(|_| {
-                            warn!("Could not track window");
+                        .unwrap_or_else(|e| {
+                            warn!("Could not track window: {e}");
                         });
                 }
-                WMEvent::WindowShown(_) => {
-                    // TODO: If the window was hidden, then bring it back to where it was
+                WMEvent::WindowShown(id) => {
+                    wm.unhide_window(id.clone()).unwrap_or_else(|e| {
+                        warn!("Could not unhide window: {e}");
+                    });
                 }
                 WMEvent::WindowClosed(id) | WMEvent::WindowHidden(id) => {
                     // TODO: Check if manageable
