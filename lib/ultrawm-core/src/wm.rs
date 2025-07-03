@@ -7,6 +7,7 @@ use crate::serialization::{deserialize_partition, load_layout, save_layout};
 use crate::tile_result::InsertResult;
 use crate::window::{Window, WindowRef};
 use crate::workspace::{Workspace, WorkspaceId};
+use crate::workspace_animator::{WorkspaceAnimationConfig, WorkspaceAnimationThread};
 use crate::PlatformError;
 use indexmap::{IndexMap, IndexSet};
 use log::{error, warn};
@@ -38,11 +39,11 @@ pub enum WMError {
 
 pub type WMResult<T> = Result<T, WMError>;
 
-#[derive(Debug)]
 pub struct WindowManager {
     partitions: HashMap<PartitionId, Partition>,
     workspaces: HashMap<WorkspaceId, Workspace>,
     window_order: IndexSet<WindowId>,
+    animation_thread: WorkspaceAnimationThread,
 }
 
 impl WindowManager {
@@ -135,6 +136,9 @@ impl WindowManager {
             partitions,
             workspaces,
             window_order: IndexSet::new(),
+            animation_thread: WorkspaceAnimationThread::new(WorkspaceAnimationConfig {
+                animation_fps: Config::window_tile_fps(),
+            }),
         };
 
         for existing_window in existing_windows.values() {
@@ -208,15 +212,38 @@ impl WindowManager {
                 let old_workspace = self.workspaces.get_mut(&id).unwrap();
                 old_workspace.remove_window(&window)?;
             }
-
-            // Flush the old workspace (get a fresh reference)
-            let old_workspace = self.workspaces.get_mut(&id).unwrap();
-            old_workspace.flush_windows()?;
         }
 
-        let new_workspace = self.workspaces.get_mut(&new_workspace_id).unwrap();
-        new_workspace.flush_windows()?;
+        self.animated_flush()?;
         self.try_save_layout();
+        Ok(())
+    }
+
+    /// Animated flush that sends dirty windows to the animation thread
+    pub fn animated_flush(&mut self) -> PlatformResult<()> {
+        for workspace in self.workspaces.values_mut() {
+            for window in workspace.windows().values() {
+                if window.dirty() {
+                    if Config::window_tile_animate() {
+                        let platform_window = window.platform_window().clone();
+                        let start_bounds = window.platform_bounds();
+                        let target_bounds = window.window_bounds().clone();
+                        let duration_ms = Config::window_tile_animation_ms();
+
+                        self.animation_thread.animate_window(
+                            window.id(),
+                            platform_window,
+                            start_bounds,
+                            target_bounds,
+                            duration_ms,
+                        );
+                    } else {
+                        window.flush()?;
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 

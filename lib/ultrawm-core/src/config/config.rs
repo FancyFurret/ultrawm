@@ -34,6 +34,12 @@ pub struct Config {
     pub tile_preview_fade_animate: bool,
     /// Enable movement animations for tile previews
     pub tile_preview_move_animate: bool,
+    /// Enable animations when tiling windows
+    pub window_tile_animate: bool,
+    /// How long window tiling animations take in milliseconds
+    pub window_tile_animation_ms: u32,
+    /// The number of frames per second for window tiling animations
+    pub window_tile_fps: u32,
     /// Show transparent resize handles between tiled windows for easy resizing
     pub resize_handles: bool,
     /// Width of the transparent resize handles in pixels
@@ -217,6 +223,18 @@ impl Config {
         Self::current().tile_preview_move_animate
     }
 
+    pub fn window_tile_animate() -> bool {
+        Self::current().window_tile_animate
+    }
+
+    pub fn window_tile_animation_ms() -> u32 {
+        Self::current().window_tile_animation_ms
+    }
+
+    pub fn window_tile_fps() -> u32 {
+        Self::current().window_tile_fps
+    }
+
     pub fn resize_handles() -> bool {
         Self::current().resize_handles
     }
@@ -265,6 +283,9 @@ impl Default for Config {
             tile_preview_animation_ms: 150,
             tile_preview_fade_animate: true,
             tile_preview_move_animate: true,
+            window_tile_animate: true,
+            window_tile_animation_ms: 150,
+            window_tile_fps: 240,
             resize_handles: true,
             resize_handle_width: 25,
             resize_handle_color: (40, 40, 40),

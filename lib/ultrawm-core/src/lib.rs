@@ -31,6 +31,7 @@ mod tile_result;
 mod window;
 mod wm;
 mod workspace;
+mod workspace_animator;
 
 use crate::platform::input_state::InputState;
 use crate::wm::WMError;

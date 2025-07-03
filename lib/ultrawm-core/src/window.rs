@@ -70,8 +70,10 @@ impl Window {
     }
 
     pub fn set_bounds(&self, bounds: Bounds) {
-        self.bounds.replace(bounds);
-        self.bounds_dirty.replace(true);
+        let old = self.bounds.replace(bounds.clone());
+        if old != bounds {
+            self.bounds_dirty.replace(true);
+        }
     }
 
     pub fn update_bounds(&self) {
@@ -100,7 +102,8 @@ impl Window {
     pub fn flush(&self) -> PlatformResult<()> {
         if self.bounds_dirty.borrow().clone() {
             self.bounds_dirty.replace(false);
-            self.set_platform_bounds(self.bounds.borrow().clone())?;
+
+            self.set_platform_bounds(self.window_bounds())?;
         }
 
         if self.always_on_top_dirty.borrow().clone() {
@@ -112,31 +115,29 @@ impl Window {
         Ok(())
     }
 
+    /// The bounds of the window, with tiling gaps applied
     pub fn window_bounds(&self) -> Bounds {
         let config = Config::current();
-
         let mut bounds = self.bounds.borrow().clone();
-        bounds.position.x += config.window_gap as i32 / 2;
-        bounds.position.y += config.window_gap as i32 / 2;
-        bounds.size.width = (bounds.size.width as i32 - config.window_gap as i32).max(100) as u32;
-        bounds.size.height = (bounds.size.height as i32 - config.window_gap as i32).max(100) as u32;
+
+        if !self.floating() {
+            bounds.position.x += config.window_gap as i32 / 2;
+            bounds.position.y += config.window_gap as i32 / 2;
+            bounds.size.width = bounds.size.width.saturating_sub(config.window_gap).max(100);
+            bounds.size.height = bounds
+                .size
+                .height
+                .saturating_sub(config.window_gap)
+                .max(100);
+        }
+
         bounds
     }
 
     pub fn platform_bounds(&self) -> Bounds {
-        let config = Config::current();
-
-        let mut bounds = self.platform_window().size().clone();
-        bounds.width += config.window_gap;
-        bounds.height += config.window_gap;
-
-        let mut position = self.platform_window().position().clone();
-        position.x -= config.window_gap as i32 / 2;
-        position.y -= config.window_gap as i32 / 2;
-
         Bounds {
-            position,
-            size: bounds,
+            position: self.platform_window().position().clone(),
+            size: self.platform_window().size().clone(),
         }
     }
 
@@ -145,18 +146,6 @@ impl Window {
     }
 
     fn set_platform_bounds(&self, bounds: Bounds) -> PlatformResult<()> {
-        let mut bounds = bounds;
-        let config = Config::current();
-
-        // Apply gap (offset from screen edge)
-        if !self.floating() {
-            bounds.position.x += config.window_gap as i32 / 2;
-            bounds.position.y += config.window_gap as i32 / 2;
-
-            bounds.size.width = bounds.size.width.saturating_sub(config.window_gap);
-            bounds.size.height = bounds.size.height.saturating_sub(config.window_gap);
-        }
-
         self.platform_window.borrow().set_bounds(&bounds)
     }
 }
