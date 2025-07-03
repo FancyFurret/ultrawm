@@ -111,12 +111,16 @@ impl Window {
             self.set_platform_bounds(self.window_bounds())?;
         }
 
+        self.flush_always_on_top()?;
+        Ok(())
+    }
+
+    pub fn flush_always_on_top(&self) -> PlatformResult<()> {
         if self.always_on_top_dirty.borrow().clone() {
             let on_top = self.always_on_top.borrow().clone();
             self.always_on_top_dirty.replace(false);
             self.platform_window.borrow().set_always_on_top(on_top)?;
         }
-
         Ok(())
     }
 

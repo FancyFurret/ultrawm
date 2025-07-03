@@ -211,6 +211,10 @@ impl WindowManager {
         let was_floating = window.floating();
         let old_bounds = window.bounds().clone();
 
+        if was_floating {
+            window.set_floating(false);
+        }
+
         let old_workspace_id = self.get_workspace_with_window(&window).map(|w| w.id());
         let new_workspace_id = self.get_workspace_at_position(position)?.id();
 
@@ -245,6 +249,7 @@ impl WindowManager {
     pub fn animated_flush(&mut self) -> PlatformResult<()> {
         for workspace in self.workspaces.values_mut() {
             for window in workspace.windows().values() {
+                window.flush_always_on_top()?;
                 if window.dirty() {
                     if Config::window_tile_animate() {
                         let platform_window = window.platform_window().clone();
@@ -305,7 +310,7 @@ impl WindowManager {
         };
 
         workspace.float_window(&window)?;
-        workspace.flush_windows()?;
+        self.animated_flush()?;
         self.move_to_top(window.id());
         self.try_save_layout();
         Ok(())
