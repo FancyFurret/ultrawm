@@ -1,5 +1,6 @@
 use log::trace;
 use std::collections::VecDeque;
+use std::fmt::Debug;
 use std::time::Instant;
 
 pub trait Animatable {
@@ -91,7 +92,7 @@ where
 
 impl<T> Animator<T>
 where
-    T: Interpolatable,
+    T: Interpolatable + Debug,
 {
     pub fn new(from: T, to: T, ease_fn: fn(f64) -> f64) -> Self {
         Self {

@@ -287,7 +287,7 @@ impl OverlayWindowAnimator {
 
     fn start_move(&mut self, bounds: Bounds, duration_ms: u32) {
         if !self.visible {
-            let _ = PlatformOverlay::set_window_bounds(self.handle, bounds.clone());
+            self.move_animator.start_from(bounds.clone(), bounds, 0);
             return;
         }
 
@@ -302,8 +302,7 @@ impl OverlayWindowAnimator {
         }
 
         if *self.fade_animator.current_value() < f32::EPSILON {
-            self.move_animator
-                .start_from(bounds.clone(), bounds, duration_ms);
+            self.move_animator.start_from(bounds.clone(), bounds, 0);
         } else {
             self.move_animator.start(bounds, duration_ms);
         }
