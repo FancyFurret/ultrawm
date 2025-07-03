@@ -228,8 +228,8 @@ impl WindowManager {
             // Handle the swap case where we need to float a window
             if let InsertResult::Swap(new_window) = &result {
                 if was_floating {
-                    new_window.set_bounds(old_bounds);
                     self.float_window(new_window.id())?;
+                    new_window.set_bounds(old_bounds);
                 } else {
                     let old_workspace = self.workspaces.get_mut(&id).unwrap();
                     old_workspace.replace_window(&window, &new_window)?;
@@ -249,16 +249,12 @@ impl WindowManager {
     pub fn animated_flush(&mut self) -> PlatformResult<()> {
         for workspace in self.workspaces.values_mut() {
             for window in workspace.windows().values() {
+                window.flush_always_on_top()?;
+
                 if !window.dirty() {
                     continue;
                 }
 
-                if window.floating() {
-                    window.flush()?;
-                    continue;
-                }
-
-                window.flush_always_on_top()?;
                 if Config::window_tile_animate() {
                     let platform_window = window.platform_window().clone();
                     let start_bounds = window.platform_bounds();
