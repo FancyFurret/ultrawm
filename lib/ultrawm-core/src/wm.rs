@@ -294,7 +294,7 @@ impl WindowManager {
         let workspace = self.get_workspace_for_window_mut(&id)?;
 
         workspace.remove_window(&window)?;
-        workspace.flush_windows()?;
+        self.animated_flush()?;
         self.try_save_layout();
         Ok(())
     }
