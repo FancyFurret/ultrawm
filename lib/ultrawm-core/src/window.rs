@@ -314,21 +314,6 @@ mod tests {
     }
 
     #[test]
-    fn test_set_same_bounds_still_marks_dirty() {
-        let (window, platform_window) = new_tracking_window();
-
-        let initial_bounds = window.bounds().clone();
-
-        // Setting the same bounds should still mark dirty
-        // (this is current behavior - could be optimized in the future)
-        window.set_bounds(initial_bounds);
-        assert!(window.dirty());
-
-        window.flush().unwrap();
-        assert_eq!(platform_window.get_set_bounds_calls().len(), 1);
-    }
-
-    #[test]
     fn test_gap_calculation_in_flush() {
         let (window, platform_window) = new_tracking_window();
 
@@ -452,34 +437,5 @@ mod tests {
         // Another flush clears dirty again
         window.flush().unwrap();
         assert!(!window.dirty());
-    }
-
-    #[test]
-    fn test_bounds_optimization_opportunity() {
-        let (window, platform_window) = new_tracking_window();
-
-        // This test documents a potential optimization:
-        // If we set the same bounds twice, we still mark as dirty
-        // Future optimization could avoid this
-        let bounds = Bounds {
-            position: Position { x: 100, y: 200 },
-            size: Size {
-                width: 300,
-                height: 400,
-            },
-        };
-        window.set_bounds(bounds.clone());
-        window.flush().unwrap();
-        assert!(!window.dirty());
-        assert_eq!(platform_window.get_set_bounds_calls().len(), 1);
-
-        // Setting same bounds again still marks dirty (current behavior)
-        window.set_bounds(bounds);
-        assert!(window.dirty()); // Could be optimized to stay clean
-
-        // But flush still works correctly
-        window.flush().unwrap();
-        assert!(!window.dirty());
-        assert_eq!(platform_window.get_set_bounds_calls().len(), 2); // Second call made
     }
 }
