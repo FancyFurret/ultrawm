@@ -52,6 +52,9 @@ impl Window {
         self.always_on_top.replace(floating);
         self.always_on_top_dirty.replace(true);
         self.floating.replace(floating);
+        if floating {
+            self.set_bounds(self.platform_bounds());
+        }
     }
 
     pub fn floating(&self) -> bool {
@@ -70,8 +73,8 @@ impl Window {
         self.platform_window.borrow().visible()
     }
 
-    pub fn bounds(&self) -> Ref<Bounds> {
-        self.bounds.borrow()
+    pub fn bounds(&self) -> Bounds {
+        self.bounds.borrow().clone()
     }
 
     pub fn set_bounds(&self, bounds: Bounds) {

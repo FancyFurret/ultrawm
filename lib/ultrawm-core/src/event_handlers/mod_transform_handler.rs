@@ -39,13 +39,8 @@ impl ModTransformHandler {
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
         let window = wm.get_window(id)?;
-        let bounds = window.bounds();
         let floating = window.floating();
         let tiled = !floating;
-
-        // Store start position and bounds for this drag
-        self.drag_start_position = Some(pos.clone());
-        self.drag_start_bounds = Some(bounds.clone());
 
         // Determine the drag type
         if drag_type == ModTransformType::Tile
@@ -64,6 +59,10 @@ impl ModTransformHandler {
         } else {
             self.drag_type = Some(drag_type.clone());
         }
+
+        // Store start position and bounds for this drag
+        self.drag_start_position = Some(pos.clone());
+        self.drag_start_bounds = Some(window.bounds().clone());
 
         // Set appropriate cursor for the drag type
         let cursor_type = match &drag_type {

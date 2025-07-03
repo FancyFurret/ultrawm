@@ -249,24 +249,31 @@ impl WindowManager {
     pub fn animated_flush(&mut self) -> PlatformResult<()> {
         for workspace in self.workspaces.values_mut() {
             for window in workspace.windows().values() {
-                window.flush_always_on_top()?;
-                if window.dirty() {
-                    if Config::window_tile_animate() {
-                        let platform_window = window.platform_window().clone();
-                        let start_bounds = window.platform_bounds();
-                        let target_bounds = window.window_bounds().clone();
-                        let duration_ms = Config::window_tile_animation_ms();
+                if !window.dirty() {
+                    continue;
+                }
 
-                        self.animation_thread.animate_window(
-                            window.id(),
-                            platform_window,
-                            start_bounds,
-                            target_bounds,
-                            duration_ms,
-                        );
-                    } else {
-                        window.flush()?;
-                    }
+                if window.floating() {
+                    window.flush()?;
+                    continue;
+                }
+
+                window.flush_always_on_top()?;
+                if Config::window_tile_animate() {
+                    let platform_window = window.platform_window().clone();
+                    let start_bounds = window.platform_bounds();
+                    let target_bounds = window.window_bounds().clone();
+                    let duration_ms = Config::window_tile_animation_ms();
+
+                    self.animation_thread.animate_window(
+                        window.id(),
+                        platform_window,
+                        start_bounds,
+                        target_bounds,
+                        duration_ms,
+                    );
+                } else {
+                    window.flush()?;
                 }
             }
         }
