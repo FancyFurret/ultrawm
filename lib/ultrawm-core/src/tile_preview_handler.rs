@@ -112,9 +112,8 @@ impl TilePreviewHandler {
         let tiled_bounds = window.bounds().clone();
         window.update_bounds();
         window.set_bounds(tiled_bounds);
-        window
-            .flush()
-            .map_err(|e| WMOperationError::Move(e.into()))?;
+        wm.animated_flush()
+            .map_err(|e| WMOperationError::Error(e.into()))?;
         Ok(())
     }
 }
