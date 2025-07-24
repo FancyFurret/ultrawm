@@ -161,9 +161,12 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
     }
 
     fn position(&self) -> Position {
-        let rect = self
-            .get_visible_bounds()
-            .expect("Could not get window position");
+        let rect = self.get_visible_bounds().unwrap_or(RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        });
         Position {
             x: rect.left,
             y: rect.top,
@@ -171,9 +174,12 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
     }
 
     fn size(&self) -> Size {
-        let rect = self
-            .get_visible_bounds()
-            .expect("Could not get window size");
+        let rect = self.get_visible_bounds().unwrap_or(RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        });
         Size {
             width: (rect.right - rect.left) as u32,
             height: (rect.bottom - rect.top) as u32,

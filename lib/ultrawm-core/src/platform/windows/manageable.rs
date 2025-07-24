@@ -1,5 +1,5 @@
 use crate::platform::windows::WindowsPlatformWindow;
-use crate::platform::PlatformError;
+use crate::platform::{PlatformError, PlatformWindowImpl};
 use std::mem::size_of;
 use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -9,6 +9,11 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 pub fn window_is_manageable(window: &WindowsPlatformWindow) -> ObserveResult {
     let hwnd = window.hwnd();
+
+    let size = window.size();
+    if size.width == 0 || size.height == 0 {
+        return Err("Window is not visible")?;
+    }
 
     unsafe {
         if !IsWindowVisible(hwnd).as_bool() {
