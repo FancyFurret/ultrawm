@@ -35,4 +35,3 @@ pub fn register_commands() {
     register(&AI_ORGANIZE_ALL_WINDOWS);
     register(&AI_ORGANIZE_CURRENT_WINDOW);
 }
-

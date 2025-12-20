@@ -37,7 +37,6 @@ impl ContainerTree {
     fn serialize(&self) -> serde_yaml::Value {
         let serialized = SerializedContainerTree {
             root: serialize_container(&self.root()),
-            bounds: self.bounds(),
         };
 
         serde_yaml::to_value(serialized).unwrap()

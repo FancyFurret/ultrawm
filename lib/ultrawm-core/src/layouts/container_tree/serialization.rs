@@ -10,12 +10,10 @@ use std::collections::HashMap;
 #[derive(Serialize, Deserialize)]
 pub struct SerializedContainerTree {
     pub root: SerializedContainer,
-    pub bounds: Bounds,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct SerializedContainer {
-    pub bounds: Bounds,
     pub direction: Direction,
     pub ratios: Vec<f32>,
     pub children: Vec<SerializedContainerChild>,
@@ -29,14 +27,12 @@ pub enum SerializedContainerChild {
 
 #[derive(Serialize, Deserialize)]
 pub struct SerializedWindow {
-    pub bounds: Bounds,
     pub id: WindowId,
     pub title: String,
 }
 
 pub fn serialize_container(container: &ContainerRef) -> SerializedContainer {
     SerializedContainer {
-        bounds: container.bounds(),
         direction: container.direction(),
         ratios: container.ratios().clone(),
         children: container
@@ -56,7 +52,6 @@ pub fn serialize_container(container: &ContainerRef) -> SerializedContainer {
 
 fn serialize_window(window: &ContainerWindowRef) -> SerializedWindow {
     SerializedWindow {
-        bounds: window.bounds(),
         id: window.window().platform_window().id(),
         title: window.window().platform_window().title().to_string(),
     }
@@ -74,7 +69,7 @@ pub(crate) fn deserialize_container(
     }
 
     let parent_ref = parent.map(|p| p.self_ref());
-    let container = Container::new(bounds, serialized.direction, parent_ref.clone());
+    let container = Container::new(bounds.clone(), serialized.direction, parent_ref.clone());
 
     // Start with the saved ratios and track which ones to remove
     let mut ratios = serialized.ratios.clone();
@@ -83,9 +78,10 @@ pub(crate) fn deserialize_container(
     for (index, child) in serialized.children.iter().enumerate() {
         match child {
             SerializedContainerChild::Container(child_container) => {
+                // Use parent bounds as placeholder - will be recalculated from ratios
                 if let Some(child) = deserialize_container(
                     child_container,
-                    child_container.bounds.clone(),
+                    bounds.clone(),
                     available_windows,
                     windows_map,
                     Some(container.clone()),
@@ -115,7 +111,6 @@ pub(crate) fn deserialize_container(
             SerializedContainerChild::Window(window_data) => {
                 if let Some(window_ref) = available_windows.get(&window_data.id) {
                     let container_window = ContainerWindow::new(window_ref.clone());
-                    container_window.set_bounds(window_data.bounds.clone());
                     let window_ref = container.add_window(container_window);
                     windows_map.insert(window_data.id, window_ref);
                 } else {
