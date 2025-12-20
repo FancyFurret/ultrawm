@@ -6,6 +6,7 @@ use crate::event_loop_wm::WMOperationResult;
 use crate::platform::{Position, WMEvent, WindowId};
 use crate::tile_preview_handler::TilePreviewHandler;
 use crate::wm::WindowManager;
+use log::trace;
 
 pub struct NativeTransformHandler {
     preview: TilePreviewHandler,
@@ -51,6 +52,12 @@ impl NativeTransformHandler {
         drag_type: WindowDragType,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
+        trace!(
+            "Native drop: id={} pos={:?} type={:?}",
+            id,
+            position,
+            drag_type
+        );
         let window = wm.get_window(id)?;
         if window.floating() {
             return Ok(());

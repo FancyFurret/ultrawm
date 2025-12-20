@@ -5,6 +5,7 @@ use crate::platform::{
 };
 use crate::window::WindowRef;
 use crate::wm::WindowManager;
+use log::trace;
 
 #[derive(Debug)]
 pub enum WindowDragEvent {
@@ -46,13 +47,29 @@ impl NativeTransformTracker {
     pub fn handle_event(&mut self, event: &WMEvent, wm: &WindowManager) -> Option<WindowDragEvent> {
         match event {
             WMEvent::WindowTransformStarted(id) => {
-                if !InputState::mouse_button_pressed(&MouseButton::Left)
-                    || self.current_drag.is_some()
-                {
+                trace!("WindowTransformStarted: id={}", id);
+                if !InputState::mouse_button_pressed(&MouseButton::Left) {
+                    trace!("  -> ignored: left mouse not pressed");
+                    return None;
+                }
+                if self.current_drag.is_some() {
+                    trace!("  -> ignored: drag already in progress");
                     return None;
                 }
 
-                let window = wm.get_window(*id).ok()?;
+                let window = match wm.get_window(*id) {
+                    Ok(w) => w,
+                    Err(e) => {
+                        trace!("  -> ignored: window not found: {:?}", e);
+                        let tracked: Vec<_> = wm
+                            .workspaces()
+                            .values()
+                            .flat_map(|ws| ws.windows().keys())
+                            .collect();
+                        trace!("  -> tracked windows: {:?}", tracked);
+                        return None;
+                    }
+                };
                 self.current_drag = Some(DragContext {
                     window: window.clone(),
                     drag_type: None,
