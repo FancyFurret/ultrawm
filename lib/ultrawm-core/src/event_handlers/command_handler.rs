@@ -44,9 +44,7 @@ impl EventHandler for CommandHandler {
                 }
                 Ok(false)
             }
-            WMEvent::CommandTriggered(command_id) => {
-                self.execute_command(command_id, wm, None)
-            }
+            WMEvent::CommandTriggered(command_id) => self.execute_command(command_id, wm, None),
             WMEvent::ConfigChanged => {
                 self.commands = build_commands(&Config::current().commands.keybinds);
                 Ok(false)
@@ -55,4 +53,3 @@ impl EventHandler for CommandHandler {
         }
     }
 }
-

@@ -73,11 +73,9 @@ impl PlatformOverlayImpl for MacOSPlatformOverlay {
     }
 
     fn set_window_opacity(window_id: WindowId, opacity: f32) -> PlatformResult<()> {
-        unsafe {
-            let ns_window = get_ns_window_from_id(window_id)?;
-            ns_window.setAlphaValue(opacity as f64);
-            ns_window.setOpaque(false);
-        }
+        let ns_window = get_ns_window_from_id(window_id)?;
+        ns_window.setAlphaValue(opacity as f64);
+        ns_window.setOpaque(false);
         Ok(())
     }
 
@@ -87,7 +85,7 @@ impl PlatformOverlayImpl for MacOSPlatformOverlay {
         bounds: Bounds,
     ) -> PlatformResult<bool> {
         let duration_seconds = duration.as_secs_f64();
-        run_on_main_thread_blocking(move || unsafe {
+        run_on_main_thread_blocking(move || {
             let ns_window = get_ns_window_from_id(window_id).unwrap();
             CATransaction::begin();
             CATransaction::setAnimationDuration(duration_seconds as CFTimeInterval);

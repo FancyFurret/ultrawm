@@ -2,7 +2,6 @@ use crate::config::Config;
 use crate::event_handlers::mod_mouse_keybind_tracker::{KeybindEvent, ModMouseKeybindTracker};
 use crate::event_handlers::EventHandler;
 use crate::event_loop_wm::WMOperationResult;
-use crate::platform::inteceptor::Interceptor;
 use crate::platform::{ContextMenuRequest, Position, WMEvent, WindowId};
 use crate::wm::WindowManager;
 use crate::GLOBAL_EVENT_DISPATCHER;

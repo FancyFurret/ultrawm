@@ -1,7 +1,9 @@
 use muda::accelerator::{Accelerator, Code, Modifiers};
 use winit::keyboard::KeyCode;
 
-pub fn keybind_to_accelerator(keybind: &ultrawm_core::config::KeyboardKeybind) -> Option<Accelerator> {
+pub fn keybind_to_accelerator(
+    keybind: &ultrawm_core::config::KeyboardKeybind,
+) -> Option<Accelerator> {
     let combo = keybind.combos().first()?;
 
     let mut modifiers = Modifiers::empty();
@@ -95,4 +97,3 @@ fn winit_to_accelerator_code(key: &KeyCode) -> Option<Code> {
         _ => None,
     }
 }
-

@@ -93,7 +93,7 @@ impl Container {
         self.direction
     }
 
-    pub fn ratios(&self) -> Ref<Vec<f32>> {
+    pub fn ratios(&self) -> Ref<'_, Vec<f32>> {
         self.ratios.borrow()
     }
 
@@ -113,11 +113,11 @@ impl Container {
         self.parent.replace(Some(parent));
     }
 
-    pub fn children(&self) -> Ref<Vec<ContainerChildRef>> {
+    pub fn children(&self) -> Ref<'_, Vec<ContainerChildRef>> {
         self.children.borrow()
     }
 
-    fn children_mut(&self) -> RefMut<Vec<ContainerChildRef>> {
+    fn children_mut(&self) -> RefMut<'_, Vec<ContainerChildRef>> {
         self.children.borrow_mut()
     }
 

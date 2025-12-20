@@ -99,7 +99,7 @@ impl Window {
         Ok(())
     }
 
-    pub fn platform_window(&self) -> Ref<PlatformWindow> {
+    pub fn platform_window(&self) -> Ref<'_, PlatformWindow> {
         self.platform_window.borrow()
     }
 

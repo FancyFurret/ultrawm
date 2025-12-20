@@ -168,7 +168,7 @@ impl CFDictionaryExt {
         bool::from(boolean.to_owned())
     }
 
-    pub fn get_dict(&self, key: CFString) -> ItemRef<CFDictionary> {
+    pub fn get_dict(&self, key: CFString) -> ItemRef<'_, CFDictionary> {
         let dict = self.get::<CFDictionary>(key);
         dict
     }

@@ -32,4 +32,3 @@ impl KeyboardKeybindTracker {
         self.was_pressed = self.is_pressed();
     }
 }
-
