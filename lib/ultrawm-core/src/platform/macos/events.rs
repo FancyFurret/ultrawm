@@ -6,8 +6,20 @@ use crate::platform::{EventDispatcher, PlatformEventsImpl, PlatformResult};
 
 pub struct MacOSPlatformEvents;
 
+/// Check if the process has accessibility permissions
+fn verify_accessibility_permissions() -> PlatformResult<()> {
+    let trusted = unsafe { application_services::AXIsProcessTrusted() };
+    if trusted == 0 {
+        return Err("Accessibility permissions not granted. Please enable accessibility access for this app in System Preferences > Security & Privacy > Privacy > Accessibility".into());
+    }
+    Ok(())
+}
+
 unsafe impl PlatformEventsImpl for MacOSPlatformEvents {
     unsafe fn initialize(dispatcher: EventDispatcher) -> PlatformResult<()> {
+        // Check accessibility permissions first
+        verify_accessibility_permissions()?;
+
         // Initialize screen cache first
         MacOSPlatform::initialize_screens()?;
 

@@ -93,17 +93,22 @@ impl PlatformWindowImpl for MacOSPlatformWindow {
     }
 
     fn visible(&self) -> bool {
-        self.element.minimized().unwrap_or(false)
+        !self.element.minimized().unwrap_or(false)
     }
 
     fn set_bounds(&self, bounds: &Bounds) -> PlatformResult<()> {
-        self.element.set_position(CGPoint::new(
-            bounds.position.x as f64,
-            bounds.position.y as f64,
-        ))?;
+        // Set size BEFORE position to avoid intermediate states where the window
+        // temporarily exceeds screen bounds. This is important when shrinking a window
+        // that also moves (e.g., the bottom window in a vertical stack when the
+        // resize handle moves down). Setting position first would temporarily place
+        // the window in an invalid state, causing some apps to reject the resize.
         self.element.set_size(CGSize::new(
             bounds.size.width as f64,
             bounds.size.height as f64,
+        ))?;
+        self.element.set_position(CGPoint::new(
+            bounds.position.x as f64,
+            bounds.position.y as f64,
         ))?;
         Ok(())
     }
