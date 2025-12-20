@@ -4,6 +4,8 @@ use std::collections::HashSet;
 use thiserror::Error;
 use winit::keyboard::KeyCode;
 
+pub const DEFAULT_MOVEMENT_THRESHOLD: i32 = 5;
+
 #[derive(Debug, Error)]
 pub enum PlatformError {
     #[error("Unknown platform error")]
@@ -267,6 +269,17 @@ pub struct Position {
 impl Position {
     pub fn new(x: i32, y: i32) -> Self {
         Self { x, y }
+    }
+
+    pub fn distance_squared_to(&self, other: &Position) -> i64 {
+        let dx = (self.x - other.x) as i64;
+        let dy = (self.y - other.y) as i64;
+        dx * dx + dy * dy
+    }
+
+    pub fn has_moved_by(&self, other: &Position, threshold: i32) -> bool {
+        let threshold_squared = (threshold as i64) * (threshold as i64);
+        self.distance_squared_to(other) >= threshold_squared
     }
 }
 

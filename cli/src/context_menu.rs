@@ -1,7 +1,7 @@
 use crate::menu_system::ContextMenuBuilder;
 use log::{trace, warn};
 use ultrawm_core::{
-    run_on_main_thread_blocking, ContextMenuRequest, Interceptor, Platform, Position,
+    run_on_main_thread_blocking, ContextMenuRequest, Interceptor, Position,
     AI_ORGANIZE_ALL_WINDOWS, AI_ORGANIZE_CURRENT_WINDOW,
 };
 
@@ -53,6 +53,7 @@ fn show_menu_at_position(menu: &muda::Menu, position: &Position) {
     unsafe {
         use objc2_app_kit::NSMenu;
         use objc2_foundation::NSPoint;
+        use ultrawm_core::Platform;
 
         let max_screen_top = Platform::get_max_screen_top() as f64;
         let ns_position = NSPoint::new(position.x as f64, max_screen_top - position.y as f64);
@@ -74,23 +75,24 @@ fn show_menu_at_position(menu: &muda::Menu, position: &Position) {
     use muda::ContextMenu as _;
 
     // On Windows, show at screen coordinates
-    if let Some(hmenu) = menu.hpopupmenu() {
-        unsafe {
-            use windows::Win32::UI::WindowsAndMessaging::{
-                GetForegroundWindow, TrackPopupMenu, TPM_LEFTALIGN, TPM_TOPALIGN,
-            };
+    let hmenu_raw = menu.hpopupmenu();
+    unsafe {
+        use std::ffi::c_void;
+        use windows::Win32::UI::WindowsAndMessaging::{
+            GetForegroundWindow, TrackPopupMenu, HMENU, TPM_LEFTALIGN, TPM_TOPALIGN,
+        };
 
-            let hwnd = GetForegroundWindow();
-            let _ = TrackPopupMenu(
-                hmenu,
-                TPM_LEFTALIGN | TPM_TOPALIGN,
-                position.x,
-                position.y,
-                0,
-                hwnd,
-                std::ptr::null(),
-            );
-        }
+        let hmenu = HMENU(hmenu_raw as *mut c_void);
+        let hwnd = GetForegroundWindow();
+        let _ = TrackPopupMenu(
+            hmenu,
+            TPM_LEFTALIGN | TPM_TOPALIGN,
+            position.x,
+            position.y,
+            None,
+            hwnd,
+            None,
+        );
     }
 }
 

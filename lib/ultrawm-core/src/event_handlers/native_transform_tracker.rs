@@ -1,7 +1,7 @@
 use crate::layouts::ResizeDirection;
 use crate::platform::{
     input_state::InputState, Bounds, MouseButton, Platform, PlatformImpl, PlatformWindowImpl,
-    Position, WMEvent, WindowId,
+    Position, WMEvent, WindowId, DEFAULT_MOVEMENT_THRESHOLD,
 };
 use crate::window::WindowRef;
 use crate::wm::WindowManager;
@@ -19,8 +19,6 @@ pub enum WindowDragType {
     Move,
     Resize(ResizeDirection),
 }
-
-const DRAG_TYPE_DETERMINATION_THRESHOLD: i32 = 5;
 
 #[derive(Debug)]
 struct DragContext {
@@ -100,31 +98,28 @@ impl NativeTransformTracker {
                 let drag = self.current_drag.as_mut().unwrap();
 
                 if drag.drag_type.is_none() {
-                    let delta_x = (pos.x - drag.start_position.x).abs();
-                    let delta_y = (pos.y - drag.start_position.y).abs();
+                    if !pos.has_moved_by(&drag.start_position, DEFAULT_MOVEMENT_THRESHOLD) {
+                        return None;
+                    }
 
-                    if delta_x > DRAG_TYPE_DETERMINATION_THRESHOLD
-                        || delta_y > DRAG_TYPE_DETERMINATION_THRESHOLD
-                    {
-                        let current_bounds = Bounds::from_position(
-                            drag.window.platform_window().position(),
-                            drag.window.platform_window().size(),
-                        );
+                    let current_bounds = Bounds::from_position(
+                        drag.window.platform_window().position(),
+                        drag.window.platform_window().size(),
+                    );
 
-                        // If the bounds haven't changed yet, then wait
-                        if current_bounds == drag.start_bounds {
-                            return None;
-                        }
+                    // If the bounds haven't changed yet, then wait
+                    if current_bounds == drag.start_bounds {
+                        return None;
+                    }
 
-                        // If the size has changed, then we're resizing
-                        if current_bounds.size != drag.start_bounds.size {
-                            let start_bounds = drag.start_bounds.clone();
-                            drag.drag_type = Some(WindowDragType::Resize(
-                                Self::calculate_resize_direction(&start_bounds, &current_bounds),
-                            ));
-                        } else {
-                            drag.drag_type = Some(WindowDragType::Move);
-                        }
+                    // If the size has changed, then we're resizing
+                    if current_bounds.size != drag.start_bounds.size {
+                        let start_bounds = drag.start_bounds.clone();
+                        drag.drag_type = Some(WindowDragType::Resize(
+                            Self::calculate_resize_direction(&start_bounds, &current_bounds),
+                        ));
+                    } else {
+                        drag.drag_type = Some(WindowDragType::Move);
                     }
                 }
 
@@ -339,14 +334,6 @@ mod tests {
     fn test_window_drag_tracker_new() {
         let tracker = NativeTransformTracker::new();
         assert!(tracker.current_drag.is_none());
-    }
-
-    // === Threshold Constant Tests ===
-
-    #[test]
-    fn test_drag_type_determination_threshold() {
-        assert_eq!(DRAG_TYPE_DETERMINATION_THRESHOLD, 5);
-        assert!(DRAG_TYPE_DETERMINATION_THRESHOLD > 0); // Should be positive
     }
 
     // === Edge Cases for Resize Direction ===

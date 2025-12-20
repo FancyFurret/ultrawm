@@ -4,7 +4,7 @@ use crate::config::ModMouseKeybind;
 use crate::platform::{
     input_state::InputState,
     inteceptor::{InterceptionRequest, Interceptor},
-    MouseButton, Position, WMEvent,
+    MouseButton, Position, WMEvent, DEFAULT_MOVEMENT_THRESHOLD,
 };
 use log::error;
 use winit::keyboard::KeyCode;
@@ -71,6 +71,14 @@ impl ModMouseKeybindTracker {
                 if !self.active {
                     None
                 } else {
+                    // Check if mouse has moved enough pixels from activation position
+                    if let Some(activation_pos) = &self.activation_position {
+                        if !pos.has_moved_by(activation_pos, DEFAULT_MOVEMENT_THRESHOLD) {
+                            // Not enough movement yet
+                            return None;
+                        }
+                    }
+
                     self.moved = true;
                     if !self.started {
                         self.started = true;
