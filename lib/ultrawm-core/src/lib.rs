@@ -41,7 +41,7 @@ pub use event_handlers::commands::{
 };
 pub use event_loop_main::run_on_main_thread_blocking;
 pub use platform::inteceptor::Interceptor;
-pub use platform::{ContextMenuRequest, Position, WindowId};
+pub use platform::{ContextMenuRequest, Platform, Position, WindowId};
 
 static GLOBAL_EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
 

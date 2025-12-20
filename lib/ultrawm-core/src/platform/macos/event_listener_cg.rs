@@ -1,5 +1,6 @@
 use crate::platform::inteceptor::Interceptor;
 use crate::platform::macos::ffi::run_loop_mode;
+use crate::platform::macos::platform::MacOSPlatform;
 use crate::platform::{EventDispatcher, MouseButton, PlatformResult, Position, WMEvent};
 use core_foundation::runloop::{CFRunLoop, CFRunLoopSource};
 use core_graphics::event::{
@@ -81,9 +82,10 @@ impl EventListenerCG {
         event: &CGEvent,
     ) -> bool {
         let location = event.location();
+        let y_offset = MacOSPlatform::get_cgevent_y_offset();
         let position = Position {
             x: location.x as i32,
-            y: location.y as i32,
+            y: location.y as i32 + y_offset,
         };
 
         let (e, button) = match event_type {
@@ -96,9 +98,7 @@ impl EventListenerCG {
                 WMEvent::MouseUp(position, MouseButton::Left),
                 Some(MouseButton::Left),
             ),
-            CGEventType::LeftMouseDragged => {
-                (WMEvent::MouseMoved(position), Some(MouseButton::Left))
-            }
+            CGEventType::LeftMouseDragged => (WMEvent::MouseMoved(position), None),
             CGEventType::RightMouseDown => (
                 WMEvent::MouseDown(position, MouseButton::Right),
                 Some(MouseButton::Right),
@@ -129,7 +129,7 @@ impl EventListenerCG {
                 }
             }
             CGEventType::OtherMouseDragged => {
-                if let Some(_) = Self::get_mouse_button_from_event(event) {
+                if Self::get_mouse_button_from_event(event).is_some() {
                     (WMEvent::MouseMoved(position), None)
                 } else {
                     return false;

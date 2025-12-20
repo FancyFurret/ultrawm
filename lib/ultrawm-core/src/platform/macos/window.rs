@@ -1,5 +1,6 @@
 use crate::event_loop_main::run_on_main_thread_blocking;
 use crate::platform::macos::ffi::{get_window_id, AXUIElementExt};
+use crate::platform::macos::platform::MacOSPlatform;
 use crate::platform::traits::PlatformWindowImpl;
 use crate::platform::{Bounds, PlatformError, PlatformResult, Position, ProcessId, Size, WindowId};
 use application_services::accessibility_ui::AXUIElement;
@@ -78,9 +79,10 @@ impl PlatformWindowImpl for MacOSPlatformWindow {
             .element
             .position()
             .expect("Could not get window position");
+        let y_offset = MacOSPlatform::get_cgevent_y_offset();
         Position {
             x: position.x as i32,
-            y: position.y as i32,
+            y: position.y as i32 + y_offset,
         }
     }
 
@@ -106,9 +108,10 @@ impl PlatformWindowImpl for MacOSPlatformWindow {
             bounds.size.width as f64,
             bounds.size.height as f64,
         ))?;
+        let y_offset = MacOSPlatform::get_cgevent_y_offset();
         self.element.set_position(CGPoint::new(
             bounds.position.x as f64,
-            bounds.position.y as f64,
+            (bounds.position.y - y_offset) as f64,
         ))?;
         Ok(())
     }

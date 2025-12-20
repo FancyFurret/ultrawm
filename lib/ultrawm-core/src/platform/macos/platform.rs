@@ -25,6 +25,7 @@ pub struct MacOSPlatform;
 static CURRENT_CURSOR_TYPE: AtomicI32 = AtomicI32::new(-1);
 static CACHED_SCREENS: OnceLock<Vec<CachedScreen>> = OnceLock::new();
 static MAX_SCREEN_TOP: OnceLock<i32> = OnceLock::new();
+static CGEVENT_Y_OFFSET: OnceLock<i32> = OnceLock::new();
 
 // TODO: Improve screens
 #[derive(Debug, Clone)]
@@ -65,13 +66,31 @@ impl MacOSPlatform {
 
             // Find the maximum Y coordinate across all screens to determine the coordinate space height
             // This is needed for proper coordinate conversion from macOS (bottom-left) to our system (top-left)
-            let max_screen_top = displays.iter().map(|screen| {
-                screen.frame().origin.y as f64 + screen.frame().size.height as f64
-            }).fold(0.0, f64::max) as i32;
-            
+            let max_screen_top = displays
+                .iter()
+                .map(|screen| screen.frame().origin.y as f64 + screen.frame().size.height as f64)
+                .fold(0.0, f64::max) as i32;
+
             // Cache the max screen top for use in coordinate conversions
-            MAX_SCREEN_TOP.set(max_screen_top).map_err(|_| {
-                PlatformError::Error("Failed to cache max screen top".to_string())
+            MAX_SCREEN_TOP
+                .set(max_screen_top)
+                .map_err(|_| PlatformError::Error("Failed to cache max screen top".to_string()))?;
+
+            // Find the primary display (origin.y = 0 in macOS coordinates) and calculate
+            // the offset needed to convert CGEvent coordinates to our coordinate system.
+            // CGEvent uses Y=0 at the top of the primary display, but our system uses
+            // Y=0 at the top of the topmost monitor.
+            let primary_display = displays
+                .iter()
+                .find(|screen| screen.frame().origin.y == 0.0);
+            let cgevent_y_offset = if let Some(primary) = primary_display {
+                // Primary display's Y in our coords = max_screen_top - 0 - height
+                max_screen_top - primary.frame().size.height as i32
+            } else {
+                0
+            };
+            CGEVENT_Y_OFFSET.set(cgevent_y_offset).map_err(|_| {
+                PlatformError::Error("Failed to cache CGEvent Y offset".to_string())
             })?;
 
             for screen in displays {
@@ -82,18 +101,19 @@ impl MacOSPlatform {
 
                 let screen_frame = screen.frame();
                 let screen_visible_frame = screen.visibleFrame();
-                
+
                 // Convert from macOS coordinate system (bottom-left origin) to our system (top-left origin)
                 // macOS: origin.y is distance from bottom of coordinate space
                 // Our system: position.y is distance from top of coordinate space
-                let bounds_y = max_screen_top
-                    - screen_frame.origin.y as i32
-                    - screen_frame.size.height as i32;
-                
+                let bounds_y =
+                    max_screen_top - screen_frame.origin.y as i32 - screen_frame.size.height as i32;
+
                 // Calculate work_area: visibleFrame excludes notch/menu bar at top
                 // Gap at top = (screen top in macOS) - (visible frame top in macOS)
-                let screen_top_macos = screen_frame.origin.y as f64 + screen_frame.size.height as f64;
-                let visible_top_macos = screen_visible_frame.origin.y as f64 + screen_visible_frame.size.height as f64;
+                let screen_top_macos =
+                    screen_frame.origin.y as f64 + screen_frame.size.height as f64;
+                let visible_top_macos =
+                    screen_visible_frame.origin.y as f64 + screen_visible_frame.size.height as f64;
                 let gap_at_top = (screen_top_macos - visible_top_macos) as i32;
                 let work_area_y = bounds_y + gap_at_top;
 
@@ -149,6 +169,14 @@ impl MacOSPlatform {
         let screens = Self::get_cached_screens().ok()?;
         screens.first().map(|screen| screen.bounds.clone())
     }
+
+    pub fn get_cgevent_y_offset() -> i32 {
+        CGEVENT_Y_OFFSET.get().copied().unwrap_or(0)
+    }
+
+    pub fn get_max_screen_top() -> i32 {
+        MAX_SCREEN_TOP.get().copied().unwrap_or(1080)
+    }
 }
 
 impl PlatformImpl for MacOSPlatform {
@@ -199,19 +227,9 @@ impl PlatformImpl for MacOSPlatform {
     }
 
     fn get_mouse_position() -> PlatformResult<Position> {
-        // TODO: Slow?
-        unsafe {
-            let pos = NSEvent::mouseLocation();
-            let position = Position::new(pos.x as i32, pos.y as i32);
-            let screen = Self::get_screen_bounds_for_position(&position).ok_or_else(|| {
-                PlatformError::Error("Mouse position is outside of any known screen".to_string())
-            })?;
-            let total_height = screen.size.height as f64;
-            Ok(Position::new(
-                position.x,
-                total_height as i32 - position.y - 1,
-            ))
-        }
+        let pos = NSEvent::mouseLocation();
+        let max_screen_top = MAX_SCREEN_TOP.get().copied().unwrap_or(1080);
+        Ok(Position::new(pos.x as i32, max_screen_top - pos.y as i32))
     }
 
     fn set_cursor(_cursor_type: CursorType) -> PlatformResult<()> {
@@ -239,85 +257,86 @@ impl PlatformImpl for MacOSPlatform {
 
         Interceptor::ignore_next_click(button.clone());
 
-        unsafe {
-            let screen_pos =
-                core_graphics::geometry::CGPoint::new(position.x as f64, position.y as f64);
+        let y_offset = Self::get_cgevent_y_offset();
+        let screen_pos = core_graphics::geometry::CGPoint::new(
+            position.x as f64,
+            (position.y - y_offset) as f64,
+        );
 
-            let event_source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)?;
+        let event_source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)?;
 
-            match button {
-                MouseButton::Left => {
-                    let down = CGEvent::new_mouse_event(
-                        event_source.clone(),
-                        CGEventType::LeftMouseDown,
-                        screen_pos,
-                        CGMouseButton::Left,
-                    )?;
-                    let up = CGEvent::new_mouse_event(
-                        event_source,
-                        CGEventType::LeftMouseUp,
-                        screen_pos,
-                        CGMouseButton::Left,
-                    )?;
-                    down.post(CGEventTapLocation::HID);
-                    up.post(CGEventTapLocation::HID);
-                }
-                MouseButton::Right => {
-                    let down = CGEvent::new_mouse_event(
-                        event_source.clone(),
-                        CGEventType::RightMouseDown,
-                        screen_pos,
-                        CGMouseButton::Right,
-                    )?;
-                    let up = CGEvent::new_mouse_event(
-                        event_source,
-                        CGEventType::RightMouseUp,
-                        screen_pos,
-                        CGMouseButton::Right,
-                    )?;
-                    down.post(CGEventTapLocation::HID);
-                    up.post(CGEventTapLocation::HID);
-                }
-                MouseButton::Middle => {
-                    let down = CGEvent::new_mouse_event(
-                        event_source.clone(),
-                        CGEventType::OtherMouseDown,
-                        screen_pos,
-                        CGMouseButton::Center,
-                    )?;
-                    let up = CGEvent::new_mouse_event(
-                        event_source,
-                        CGEventType::OtherMouseUp,
-                        screen_pos,
-                        CGMouseButton::Center,
-                    )?;
-                    down.post(CGEventTapLocation::HID);
-                    up.post(CGEventTapLocation::HID);
-                }
-                MouseButton::Button4 | MouseButton::Button5 => {
-                    // For side buttons, we need to create OtherMouse events and set the button number manually
-                    // CGMouseButton enum only has Left/Right/Center, so we use Center and override the button number field
-                    let button_number = if button == MouseButton::Button4 { 3 } else { 4 };
+        match button {
+            MouseButton::Left => {
+                let down = CGEvent::new_mouse_event(
+                    event_source.clone(),
+                    CGEventType::LeftMouseDown,
+                    screen_pos,
+                    CGMouseButton::Left,
+                )?;
+                let up = CGEvent::new_mouse_event(
+                    event_source,
+                    CGEventType::LeftMouseUp,
+                    screen_pos,
+                    CGMouseButton::Left,
+                )?;
+                down.post(CGEventTapLocation::HID);
+                up.post(CGEventTapLocation::HID);
+            }
+            MouseButton::Right => {
+                let down = CGEvent::new_mouse_event(
+                    event_source.clone(),
+                    CGEventType::RightMouseDown,
+                    screen_pos,
+                    CGMouseButton::Right,
+                )?;
+                let up = CGEvent::new_mouse_event(
+                    event_source,
+                    CGEventType::RightMouseUp,
+                    screen_pos,
+                    CGMouseButton::Right,
+                )?;
+                down.post(CGEventTapLocation::HID);
+                up.post(CGEventTapLocation::HID);
+            }
+            MouseButton::Middle => {
+                let down = CGEvent::new_mouse_event(
+                    event_source.clone(),
+                    CGEventType::OtherMouseDown,
+                    screen_pos,
+                    CGMouseButton::Center,
+                )?;
+                let up = CGEvent::new_mouse_event(
+                    event_source,
+                    CGEventType::OtherMouseUp,
+                    screen_pos,
+                    CGMouseButton::Center,
+                )?;
+                down.post(CGEventTapLocation::HID);
+                up.post(CGEventTapLocation::HID);
+            }
+            MouseButton::Button4 | MouseButton::Button5 => {
+                // For side buttons, we need to create OtherMouse events and set the button number manually
+                // CGMouseButton enum only has Left/Right/Center, so we use Center and override the button number field
+                let button_number = if button == MouseButton::Button4 { 3 } else { 4 };
 
-                    let down = CGEvent::new_mouse_event(
-                        event_source.clone(),
-                        CGEventType::OtherMouseDown,
-                        screen_pos,
-                        CGMouseButton::Center, // Placeholder, we'll set the actual button number
-                    )?;
-                    down.set_integer_value_field(EventField::MOUSE_EVENT_BUTTON_NUMBER, button_number);
+                let down = CGEvent::new_mouse_event(
+                    event_source.clone(),
+                    CGEventType::OtherMouseDown,
+                    screen_pos,
+                    CGMouseButton::Center, // Placeholder, we'll set the actual button number
+                )?;
+                down.set_integer_value_field(EventField::MOUSE_EVENT_BUTTON_NUMBER, button_number);
 
-                    let up = CGEvent::new_mouse_event(
-                        event_source,
-                        CGEventType::OtherMouseUp,
-                        screen_pos,
-                        CGMouseButton::Center,
-                    )?;
-                    up.set_integer_value_field(EventField::MOUSE_EVENT_BUTTON_NUMBER, button_number);
+                let up = CGEvent::new_mouse_event(
+                    event_source,
+                    CGEventType::OtherMouseUp,
+                    screen_pos,
+                    CGMouseButton::Center,
+                )?;
+                up.set_integer_value_field(EventField::MOUSE_EVENT_BUTTON_NUMBER, button_number);
 
-                    down.post(CGEventTapLocation::HID);
-                    up.post(CGEventTapLocation::HID);
-                }
+                down.post(CGEventTapLocation::HID);
+                up.post(CGEventTapLocation::HID);
             }
         }
 
@@ -335,7 +354,7 @@ impl From<Bounds> for CGRect {
                 .unwrap_or_else(|| Bounds::new(0, 0, 1920, 1080));
             screen.size.height as i32
         }) as f64;
-        
+
         CGRect::new(
             CGPoint::new(
                 value.position.x as f64,
@@ -359,7 +378,7 @@ impl From<CGRect> for Bounds {
             .unwrap_or_else(|| Bounds::new(0, 0, 1920, 1080));
             screen.size.height as i32
         });
-        
+
         Bounds::new(
             value.origin.x as i32,
             max_screen_top - value.origin.y as i32 - value.size.height as i32,
