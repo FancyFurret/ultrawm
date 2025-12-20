@@ -1,5 +1,8 @@
 # UltraWM
 
+> [!WARNING]
+> **This project is in early alpha.** It is very prone to bugs, incomplete features, and breaking changes. It is **not intended for daily use yet**. Use at your own risk, and expect things to break!
+
 **UltraWM** is a next-generation, cross-platform tiling window manager written in Rust. Designed for power users with
 ultrawide or multi-monitor setups, UltraWM enables you to partition your physical displays into multiple virtual
 monitors, tile windows seamlessly across monitor borders (including picture-by-picture setups), and maintain a
@@ -78,8 +81,8 @@ Before commiting, please run and ensure `cargo tidy` passes to reformat and fix 
 
 ## Roadmap
 
-| Feature/Goal                     | Status    |
-|----------------------------------|-----------|
+| Feature/Goal                     | Status     |
+| -------------------------------- | ---------- |
 | macOS support                    | ✅ Done    |
 | Windows support                  | ✅ Done    |
 | Linux support                    | ⏳ Planned |
