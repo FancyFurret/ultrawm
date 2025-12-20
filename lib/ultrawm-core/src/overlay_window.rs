@@ -287,6 +287,8 @@ impl OverlayWindowAnimator {
 
     fn start_move(&mut self, bounds: Bounds, duration_ms: u32) {
         if !self.visible {
+            // Set bounds immediately when not visible to avoid showing at old position
+            self.set_bounds(bounds.clone());
             self.move_animator.start_from(bounds.clone(), bounds, 0);
             return;
         }
