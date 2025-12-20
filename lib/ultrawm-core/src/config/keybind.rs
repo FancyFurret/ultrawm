@@ -53,6 +53,7 @@ impl<T: KeybindVariant> Into<Keybind<T>> for Vec<&str> {
 
 pub type MouseKeybind = Keybind<MouseKeybindVariant>;
 pub type ModMouseKeybind = Keybind<ModifiedMouseKeybindVariant>;
+pub type KeyboardKeybind = Keybind<KeyboardKeybindVariant>;
 
 pub trait KeybindVariant: 'static {
     fn validate<E: serde::de::Error>(combo: &InputCombo) -> Result<(), E>
@@ -84,6 +85,22 @@ impl KeybindVariant for ModifiedMouseKeybindVariant {
 
         if combo.modifiers().len() == 0 {
             return Err(E::custom("This keybind must contain at least one modifier"));
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct KeyboardKeybindVariant;
+impl KeybindVariant for KeyboardKeybindVariant {
+    fn validate<E: serde::de::Error>(combo: &InputCombo) -> Result<(), E> {
+        if !combo.keys().any() {
+            return Err(E::custom("This keybind must contain at least one key"));
+        }
+
+        if combo.buttons().any() {
+            return Err(E::custom("This keybind must not contain any mouse buttons"));
         }
 
         Ok(())

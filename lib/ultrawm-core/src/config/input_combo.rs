@@ -13,11 +13,11 @@ pub struct InputCombo {
 }
 
 impl InputCombo {
-    /// Parse a keybind string like "ctrl+shift+lmb" (case-insensitive, order-insensitive)
     pub fn parse(s: &str) -> Self {
         let mut keybind = InputCombo::default();
         for part in s.split('+') {
-            match part.trim().to_ascii_lowercase().as_str() {
+            let part_lower = part.trim().to_ascii_lowercase();
+            match part_lower.as_str() {
                 "ctrl" => keybind.keys.add(&KeyCode::ControlLeft),
                 "shift" => keybind.keys.add(&KeyCode::ShiftLeft),
                 "alt" => keybind.keys.add(&KeyCode::AltLeft),
@@ -28,10 +28,79 @@ impl InputCombo {
                 "bmb" | "button4" | "back" => keybind.buttons.add(&MouseButton::Button4),
                 "fmb" | "button5" | "forward" => keybind.buttons.add(&MouseButton::Button5),
                 "" => {}
-                _ => {}
+                _ => {
+                    if let Some(keycode) = Self::parse_key(&part_lower) {
+                        keybind.keys.add(&keycode);
+                    }
+                }
             }
         }
         keybind
+    }
+
+    fn parse_key(s: &str) -> Option<KeyCode> {
+        use winit::keyboard::KeyCode::*;
+        match s {
+            "a" => Some(KeyA),
+            "b" => Some(KeyB),
+            "c" => Some(KeyC),
+            "d" => Some(KeyD),
+            "e" => Some(KeyE),
+            "f" => Some(KeyF),
+            "g" => Some(KeyG),
+            "h" => Some(KeyH),
+            "i" => Some(KeyI),
+            "j" => Some(KeyJ),
+            "k" => Some(KeyK),
+            "l" => Some(KeyL),
+            "m" => Some(KeyM),
+            "n" => Some(KeyN),
+            "o" => Some(KeyO),
+            "p" => Some(KeyP),
+            "q" => Some(KeyQ),
+            "r" => Some(KeyR),
+            "s" => Some(KeyS),
+            "t" => Some(KeyT),
+            "u" => Some(KeyU),
+            "v" => Some(KeyV),
+            "w" => Some(KeyW),
+            "x" => Some(KeyX),
+            "y" => Some(KeyY),
+            "z" => Some(KeyZ),
+            "0" => Some(Digit0),
+            "1" => Some(Digit1),
+            "2" => Some(Digit2),
+            "3" => Some(Digit3),
+            "4" => Some(Digit4),
+            "5" => Some(Digit5),
+            "6" => Some(Digit6),
+            "7" => Some(Digit7),
+            "8" => Some(Digit8),
+            "9" => Some(Digit9),
+            "space" => Some(Space),
+            "enter" | "return" => Some(Enter),
+            "tab" => Some(Tab),
+            "escape" | "esc" => Some(Escape),
+            "backspace" => Some(Backspace),
+            "delete" => Some(Delete),
+            "up" | "arrowup" => Some(ArrowUp),
+            "down" | "arrowdown" => Some(ArrowDown),
+            "left" | "arrowleft" => Some(ArrowLeft),
+            "right" | "arrowright" => Some(ArrowRight),
+            "f1" => Some(F1),
+            "f2" => Some(F2),
+            "f3" => Some(F3),
+            "f4" => Some(F4),
+            "f5" => Some(F5),
+            "f6" => Some(F6),
+            "f7" => Some(F7),
+            "f8" => Some(F8),
+            "f9" => Some(F9),
+            "f10" => Some(F10),
+            "f11" => Some(F11),
+            "f12" => Some(F12),
+            _ => None,
+        }
     }
 
     pub fn keys(&self) -> &Keys {
@@ -102,18 +171,32 @@ impl<'de> Deserialize<'de> for InputCombo {
 impl Display for InputCombo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut parts = Vec::new();
-        if self.keys.contains(&KeyCode::ControlLeft) {
+        use winit::keyboard::KeyCode::*;
+
+        // Modifiers first (in standard order)
+        if self.keys.contains(&ControlLeft) {
             parts.push("ctrl");
         }
-        if self.keys.contains(&KeyCode::ShiftLeft) {
+        if self.keys.contains(&ShiftLeft) {
             parts.push("shift");
         }
-        if self.keys.contains(&KeyCode::AltLeft) {
+        if self.keys.contains(&AltLeft) {
             parts.push("alt");
         }
-        if self.keys.contains(&KeyCode::SuperLeft) {
-            parts.push("super");
+        if self.keys.contains(&SuperLeft) {
+            parts.push("cmd");
         }
+
+        // Regular keys
+        for key in self.keys.iter() {
+            if !matches!(key, ControlLeft | ShiftLeft | AltLeft | SuperLeft) {
+                if let Some(key_str) = key_to_string(key) {
+                    parts.push(key_str);
+                }
+            }
+        }
+
+        // Mouse buttons
         if self.buttons.contains(&MouseButton::Left) {
             parts.push("lmb");
         }
@@ -130,6 +213,71 @@ impl Display for InputCombo {
             parts.push("forward");
         }
         write!(f, "{}", parts.join("+"))
+    }
+}
+
+fn key_to_string(key: &KeyCode) -> Option<&'static str> {
+    use winit::keyboard::KeyCode::*;
+    match key {
+        KeyA => Some("a"),
+        KeyB => Some("b"),
+        KeyC => Some("c"),
+        KeyD => Some("d"),
+        KeyE => Some("e"),
+        KeyF => Some("f"),
+        KeyG => Some("g"),
+        KeyH => Some("h"),
+        KeyI => Some("i"),
+        KeyJ => Some("j"),
+        KeyK => Some("k"),
+        KeyL => Some("l"),
+        KeyM => Some("m"),
+        KeyN => Some("n"),
+        KeyO => Some("o"),
+        KeyP => Some("p"),
+        KeyQ => Some("q"),
+        KeyR => Some("r"),
+        KeyS => Some("s"),
+        KeyT => Some("t"),
+        KeyU => Some("u"),
+        KeyV => Some("v"),
+        KeyW => Some("w"),
+        KeyX => Some("x"),
+        KeyY => Some("y"),
+        KeyZ => Some("z"),
+        Digit0 => Some("0"),
+        Digit1 => Some("1"),
+        Digit2 => Some("2"),
+        Digit3 => Some("3"),
+        Digit4 => Some("4"),
+        Digit5 => Some("5"),
+        Digit6 => Some("6"),
+        Digit7 => Some("7"),
+        Digit8 => Some("8"),
+        Digit9 => Some("9"),
+        Space => Some("space"),
+        Enter => Some("enter"),
+        Tab => Some("tab"),
+        Escape => Some("escape"),
+        Backspace => Some("backspace"),
+        Delete => Some("delete"),
+        ArrowUp => Some("up"),
+        ArrowDown => Some("down"),
+        ArrowLeft => Some("left"),
+        ArrowRight => Some("right"),
+        F1 => Some("f1"),
+        F2 => Some("f2"),
+        F3 => Some("f3"),
+        F4 => Some("f4"),
+        F5 => Some("f5"),
+        F6 => Some("f6"),
+        F7 => Some("f7"),
+        F8 => Some("f8"),
+        F9 => Some("f9"),
+        F10 => Some("f10"),
+        F11 => Some("f11"),
+        F12 => Some("f12"),
+        _ => None,
     }
 }
 
