@@ -8,7 +8,7 @@ use crate::platform::traits::PlatformImpl;
 use crate::platform::{Bounds, CursorType, Platform, Position, WMEvent, WindowId};
 use crate::tile_preview_handler::TilePreviewHandler;
 use crate::wm::WindowManager;
-use log::warn;
+use log::{trace, warn};
 
 pub struct ModTransformHandler {
     preview: TilePreviewHandler,
@@ -38,6 +38,12 @@ impl ModTransformHandler {
         drag_type: ModTransformType,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
+        trace!(
+            "Mod drag start: id={} pos={:?} type={:?}",
+            id,
+            pos,
+            drag_type
+        );
         let window = wm.get_window(id)?;
         let floating = window.floating();
         let tiled = !floating;
@@ -114,17 +120,16 @@ impl ModTransformHandler {
                 wm.update_floating_window(window.id())?;
             }
             ModTransformType::Slide => {
-                wm.resize_window(id, &move_bounds)
+                wm.resize_window_deferred(id, &move_bounds)
                     .map_err(WMOperationError::Resize)?;
-
                 if window.floating() {
-                    wm.update_floating_window(window.id())?;
+                    wm.update_floating_window(id)?;
                 }
             }
             ModTransformType::Resize(direction) => {
                 let new_bounds =
                     Self::calculate_resize_bounds(&start_bounds, &start_pos, &pos, direction);
-                wm.resize_window(id, &new_bounds)
+                wm.resize_window_deferred(id, &new_bounds)
                     .map_err(WMOperationError::Resize)?;
             }
             ModTransformType::ResizeSymmetric(direction) => {
@@ -134,7 +139,7 @@ impl ModTransformHandler {
                     &pos,
                     direction,
                 );
-                wm.resize_window(id, &new_bounds)
+                wm.resize_window_deferred(id, &new_bounds)
                     .map_err(WMOperationError::Resize)?;
             }
             _ => {}
@@ -244,8 +249,19 @@ impl ModTransformHandler {
         drag_type: ModTransformType,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
+        trace!("Mod drop: id={} pos={:?} type={:?}", id, pos, drag_type);
         if drag_type == ModTransformType::Tile {
             self.preview.tile_on_drop(id, &pos, wm)?;
+        }
+
+        // Flush any pending resize changes immediately on drop
+        if matches!(
+            drag_type,
+            ModTransformType::Slide
+                | ModTransformType::Resize(_)
+                | ModTransformType::ResizeSymmetric(_)
+        ) {
+            wm.flush()?;
         }
 
         Ok(())
@@ -270,7 +286,9 @@ impl ModTransformHandler {
 
     fn finalize(&mut self, drag_type: ModTransformType) {
         match drag_type {
-            ModTransformType::Resize(_) | ModTransformType::ResizeSymmetric(_) => {
+            ModTransformType::Slide
+            | ModTransformType::Resize(_)
+            | ModTransformType::ResizeSymmetric(_) => {
                 self.resize_direction = None;
             }
             _ => {}

@@ -125,19 +125,15 @@ impl EventLoopMain {
         let mut app = App::default();
 
         loop {
-            let exit = event_loop.pump_app_events(Some(Duration::ZERO), &mut app);
+            let exit = event_loop.pump_app_events(Some(Duration::from_millis(100)), &mut app);
             if matches!(exit, PumpStatus::Exit(_)) {
                 break;
             }
 
-            // Handle main thread messages ourselves instead of through winit
-            // This prevents issues where we may trigger a new window event
-            // while winit is already processing one
+            // Check for main thread tasks after waking up
             if Self::process_main_thread_tasks() {
                 break;
             }
-
-            std::thread::sleep(Duration::from_millis(1));
         }
 
         Ok(())

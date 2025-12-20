@@ -1,13 +1,31 @@
 use crate::config::config_serializer::serialize_config;
-use crate::config::{ModMouseKeybind, MouseKeybind};
+use crate::config::{KeyboardKeybind, ModMouseKeybind, MouseKeybind};
+use crate::event_handlers::command_registry;
 use log::{trace, warn};
 use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::RwLock;
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(transparent)]
+pub struct Commands {
+    pub keybinds: HashMap<String, KeyboardKeybind>,
+}
+
+impl Commands {
+    pub fn fill_defaults(&mut self) {
+        for (name, default) in command_registry::get_defaults() {
+            self.keybinds
+                .entry(name)
+                .or_insert_with(|| vec![default.as_str()].into());
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
@@ -50,10 +68,14 @@ pub struct Config {
     pub resize_handle_opacity: f32,
     /// Update window sizes in real-time while dragging handles
     pub live_window_resize: bool,
+    /// Maximum frames per second for live window resize updates (rate limiting to reduce OS calls)
+    pub live_window_resize_fps: u32,
     /// Mouse controls for resize handles
     pub resize_handle_bindings: ResizeHandleBindings,
     /// Mouse controls for moving and resizing windows with a modifier key
     pub mod_transform_bindings: ModTransformBindings,
+    /// Keyboard shortcuts for commands
+    pub commands: Commands,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -98,17 +120,20 @@ pub struct ModTransformBindings {
     pub resize: ModMouseKeybind,
     /// Equally resize the sides of the window
     pub resize_symmetric: ModMouseKeybind,
+    /// Open the context menu
+    pub context_menu: ModMouseKeybind,
 }
 
 impl Default for ModTransformBindings {
     fn default() -> Self {
         Self {
-            tile: vec![].into(),
+            tile: vec!["ctrl+lmb", "bmb+lmb"].into(),
             float: vec![].into(),
-            shift: vec!["ctrl+lmb", "bmb+lmb"].into(),
+            shift: vec![].into(),
             toggle: vec!["ctrl+lmb+rmb", "bmb+lmb+rmb", "fmb+lmb"].into(),
             resize: vec!["ctrl+rmb", "bmb+rmb"].into(),
             resize_symmetric: vec!["ctrl+mmb", "bmb+mmb"].into(),
+            context_menu: vec!["bmb+rmb", "ctrl+rmb"].into(),
         }
     }
 }
@@ -141,6 +166,9 @@ impl Config {
             .map_err(|e| format!("Failed to parse config file '{}': {}", path.display(), e))?;
 
         config.config_path = Some(path.clone());
+
+        // Fill in any missing command keybinds with defaults
+        config.commands.fill_defaults();
 
         // Save the config back to ensure all fields are present (fills in any missing fields with defaults)
         if save {
@@ -255,6 +283,10 @@ impl Config {
         Self::current().live_window_resize
     }
 
+    pub fn live_window_resize_fps() -> u32 {
+        Self::current().live_window_resize_fps
+    }
+
     pub fn get_window_area_bindings(&self) -> &ModTransformBindings {
         &self.mod_transform_bindings
     }
@@ -278,21 +310,23 @@ impl Default for Config {
             window_gap: 20,
             partition_gap: 40,
             float_new_windows: true,
-            focus_on_hover: true,
-            tile_preview_fps: 240,
+            focus_on_hover: false,
+            tile_preview_fps: 30,
             tile_preview_animation_ms: 150,
             tile_preview_fade_animate: true,
             tile_preview_move_animate: true,
             window_tile_animate: true,
             window_tile_animation_ms: 150,
-            window_tile_fps: 240,
+            window_tile_fps: 30,
             resize_handles: true,
             resize_handle_width: 25,
             resize_handle_color: (40, 40, 40),
             resize_handle_opacity: 0.8,
             live_window_resize: true,
+            live_window_resize_fps: 30,
             resize_handle_bindings: ResizeHandleBindings::default(),
             mod_transform_bindings: ModTransformBindings::default(),
+            commands: Commands::default(),
         }
     }
 }

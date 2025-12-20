@@ -131,6 +131,7 @@ impl ResizeHandleHandler {
 
         if let Some(mode) = Self::get_mode() {
             wm.resize_handle_moved(&handle, &pos, &mode)?;
+            wm.flush()?;
         }
 
         Ok(())
@@ -139,7 +140,6 @@ impl ResizeHandleHandler {
     fn get_mode() -> Option<ResizeMode> {
         let config = Config::current();
         let binds = config.resize_handle_bindings.clone();
-        // if binds.resize_evenly.matches_buttons(buttons) {
         if InputState::binding_matches_mouse(&binds.resize_evenly) {
             Some(ResizeMode::Evenly)
         } else if InputState::binding_matches_mouse(&binds.resize_before) {

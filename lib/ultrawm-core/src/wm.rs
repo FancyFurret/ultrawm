@@ -10,7 +10,7 @@ use crate::workspace::{Workspace, WorkspaceId};
 use crate::workspace_animator::{WorkspaceAnimationConfig, WorkspaceAnimationThread};
 use crate::PlatformError;
 use indexmap::{IndexMap, IndexSet};
-use log::{error, warn};
+use log::{error, trace, warn};
 use std::collections::HashMap;
 use std::rc::Rc;
 use thiserror::Error;
@@ -45,11 +45,22 @@ pub struct WindowManager {
     window_order: IndexSet<WindowId>,
     animation_thread: WorkspaceAnimationThread,
     minimized_windows: HashMap<WindowId, WindowRef>,
+    /// Set when deferred resize methods are called, cleared on flush
+    needs_flush: bool,
 }
 
 impl WindowManager {
     pub fn new() -> PlatformResult<Self> {
         let displays = Platform::list_all_displays()?;
+        trace!("Displays ({}):", displays.len());
+        for d in &displays {
+            trace!(
+                "  {:?} bounds={:?} work_area={:?}",
+                d.name,
+                d.bounds,
+                d.work_area
+            );
+        }
 
         let mut partitions: HashMap<PartitionId, Partition> = HashMap::new();
         for display in displays {
@@ -141,6 +152,7 @@ impl WindowManager {
                 animation_fps: Config::window_tile_fps(),
             }),
             minimized_windows: HashMap::new(),
+            needs_flush: false,
         };
 
         for existing_window in existing_windows.values() {
@@ -151,8 +163,15 @@ impl WindowManager {
             }
         }
 
+        trace!("Partitions ({}):", wm.partitions.len());
+        for p in wm.partitions.values() {
+            trace!("  {:?} bounds={:?}", p.name(), p.bounds());
+        }
+
+        trace!("Tracking {} windows at startup...", windows.len());
         for window in windows {
             if wm.get_window(window.id()).is_err() {
+                trace!("  Tracking window: id={}", window.id());
                 wm.track_window(window.clone()).unwrap_or_else(|e| {
                     error!("Failed to track window: {e}");
                 })
@@ -171,24 +190,36 @@ impl WindowManager {
     }
 
     pub fn track_window(&mut self, window: WindowRef) -> WMResult<()> {
+        trace!(
+            "track_window: id={} visible={} title={:?}",
+            window.id(),
+            window.visible(),
+            window.title()
+        );
+
         if self.get_window(window.id()).is_ok() {
+            trace!("  -> already tracked");
             return Ok(());
         }
 
         if self.minimized_windows.contains_key(&window.id()) {
+            trace!("  -> already in minimized_windows");
             return Ok(());
         }
 
         if !window.visible() {
+            trace!("  -> not visible, adding to minimized_windows");
             self.minimized_windows.insert(window.id(), window.clone());
             return Ok(());
         }
 
         if Config::float_new_windows() {
+            trace!("  -> floating window");
             let workspace = self.get_workspace_at_bounds_mut(&window.bounds())?;
             workspace.float_window(&window)?;
             self.float_window(window.id())?;
         } else {
+            trace!("  -> tiling window at {:?}", window.bounds().position);
             self.tile_window(window.id(), &window.bounds().position)?;
         }
 
@@ -336,7 +367,18 @@ impl WindowManager {
 
         workspace.resize_window(&window, bounds)?;
         workspace.flush_windows()?;
+        self.needs_flush = false;
         self.try_save_layout();
+        Ok(())
+    }
+
+    /// Set resize bounds without flushing - for use during live drag.
+    /// Call flush() to apply pending changes.
+    pub fn resize_window_deferred(&mut self, id: WindowId, bounds: &Bounds) -> WMResult<()> {
+        let window = self.get_window(id)?;
+        let workspace = self.get_workspace_for_window_mut(&id)?;
+        workspace.resize_window(&window, bounds)?;
+        self.needs_flush = true;
         Ok(())
     }
 
@@ -541,10 +583,21 @@ impl WindowManager {
         mode: &ResizeMode,
     ) -> WMResult<()> {
         if let Ok(workspace) = self.get_workspace_at_position_mut(position) {
-            if workspace.resize_handle_moved(handle, position, mode) {
-                workspace.flush_windows()?;
-                self.try_save_layout();
-            }
+            workspace.resize_handle_moved(handle, position, mode);
+            self.needs_flush = true;
+        }
+        Ok(())
+    }
+
+    /// Flush all pending window changes across all workspaces.
+    /// Called periodically by the event loop during live resize operations.
+    pub fn flush(&mut self) -> WMResult<()> {
+        if !self.needs_flush {
+            return Ok(());
+        }
+        self.needs_flush = false;
+        for workspace in self.workspaces.values_mut() {
+            workspace.flush_windows()?;
         }
         Ok(())
     }
