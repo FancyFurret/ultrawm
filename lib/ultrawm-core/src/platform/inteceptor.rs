@@ -19,6 +19,8 @@ static INTERCEPT_BUTTONS: LazyLock<Mutex<HashSet<MouseButton>>> =
 
 static IGNORE_NEXT_CLICK: LazyLock<Mutex<Option<MouseButton>>> = LazyLock::new(|| Mutex::new(None));
 
+static IS_PAUSED: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(false));
+
 #[derive(Debug)]
 pub struct InterceptionRequest {
     buttons: HashSet<MouseButton>,
@@ -184,6 +186,13 @@ impl Interceptor {
     }
 
     pub fn should_intercept_button(button: &MouseButton) -> bool {
+        // If paused, don't intercept
+        if let Ok(is_paused) = IS_PAUSED.lock() {
+            if *is_paused {
+                return false;
+            }
+        }
+
         if let Ok(intercept_buttons) = INTERCEPT_BUTTONS.lock() {
             if intercept_buttons.contains(button) {
                 return true;
@@ -191,5 +200,21 @@ impl Interceptor {
         }
 
         false
+    }
+
+    /// Pause the interceptor - prevents all button interception
+    pub fn pause() {
+        if let Ok(mut is_paused) = IS_PAUSED.lock() {
+            *is_paused = true;
+            log::trace!("Interceptor paused");
+        }
+    }
+
+    /// Resume the interceptor - allows button interception to resume
+    pub fn resume() {
+        if let Ok(mut is_paused) = IS_PAUSED.lock() {
+            *is_paused = false;
+            log::trace!("Interceptor resumed");
+        }
     }
 }

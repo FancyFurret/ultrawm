@@ -2,10 +2,14 @@ use log::{error, info, trace, warn};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::env;
 use std::path::PathBuf;
-use ultrawm_core::{config::Config, UltraWMResult};
+use ultrawm_core::{config::Config, register_commands, UltraWMResult};
 
+mod accelerator;
 mod cli;
+mod context_menu;
 mod logger;
+mod menu_helpers;
+mod menu_system;
 mod tray;
 
 use cli::parse_args;
@@ -19,6 +23,9 @@ fn main() -> UltraWMResult<()> {
 
     info!("Starting UltraWM");
     trace!("Command: {}", env::args().collect::<Vec<_>>().join(" "));
+
+    // Register commands before config loading so defaults can be filled
+    register_commands();
 
     // Handle config loading
     let mut config = if args.use_defaults {
@@ -81,6 +88,10 @@ fn main() -> UltraWMResult<()> {
         None
     };
 
+    // Initialize unified menu event handler (must be first)
+    menu_system::init_unified_handler();
+    trace!("Unified menu event handler initialized");
+
     // Initialize tray icon
     let _tray = match UltraWMTray::new() {
         Ok(tray) => {
@@ -93,6 +104,10 @@ fn main() -> UltraWMResult<()> {
             None
         }
     };
+
+    // Initialize context menu handler
+    context_menu::init_context_menu();
+    trace!("Context menu handler initialized");
 
     // Set up Ctrl+C handler
     ctrlc::set_handler(move || {

@@ -53,6 +53,15 @@ pub enum WMEvent {
 
     Shutdown,
     ConfigChanged,
+    CommandTriggered(String),
+    ShowContextMenu(ContextMenuRequest),
+}
+
+/// Request to show a context menu
+#[derive(Debug, Clone)]
+pub struct ContextMenuRequest {
+    pub position: Position,
+    pub target_window: Option<WindowId>,
 }
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]

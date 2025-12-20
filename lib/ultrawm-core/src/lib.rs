@@ -3,7 +3,6 @@
 
 use crate::event_loop_main::EventLoopMain;
 use crate::event_loop_wm::EventLoopWM;
-use crate::platform::inteceptor::Interceptor;
 use crate::platform::{
     EventBridge, EventDispatcher, PlatformError, PlatformEvents, PlatformEventsImpl, WMEvent,
 };
@@ -36,8 +35,34 @@ mod workspace_animator;
 use crate::platform::input_state::InputState;
 use crate::wm::WMError;
 pub use config::Config;
+pub use event_handlers::command_registry::{CommandContext, CommandDef, CommandId};
+pub use event_handlers::commands::{
+    register_commands, AI_ORGANIZE_ALL_WINDOWS, AI_ORGANIZE_CURRENT_WINDOW,
+};
+pub use event_loop_main::run_on_main_thread_blocking;
+pub use platform::inteceptor::Interceptor;
+pub use platform::{ContextMenuRequest, Position, WindowId};
 
 static GLOBAL_EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
+
+// Context menu callback registration
+type ContextMenuCallback = Box<dyn Fn(ContextMenuRequest) + Send + Sync>;
+static CONTEXT_MENU_CALLBACK: OnceLock<ContextMenuCallback> = OnceLock::new();
+
+/// Register a callback to be called when a context menu should be shown
+pub fn set_context_menu_handler<F>(handler: F)
+where
+    F: Fn(ContextMenuRequest) + Send + Sync + 'static,
+{
+    let _ = CONTEXT_MENU_CALLBACK.set(Box::new(handler));
+}
+
+/// Called internally to trigger the context menu callback
+pub(crate) fn trigger_context_menu(request: ContextMenuRequest) {
+    if let Some(callback) = CONTEXT_MENU_CALLBACK.get() {
+        callback(request);
+    }
+}
 
 pub fn version() -> &'static str {
     option_env!("VERSION").unwrap_or("v0.0.0-dev")
@@ -64,6 +89,12 @@ pub fn load_config(config: Config) -> UltraWMResult<()> {
 pub fn shutdown() {
     if let Some(dispatcher) = GLOBAL_EVENT_DISPATCHER.get().cloned() {
         dispatcher.send(WMEvent::Shutdown);
+    }
+}
+
+pub fn trigger_command(command_name: &str) {
+    if let Some(dispatcher) = GLOBAL_EVENT_DISPATCHER.get().cloned() {
+        dispatcher.send(WMEvent::CommandTriggered(command_name.to_string()));
     }
 }
 

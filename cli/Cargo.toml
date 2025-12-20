@@ -11,9 +11,19 @@ path = "src/main.rs"
 ultrawm-core = { path = "../lib/ultrawm-core" }
 ctrlc = "3.4.7"
 tray-icon = "0.21.0"
+muda = "0.17.1"
 resvg = "0.45.1"
 clap = { version = "4.5.40", features = ["derive"] }
 log = "0.4.27"
 colored = "3.0.0"
 open = "5.3.2"
 notify = "8.0.0"
+winit = "0.30"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.1"
+objc2-app-kit = "0.3.1"
+objc2-foundation = "0.3.1"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61.3", features = ["Win32_UI_WindowsAndMessaging"] }
