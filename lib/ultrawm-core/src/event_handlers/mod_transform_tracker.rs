@@ -163,12 +163,12 @@ impl ModTransformTracker {
     }
 
     pub fn active(&self) -> bool {
-        self.tile_binding.mod_held()
-            || self.float_binding.mod_held()
-            || self.shift_binding.mod_held()
-            || self.toggle_binding.mod_held()
-            || self.resize_binding.mod_held()
-            || self.resize_symmetric_binding.mod_held()
+        self.tile_drag.is_some()
+            || self.float_drag.is_some()
+            || self.shift_drag.is_some()
+            || self.toggle_drag.is_some()
+            || self.resize_drag.is_some()
+            || self.resize_symmetric_drag.is_some()
     }
 
     pub fn handle_event(
@@ -308,7 +308,11 @@ impl ModTransformTracker {
                     None
                 }
             }
-            None => None,
+            Some(KeybindEvent::Activate(_)) => {
+                // Activate is for click-only actions (no drag) - mod_transform doesn't use this
+                None
+            }
+            _ => None,
         }
     }
 }

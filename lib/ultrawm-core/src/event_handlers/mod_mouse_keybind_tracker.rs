@@ -17,6 +17,7 @@ pub struct ModMouseKeybindTracker {
     started: bool,
     keybind: ModMouseKeybind,
     included_buttons: HashSet<MouseButton>,
+    activation_position: Option<Position>,
 }
 
 pub enum KeybindEvent {
@@ -24,6 +25,7 @@ pub enum KeybindEvent {
     Drag(Position),
     End(Position),
     Cancel(),
+    Activate(Position),
 }
 
 impl ModMouseKeybindTracker {
@@ -40,6 +42,7 @@ impl ModMouseKeybindTracker {
                 .cloned()
                 .collect(),
             keybind,
+            activation_position: None,
         }
     }
 
@@ -116,18 +119,32 @@ impl ModMouseKeybindTracker {
         if active && !self.active && matches!(event, WMEvent::MouseDown(_, _)) {
             // If our binding now matches due to a mouse down, activate
             self.active = true;
-            // Don't send Start event yet - wait for mouse movement
+            self.activation_position = Some(position.clone());
+            // Don't send Start yet - wait for mouse movement
             None
         } else if self.active && !active && matches!(event, WMEvent::MouseDown(_, _)) {
             // If another button was pressed, cancel
             self.active = false;
             self.started = false;
+            self.activation_position = None;
             Some(KeybindEvent::Cancel())
         } else if self.active && !active && !any_mouse_down {
-            // If all buttons have been released, end
+            // All buttons released
             self.active = false;
+            let was_started = self.started;
             self.started = false;
-            Some(KeybindEvent::End(position.clone()))
+
+            if was_started {
+                // Was dragging - send End
+                self.activation_position = None;
+                Some(KeybindEvent::End(position.clone()))
+            } else if let Some(activation_pos) = self.activation_position.take() {
+                // Never started dragging - send Activate with original position
+                Interceptor::set_handled(&self.included_buttons);
+                Some(KeybindEvent::Activate(activation_pos))
+            } else {
+                None
+            }
         } else {
             None
         }
