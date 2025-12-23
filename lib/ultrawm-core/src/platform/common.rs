@@ -1,4 +1,6 @@
 use crate::platform::PlatformWindow;
+use crate::workspace::WorkspaceId;
+use crate::{commands::CommandContext, layouts::PlacementTarget};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use thiserror::Error;
@@ -53,10 +55,14 @@ pub enum WMEvent {
     KeyDown(KeyCode),
     KeyUp(KeyCode),
 
+    /// WM Commands
     Shutdown,
     ConfigChanged,
-    CommandTriggered(String),
+    CommandTriggered(String, Option<CommandContext>),
     ShowContextMenu(ContextMenuRequest),
+    LoadLayoutToWorkspace(WorkspaceId, serde_yaml::Value),
+    PlaceWindowRelative(WindowId, PlacementTarget, WorkspaceId),
+    FloatWindow(WindowId),
 }
 
 /// Request to show a context menu

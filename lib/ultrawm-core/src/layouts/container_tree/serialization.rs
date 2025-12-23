@@ -1,7 +1,7 @@
 use crate::layouts::container_tree::container::{
     Container, ContainerChildRef, ContainerRef, ContainerWindow, ContainerWindowRef,
 };
-use crate::layouts::Direction;
+use crate::layouts::{ContainerId, Direction};
 use crate::platform::{Bounds, PlatformWindowImpl, WindowId};
 use crate::window::WindowRef;
 use serde::{Deserialize, Serialize};
@@ -14,12 +14,15 @@ pub struct SerializedContainerTree {
 
 #[derive(Serialize, Deserialize)]
 pub struct SerializedContainer {
+    #[serde(default)]
+    pub id: ContainerId,
     pub direction: Direction,
     pub ratios: Vec<f32>,
     pub children: Vec<SerializedContainerChild>,
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
 pub enum SerializedContainerChild {
     Container(SerializedContainer),
     Window(SerializedWindow),
@@ -28,11 +31,11 @@ pub enum SerializedContainerChild {
 #[derive(Serialize, Deserialize)]
 pub struct SerializedWindow {
     pub id: WindowId,
-    pub title: String,
 }
 
 pub fn serialize_container(container: &ContainerRef) -> SerializedContainer {
     SerializedContainer {
+        id: container.id(),
         direction: container.direction(),
         ratios: container.ratios().clone(),
         children: container
@@ -53,7 +56,6 @@ pub fn serialize_container(container: &ContainerRef) -> SerializedContainer {
 fn serialize_window(window: &ContainerWindowRef) -> SerializedWindow {
     SerializedWindow {
         id: window.window().platform_window().id(),
-        title: window.window().platform_window().title().to_string(),
     }
 }
 

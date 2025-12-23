@@ -6,14 +6,17 @@ use crate::event_loop_wm::EventLoopWM;
 use crate::platform::{
     EventBridge, EventDispatcher, PlatformError, PlatformEvents, PlatformEventsImpl, WMEvent,
 };
+use crate::workspace::WorkspaceId;
 use log::error;
 use std::sync::mpsc;
 use std::sync::OnceLock;
 use std::time::Duration;
 use std::{process, thread};
 
+pub mod ai;
 mod animation;
 mod coalescing_channel;
+mod commands;
 pub mod config;
 mod event_handlers;
 mod event_loop_main;
@@ -34,11 +37,11 @@ mod workspace_animator;
 
 use crate::platform::input_state::InputState;
 use crate::wm::WMError;
-pub use config::Config;
-pub use event_handlers::command_registry::{CommandContext, CommandDef, CommandId};
-pub use event_handlers::commands::{
-    register_commands, AI_ORGANIZE_ALL_WINDOWS, AI_ORGANIZE_CURRENT_WINDOW,
+pub use commands::{
+    register_commands, CommandContext, CommandDef, CommandId, AI_ORGANIZE_ALL_WINDOWS,
+    AI_ORGANIZE_CURRENT_WINDOW,
 };
+pub use config::Config;
 pub use event_loop_main::run_on_main_thread_blocking;
 pub use platform::inteceptor::Interceptor;
 pub use platform::{ContextMenuRequest, Platform, Position, WindowId};
@@ -93,8 +96,44 @@ pub fn shutdown() {
 }
 
 pub fn trigger_command(command_name: &str) {
+    trigger_command_with_context(command_name, None);
+}
+
+pub fn trigger_command_with_context(
+    command_name: &str,
+    context: Option<crate::commands::CommandContext>,
+) {
     if let Some(dispatcher) = GLOBAL_EVENT_DISPATCHER.get().cloned() {
-        dispatcher.send(WMEvent::CommandTriggered(command_name.to_string()));
+        dispatcher.send(WMEvent::CommandTriggered(command_name.to_string(), context));
+    }
+}
+
+pub fn load_layout_to_workspace(
+    workspace_id: crate::workspace::WorkspaceId,
+    layout: serde_yaml::Value,
+) {
+    if let Some(dispatcher) = GLOBAL_EVENT_DISPATCHER.get().cloned() {
+        dispatcher.send(WMEvent::LoadLayoutToWorkspace(workspace_id, layout));
+    }
+}
+
+pub fn place_window_relative(
+    window_id: WindowId,
+    target: crate::layouts::PlacementTarget,
+    workspace_id: WorkspaceId,
+) {
+    if let Some(dispatcher) = GLOBAL_EVENT_DISPATCHER.get().cloned() {
+        dispatcher.send(WMEvent::PlaceWindowRelative(
+            window_id,
+            target,
+            workspace_id,
+        ));
+    }
+}
+
+pub fn float_window(window_id: WindowId) {
+    if let Some(dispatcher) = GLOBAL_EVENT_DISPATCHER.get().cloned() {
+        dispatcher.send(WMEvent::FloatWindow(window_id));
     }
 }
 

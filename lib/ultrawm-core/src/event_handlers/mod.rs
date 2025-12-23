@@ -15,9 +15,7 @@ pub mod focus_on_hover_handler;
 mod mod_mouse_keybind_tracker;
 
 pub mod command_handler;
-pub mod command_registry;
-pub mod commands;
-mod keyboard_keybind_tracker;
+pub mod keyboard_keybind_tracker;
 
 pub mod context_menu_handler;
 

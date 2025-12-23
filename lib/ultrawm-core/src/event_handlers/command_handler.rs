@@ -1,5 +1,5 @@
+use crate::commands::{build_commands, Command, CommandContext, CommandId};
 use crate::config::Config;
-use crate::event_handlers::command_registry::{build_commands, Command, CommandContext, CommandId};
 use crate::event_handlers::EventHandler;
 use crate::event_loop_wm::WMOperationResult;
 use crate::platform::WMEvent;
@@ -44,7 +44,9 @@ impl EventHandler for CommandHandler {
                 }
                 Ok(false)
             }
-            WMEvent::CommandTriggered(command_id) => self.execute_command(command_id, wm, None),
+            WMEvent::CommandTriggered(command_id, context) => {
+                self.execute_command(command_id, wm, context.as_ref())
+            }
             WMEvent::ConfigChanged => {
                 self.commands = build_commands(&Config::current().commands.keybinds);
                 Ok(false)

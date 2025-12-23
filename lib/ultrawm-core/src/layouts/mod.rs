@@ -8,6 +8,8 @@ use thiserror::Error;
 
 pub mod container_tree;
 
+pub type PlacementTarget = serde_yaml::Value;
+
 #[derive(Debug, Error)]
 pub enum LayoutError {
     #[error("{0}")]
@@ -18,6 +20,9 @@ pub enum LayoutError {
 
     #[error("Position not valid for insertion: {0:?}")]
     InvalidInsertPosition(Position),
+
+    #[error("Placement target not found or invalid: {0}")]
+    PlacementTargetNotFound(String),
 }
 
 pub type LayoutResult<T> = Result<T, LayoutError>;
@@ -26,6 +31,12 @@ pub trait WindowLayout: Debug {
     fn new(bounds: Bounds) -> Self
     where
         Self: Sized;
+
+    fn layout_description(&self) -> String;
+
+    fn placement_help(&self) -> String;
+
+    fn example_layout(&self) -> serde_yaml::Value;
 
     fn deserialize(
         bounds: Bounds,
@@ -45,6 +56,12 @@ pub trait WindowLayout: Debug {
         &mut self,
         window: &WindowRef,
         position: &Position,
+    ) -> LayoutResult<InsertResult>;
+
+    fn insert_relative(
+        &mut self,
+        _window: &WindowRef,
+        _target: PlacementTarget,
     ) -> LayoutResult<InsertResult>;
 
     fn replace_window(

@@ -15,25 +15,36 @@ pub fn init_context_menu() {
             request.position,
             request.target_window
         );
-        // Must run on main thread - muda requires it
-        let has_target_window = request.target_window.is_some();
 
         let position = request.position.clone();
         run_on_main_thread_blocking(move || {
-            show_context_menu(has_target_window, position).unwrap_or_else(|e| {
+            show_context_menu(request, position).unwrap_or_else(|e| {
                 warn!("Failed to show context menu: {:?}", e);
             });
         });
     });
 }
 
+// Store the current context menu request so we can pass it when commands are triggered
+static CURRENT_CONTEXT_MENU: std::sync::Mutex<Option<ContextMenuRequest>> =
+    std::sync::Mutex::new(None);
+
+pub(crate) fn get_current_context_menu() -> Option<ContextMenuRequest> {
+    CURRENT_CONTEXT_MENU.lock().unwrap().clone()
+}
+
 fn show_context_menu(
-    has_target_window: bool,
+    request: ContextMenuRequest,
     position: Position,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Store the context menu request
+    if let Ok(mut current) = CURRENT_CONTEXT_MENU.lock() {
+        *current = Some(request.clone());
+    }
+
     let mut menu_builder = ContextMenuBuilder::new();
 
-    if has_target_window {
+    if request.target_window.is_some() {
         menu_builder.add_command(&AI_ORGANIZE_CURRENT_WINDOW)?;
     }
 
@@ -44,6 +55,11 @@ fn show_context_menu(
     Interceptor::pause();
     show_menu_at_position(&menu, &position);
     Interceptor::resume();
+
+    // Clear the context after menu is dismissed
+    if let Ok(mut current) = CURRENT_CONTEXT_MENU.lock() {
+        *current = None;
+    }
 
     Ok(())
 }

@@ -9,12 +9,9 @@ use std::sync::{LazyLock, RwLock};
 pub type CommandFn = fn(&mut WindowManager, Option<&CommandContext>) -> WMOperationResult<()>;
 pub type CommandId = String;
 
-/// Context passed to command handlers when triggered from UI elements like context menus
 #[derive(Debug, Clone)]
 pub struct CommandContext {
-    /// The target window for this command (e.g., the window right-clicked on)
     pub target_window: Option<WindowId>,
-    /// The position where the command was triggered (e.g., context menu position)
     pub position: Option<Position>,
 }
 
@@ -48,7 +45,6 @@ impl CommandContext {
     }
 }
 
-/// Static command definition - contains everything about a command
 pub struct CommandDef {
     pub display_name: &'static str,
     pub id: &'static str,
@@ -57,18 +53,15 @@ pub struct CommandDef {
     pub requires_window: bool,
 }
 
-/// Global command registry
 static REGISTRY: LazyLock<RwLock<Vec<&'static CommandDef>>> =
     LazyLock::new(|| RwLock::new(Vec::new()));
 
-/// Register a command with the global registry
 pub fn register(def: &'static CommandDef) {
     if let Ok(mut registry) = REGISTRY.write() {
         registry.push(def);
     }
 }
 
-/// Get all registered command names and their default keybinds
 pub fn get_defaults() -> HashMap<String, String> {
     REGISTRY
         .read()
@@ -81,15 +74,13 @@ pub fn get_defaults() -> HashMap<String, String> {
         .unwrap_or_default()
 }
 
-/// Internal command for the handler
-pub(crate) struct Command {
+pub struct Command {
     pub id: CommandId,
     pub tracker: KeyboardKeybindTracker,
     pub handler: CommandFn,
 }
 
-/// Build command handlers from the registry using config keybinds
-pub(crate) fn build_commands(keybinds: &HashMap<String, KeyboardKeybind>) -> Vec<Command> {
+pub fn build_commands(keybinds: &HashMap<String, KeyboardKeybind>) -> Vec<Command> {
     REGISTRY
         .read()
         .map(|registry| {

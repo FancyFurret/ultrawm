@@ -47,6 +47,13 @@ impl MacOSPlatformWindow {
             .get_pid()
             .map_err(|_| "Could not get window pid")?;
 
+        element
+            .position()
+            .map_err(|_| "Window element is invalid (cannot get position)")?;
+        element
+            .size()
+            .map_err(|_| "Window element is invalid (cannot get size)")?;
+
         Ok(Self {
             id,
             pid: pid as u32,

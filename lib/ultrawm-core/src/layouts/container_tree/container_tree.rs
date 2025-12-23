@@ -1,3 +1,4 @@
+use super::ContainerTreePlacementTargetType;
 use crate::config::Config;
 use crate::layouts::container_tree::container::{
     Container, ContainerChildRef, ContainerRef, ContainerWindow, ContainerWindowRef,
@@ -6,10 +7,14 @@ use crate::layouts::container_tree::serialization::{
     deserialize_container, serialize_container, SerializedContainerTree,
 };
 use crate::layouts::container_tree::{
-    Direction, TileAction, MOUSE_ADD_TO_PARENT_PREVIEW_RATIO, MOUSE_ADD_TO_PARENT_THRESHOLD,
-    MOUSE_SPLIT_PREVIEW_RATIO, MOUSE_SPLIT_THRESHOLD, MOUSE_SWAP_THRESHOLD,
+    ContainerTreePlacementTarget, Direction, TileAction, MOUSE_ADD_TO_PARENT_PREVIEW_RATIO,
+    MOUSE_ADD_TO_PARENT_THRESHOLD, MOUSE_SPLIT_PREVIEW_RATIO, MOUSE_SPLIT_THRESHOLD,
+    MOUSE_SWAP_THRESHOLD,
 };
-use crate::layouts::{ContainerId, LayoutError, LayoutResult, Side, WindowLayout};
+use crate::layouts::serialization::{
+    SerializedContainer, SerializedContainerChild, SerializedWindow,
+};
+use crate::layouts::{ContainerId, LayoutError, LayoutResult, PlacementTarget, Side, WindowLayout};
 use crate::platform::{Bounds, PlatformWindowImpl, Position, WindowId};
 use crate::resize_handle::{HandleOrientation, ResizeHandle, ResizeMode};
 use crate::tile_result::InsertResult;
@@ -48,8 +53,18 @@ impl ContainerTree {
         saved_layout: &serde_yaml::Value,
     ) -> Option<Self> {
         // Try to deserialize the saved layout
-        let serialized: SerializedContainerTree =
-            serde_yaml::from_value(saved_layout.clone()).ok()?;
+        let serialized: SerializedContainerTree = match serde_yaml::from_value(saved_layout.clone())
+        {
+            Ok(s) => s,
+            Err(e) => {
+                warn!(
+                    "Failed to parse layout YAML: {}. Layout was: {}",
+                    e,
+                    serde_yaml::to_string(saved_layout).unwrap_or_default()
+                );
+                return None;
+            }
+        };
 
         // Create a map of available windows by ID
         let available_windows: HashMap<WindowId, WindowRef> = available_windows
@@ -57,14 +72,29 @@ impl ContainerTree {
             .map(|w| (w.id(), w.clone()))
             .collect();
 
+        info!(
+            "Deserializing layout with {} available windows: {:?}",
+            available_windows.len(),
+            available_windows.keys().collect::<Vec<_>>()
+        );
+
         let mut windows_map = HashMap::new();
-        let root = deserialize_container(
+        let root = match deserialize_container(
             &serialized.root,
             Self::get_root_bounds(&bounds),
             &available_windows,
             &mut windows_map,
             None,
-        )?;
+        ) {
+            Some(r) => r,
+            None => {
+                warn!(
+                    "deserialize_container returned None. Serialized root had {} children",
+                    serialized.root.children.len()
+                );
+                return None;
+            }
+        };
 
         info!(
             "Successfully reconstructed layout with {} windows placed",
@@ -319,6 +349,32 @@ impl ContainerTree {
         preview_bounds
     }
 
+    /// Finds a container by its ID
+    pub fn find_container(&self, id: ContainerId) -> Option<ContainerRef> {
+        let mut result = None;
+        self.find_container_recursive(&self.root, id, &mut result);
+        result
+    }
+
+    fn find_container_recursive(
+        &self,
+        container: &ContainerRef,
+        id: ContainerId,
+        out: &mut Option<ContainerRef>,
+    ) {
+        if container.id() == id {
+            *out = Some(container.clone());
+            return;
+        }
+
+        // Recurse into children containers
+        for child in container.children().iter() {
+            if let ContainerChildRef::Container(c) = child {
+                self.find_container_recursive(c, id, out);
+            }
+        }
+    }
+
     /// Finds the container that owns the given drag handle.
     /// Returns the container and the index of the child that the handle is after.
     fn find_container_for_handle(&self, id: ContainerId) -> Option<ContainerRef> {
@@ -419,6 +475,48 @@ impl ContainerTree {
 }
 
 impl WindowLayout for ContainerTree {
+    fn layout_description(&self) -> String {
+        "ContainerTree is a layout that uses a tree of containers to arrange windows. It supports splitting and merging containers, and adding windows to containers. Each container can hold any number of windows or containers as children.".to_string()
+    }
+
+    fn placement_help(&self) -> String {
+        r#"Placement targets:
+  - {type: window, id: <window_id>} - Place relative to a window
+  - {type: container, id: <container_id>} - Place relative to a container
+
+When placing relative to a window, the new window will be split from the target window.
+When placing relative to a container, the new window will be added to that container.
+
+Placement options:
+  - side: "left" | "right" | "top" | "bottom" - Which side to place the window on
+  - ratio: <0.0-1.0> (optional) - Size ratio for the new window (default: 0.5)
+"#
+        .to_string()
+    }
+
+    fn example_layout(&self) -> serde_yaml::Value {
+        let example = SerializedContainerTree {
+            root: SerializedContainer {
+                id: 0,
+                direction: Direction::Horizontal,
+                ratios: vec![0.6, 0.4],
+                children: vec![
+                    SerializedContainerChild::Window(SerializedWindow { id: 12345 }),
+                    SerializedContainerChild::Container(SerializedContainer {
+                        id: 1,
+                        direction: Direction::Vertical,
+                        ratios: vec![0.5, 0.5],
+                        children: vec![
+                            SerializedContainerChild::Window(SerializedWindow { id: 67890 }),
+                            SerializedContainerChild::Window(SerializedWindow { id: 11111 }),
+                        ],
+                    }),
+                ],
+            },
+        };
+        serde_yaml::to_value(example).unwrap()
+    }
+
     fn new(bounds: Bounds) -> Self
     where
         Self: Sized,
@@ -561,6 +659,116 @@ impl WindowLayout for ContainerTree {
         Ok(InsertResult::None)
     }
 
+    fn insert_relative(
+        &mut self,
+        window: &WindowRef,
+        target: PlacementTarget,
+    ) -> LayoutResult<InsertResult> {
+        let placement_target: ContainerTreePlacementTarget = serde_yaml::from_value(target.clone())
+            .map_err(|e| {
+                LayoutError::PlacementTargetNotFound(format!(
+                    "Failed to deserialize placement target: {}. Target was: {}",
+                    e,
+                    serde_yaml::to_string(&target).unwrap_or_default()
+                ))
+            })?;
+
+        // Extract side and ratio from placement target, with defaults
+        let side = placement_target.side;
+        let ratio = placement_target.ratio;
+
+        // Check if window is already in the tree
+        let existing_window = self.windows.get(&window.id()).map(|w| w.clone());
+        let is_new_window = existing_window.is_none();
+        let container_window =
+            existing_window.unwrap_or_else(|| ContainerWindow::new(window.clone()));
+
+        match placement_target.target {
+            ContainerTreePlacementTargetType::Window { id: window_id } => {
+                // Find the target window
+                let target_window = self.get_window(&window_id)?;
+                let parent = target_window.parent();
+
+                // Determine side - use provided side, or infer from parent direction
+                let side = side.unwrap_or_else(|| {
+                    match parent.direction() {
+                        Direction::Horizontal => Side::Right, // Default to right
+                        Direction::Vertical => Side::Bottom,  // Default to bottom
+                    }
+                });
+
+                // Split the window on the specified side
+                let new_container =
+                    parent.split_window(&target_window, container_window.clone(), side.into());
+
+                // Apply ratio if provided
+                if let Some(ratio) = ratio {
+                    let len = new_container.ratios().len();
+                    if len == 2 {
+                        new_container.set_ratios(vec![ratio, 1.0 - ratio]);
+                    }
+                }
+
+                // Update windows map if this is a new window
+                if is_new_window {
+                    self.windows.insert(window.id(), container_window);
+                }
+            }
+            ContainerTreePlacementTargetType::Container { id: container_id } => {
+                // Find the target container
+                let target_container = self.find_container(container_id).ok_or(
+                    LayoutError::PlacementTargetNotFound(format!(
+                        "Container with id {} not found",
+                        container_id
+                    )),
+                )?;
+
+                if target_container.children().is_empty() {
+                    // Empty container: just add the window
+                    target_container.add_window(container_window.clone());
+                } else {
+                    // Container has children: insert at the appropriate edge based on side
+                    let index = if let Some(side) = side {
+                        match side {
+                            Side::Left | Side::Top => 0,
+                            Side::Right | Side::Bottom => target_container.children().len(),
+                        }
+                    } else {
+                        // Default to end
+                        target_container.children().len()
+                    };
+                    target_container.insert_window(index, container_window.clone());
+
+                    // Apply ratio if provided
+                    if let Some(ratio) = ratio {
+                        let mut ratios = target_container.ratios().clone();
+                        if index < ratios.len() {
+                            // Adjust ratios: new window gets 'ratio', redistribute the rest
+                            let remaining = 1.0 - ratio;
+                            let old_ratio = ratios[index];
+                            ratios[index] = ratio;
+                            // Redistribute remaining ratio proportionally
+                            for r in &mut ratios {
+                                if *r != ratio {
+                                    *r = (*r / (1.0 - old_ratio)) * remaining;
+                                }
+                            }
+                            target_container.set_ratios(ratios);
+                        }
+                    }
+                }
+
+                // Update windows map if this is a new window
+                if is_new_window {
+                    self.windows.insert(window.id(), container_window);
+                }
+            }
+        }
+
+        self.root.recalculate();
+        Ok(InsertResult::None)
+    }
+
     fn replace_window(
         &mut self,
         old_window: &WindowRef,
@@ -623,7 +831,7 @@ impl WindowLayout for ContainerTree {
         mode: &ResizeMode,
     ) -> bool {
         // Find the container that owns this handle
-        let container = match self.find_container_for_handle(handle.id) {
+        let container = match self.find_container_for_handle(handle.id as ContainerId) {
             Some(result) => result,
             None => return false,
         };

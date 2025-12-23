@@ -1,6 +1,6 @@
+use crate::commands;
 use crate::config::config_serializer::serialize_config;
 use crate::config::{KeyboardKeybind, ModMouseKeybind, MouseKeybind};
-use crate::event_handlers::command_registry;
 use log::{trace, warn};
 use once_cell::sync::Lazy;
 use schemars::JsonSchema;
@@ -19,7 +19,7 @@ pub struct Commands {
 
 impl Commands {
     pub fn fill_defaults(&mut self) {
-        for (name, default) in command_registry::get_defaults() {
+        for (name, default) in commands::get_defaults() {
             self.keybinds
                 .entry(name)
                 .or_insert_with(|| vec![default.as_str()].into());
@@ -76,6 +76,8 @@ pub struct Config {
     pub mod_transform_bindings: ModTransformBindings,
     /// Keyboard shortcuts for commands
     pub commands: Commands,
+    /// AI-powered window organization settings
+    pub ai: AiConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -134,6 +136,39 @@ impl Default for ModTransformBindings {
             resize: vec!["ctrl+rmb", "bmb+rmb"].into(),
             resize_symmetric: vec!["ctrl+mmb", "bmb+mmb"].into(),
             context_menu: vec!["bmb+rmb", "ctrl+rmb"].into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct AiConfig {
+    /// Enable AI window organization features
+    pub enabled: bool,
+    /// The API endpoint URL (e.g., "https://api.openai.com/v1/chat/completions")
+    pub api_url: String,
+    /// Your API key for authentication
+    pub api_key: String,
+    /// The model to use (e.g., "gpt-4o", "claude-3-opus")
+    pub model: String,
+    /// Custom instructions for how you'd like windows organized
+    /// Example: "I prefer my browser on the left taking 60% of the screen,
+    /// and my terminal on the right. Keep Slack floating."
+    pub organization_preferences: String,
+    /// Temperature for AI responses (0.0-2.0). Lower = more deterministic, higher = more creative.
+    /// Default: 1.0
+    pub temperature: f32,
+}
+
+impl Default for AiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            api_url: String::new(),
+            api_key: String::new(),
+            model: String::new(),
+            organization_preferences: String::new(),
+            temperature: 1.0,
         }
     }
 }
@@ -291,6 +326,10 @@ impl Config {
         &self.mod_transform_bindings
     }
 
+    pub fn ai() -> AiConfig {
+        Self::current().ai.clone()
+    }
+
     /// Save the current config to a file
     pub fn save_to_file(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(parent) = path.parent() {
@@ -327,6 +366,7 @@ impl Default for Config {
             resize_handle_bindings: ResizeHandleBindings::default(),
             mod_transform_bindings: ModTransformBindings::default(),
             commands: Commands::default(),
+            ai: AiConfig::default(),
         }
     }
 }

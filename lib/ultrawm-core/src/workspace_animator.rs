@@ -210,6 +210,10 @@ impl WorkspaceAnimationThreadAnimator {
             }
 
             if !animated_window.animator.is_animating() {
+                let target_bounds = animated_window.animator.to.clone();
+                if let Err(e) = animated_window.platform_window.set_bounds(&target_bounds) {
+                    warn!("Failed to set final bounds for window {}: {}", window_id, e);
+                }
                 completed_windows.push(*window_id);
             }
         }

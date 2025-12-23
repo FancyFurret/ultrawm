@@ -58,6 +58,10 @@ impl Workspace {
         &self.name
     }
 
+    pub fn layout(&self) -> &Box<dyn WindowLayout> {
+        &self.layout
+    }
+
     pub fn windows(&self) -> &HashMap<WindowId, WindowRef> {
         &self.windows
     }
@@ -101,6 +105,17 @@ impl Workspace {
         position: &Position,
     ) -> LayoutResult<InsertResult> {
         let action = self.layout.insert_window(window, position)?;
+        window.set_floating(false);
+        self.windows.insert(window.id(), window.clone());
+        Ok(action)
+    }
+
+    pub fn insert_window_relative(
+        &mut self,
+        window: &WindowRef,
+        target: crate::layouts::PlacementTarget,
+    ) -> LayoutResult<crate::tile_result::InsertResult> {
+        let action = self.layout.insert_relative(window, target)?;
         window.set_floating(false);
         self.windows.insert(window.id(), window.clone());
         Ok(action)

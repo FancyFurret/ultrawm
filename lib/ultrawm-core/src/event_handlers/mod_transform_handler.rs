@@ -4,7 +4,7 @@ use crate::event_handlers::mod_transform_tracker::{
 use crate::event_handlers::EventHandler;
 use crate::event_loop_wm::{WMOperationError, WMOperationResult};
 use crate::layouts::container_tree::ResizeDirection;
-use crate::platform::traits::PlatformImpl;
+use crate::platform::traits::{PlatformImpl, PlatformWindowImpl};
 use crate::platform::{Bounds, CursorType, Platform, Position, WMEvent, WindowId};
 use crate::tile_preview_handler::TilePreviewHandler;
 use crate::wm::WindowManager;
@@ -44,9 +44,21 @@ impl ModTransformHandler {
             pos,
             drag_type
         );
+        wm.move_to_top(id);
+
         let window = wm.get_window(id)?;
         let floating = window.floating();
         let tiled = !floating;
+
+        // Focus the window asynchronously for floating windows only
+        if floating {
+            let platform_window = window.platform_window().clone();
+            tokio::spawn(async move {
+                if let Err(e) = platform_window.focus() {
+                    warn!("Failed to focus window during mod drag: {}", e);
+                }
+            });
+        }
 
         // Determine the drag type
         if drag_type == ModTransformType::Tile

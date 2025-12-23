@@ -121,6 +121,31 @@ impl EventLoopWM {
             return LoopControl::Continue;
         }
 
+        if let WMEvent::LoadLayoutToWorkspace(workspace_id, layout) = event {
+            self.wm
+                .load_layout_to_workspace(workspace_id, &layout)
+                .unwrap_or_else(|e| {
+                    error!("Failed to load layout to workspace: {e}");
+                });
+            return LoopControl::Continue;
+        }
+
+        if let WMEvent::PlaceWindowRelative(window_id, target, workspace_id) = event {
+            self.wm
+                .insert_window_relative(window_id, target, workspace_id)
+                .unwrap_or_else(|e| {
+                    error!("Failed to place window relative: {e}");
+                });
+            return LoopControl::Continue;
+        }
+
+        if let WMEvent::FloatWindow(window_id) = event {
+            self.wm.float_window(window_id).unwrap_or_else(|e| {
+                error!("Failed to float window: {e}");
+            });
+            return LoopControl::Continue;
+        }
+
         LoopControl::Continue
     }
 

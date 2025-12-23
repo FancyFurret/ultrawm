@@ -1,15 +1,15 @@
 use crate::config::Config;
-use crate::layouts::{ContainerTree, LayoutError};
+use crate::layouts::{ContainerTree, LayoutError, PlacementTarget, WindowLayout};
 use crate::partition::{Partition, PartitionId};
 use crate::platform::{Bounds, Platform, PlatformImpl, PlatformResult, Position, WindowId};
 use crate::resize_handle::{ResizeHandle, ResizeMode};
-use crate::serialization::{deserialize_partition, load_layout, save_layout};
+use crate::serialization::{extract_window_ids, load_layout, save_layout};
 use crate::tile_result::InsertResult;
 use crate::window::{Window, WindowRef};
 use crate::workspace::{Workspace, WorkspaceId};
 use crate::workspace_animator::{WorkspaceAnimationConfig, WorkspaceAnimationThread};
 use crate::PlatformError;
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexSet;
 use log::{error, trace, warn};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -44,7 +44,7 @@ pub struct WindowManager {
     workspaces: HashMap<WorkspaceId, Workspace>,
     window_order: IndexSet<WindowId>,
     animation_thread: WorkspaceAnimationThread,
-    minimized_windows: HashMap<WindowId, WindowRef>,
+    all_windows: HashMap<WindowId, WindowRef>,
     /// Set when deferred resize methods are called, cleared on flush
     needs_flush: bool,
 }
@@ -92,75 +92,79 @@ impl WindowManager {
             .collect::<Vec<_>>();
         windows.sort_by_key(|w| w.id());
 
-        // Try to load saved layout
-        let saved_layout = match load_layout() {
-            Ok(Some(layout)) => Some(layout),
-            Ok(None) => None,
-            Err(e) => {
-                warn!("Failed to load saved layout: {}, creating new layout", e);
-                None
-            }
+        // Store all discovered windows so they're available for layout loading
+        let mut all_windows: HashMap<WindowId, WindowRef> = HashMap::new();
+        for window in &windows {
+            all_windows.insert(window.id(), window.clone());
+        }
+
+        let mut wm = Self {
+            partitions,
+            workspaces: HashMap::new(),
+            window_order: IndexSet::new(),
+            animation_thread: WorkspaceAnimationThread::new(WorkspaceAnimationConfig {
+                animation_fps: Config::window_tile_fps(),
+            }),
+            all_windows,
+            needs_flush: false,
         };
 
-        // If there is a saved layout, use it
-        let mut workspaces: HashMap<WorkspaceId, Workspace> = HashMap::new();
-        if let Some(layout) = saved_layout {
-            for serialized_partition in layout.partitions {
-                let (p, ws) = deserialize_partition(&serialized_partition, &windows);
-                let name = p.name();
-                if let Some(partition) = partitions.iter_mut().find(|(_, p)| p.name() == name) {
-                    partition.1.assign_workspace(p.current_workspace().unwrap());
-                }
+        // Try to load saved layout
+        let has_saved_layout = if let Ok(Some(saved_layout)) = load_layout() {
+            for serialized_partition in saved_layout.partitions {
+                // Find partition by name
+                let partition_id = match wm
+                    .partitions
+                    .values()
+                    .find(|p| p.name() == &serialized_partition.name)
+                    .map(|p| p.id())
+                {
+                    Some(id) => id,
+                    None => {
+                        warn!(
+                            "Saved layout references unknown partition: {}",
+                            serialized_partition.name
+                        );
+                        continue;
+                    }
+                };
 
-                for (workspace_id, workspace) in ws {
-                    workspaces.insert(workspace_id, workspace);
+                // Load each workspace using the reusable function
+                for serialized_workspace in &serialized_partition.workspaces {
+                    if let Err(e) = wm.load_serialized_workspace(serialized_workspace, partition_id)
+                    {
+                        warn!(
+                            "Failed to load workspace {}: {}",
+                            serialized_workspace.id, e
+                        );
+                    }
                 }
             }
+            true
         } else {
-            // Also for now, just make 1 workspace per partition. Will be configurable later.
-            workspaces = partitions
-                .values_mut()
-                .map(|partition| {
+            false
+        };
+
+        // Create default workspaces only if we don't have a saved layout
+        if !has_saved_layout {
+            for partition in wm.partitions.values_mut() {
+                if partition.current_workspace().is_none() {
                     let workspace = Workspace::new::<ContainerTree>(
                         partition.bounds().clone(),
                         "Default".to_string(),
                         None,
                         None,
                     );
-
-                    partition.assign_workspace(workspace.id());
-                    (workspace.id(), workspace)
-                })
-                .collect();
+                    let workspace_id = workspace.id();
+                    wm.workspaces.insert(workspace_id, workspace);
+                    partition.assign_workspace(workspace_id);
+                }
+            }
         }
 
-        let mut existing_windows = IndexMap::new();
-        for workspace in workspaces.values_mut() {
-            for window in workspace.windows().values() {
-                existing_windows.insert(window.id(), window.clone());
-            }
-
+        // Flush all windows
+        for workspace in wm.workspaces.values_mut() {
             workspace.flush_windows()?;
-        }
-
-        // Float any unused windows
-        let mut wm = Self {
-            partitions,
-            workspaces,
-            window_order: IndexSet::new(),
-            animation_thread: WorkspaceAnimationThread::new(WorkspaceAnimationConfig {
-                animation_fps: Config::window_tile_fps(),
-            }),
-            minimized_windows: HashMap::new(),
-            needs_flush: false,
-        };
-
-        for existing_window in existing_windows.values() {
-            if existing_window.floating() {
-                wm.float_window(existing_window.id()).unwrap_or_else(|e| {
-                    error!("Failed to float existing window: {e}");
-                })
-            }
         }
 
         trace!("Partitions ({}):", wm.partitions.len());
@@ -170,7 +174,7 @@ impl WindowManager {
 
         trace!("Tracking {} windows at startup...", windows.len());
         for window in windows {
-            if wm.get_window(window.id()).is_err() {
+            if wm.get_workspace_with_window(&window).is_none() {
                 trace!("  Tracking window: id={}", window.id());
                 wm.track_window(window.clone()).unwrap_or_else(|e| {
                     error!("Failed to track window: {e}");
@@ -197,19 +201,19 @@ impl WindowManager {
             window.title()
         );
 
-        if self.get_window(window.id()).is_ok() {
-            trace!("  -> already tracked");
-            return Ok(());
+        // Always add to all_windows if not already present
+        if !self.all_windows.contains_key(&window.id()) {
+            self.all_windows.insert(window.id(), window.clone());
         }
 
-        if self.minimized_windows.contains_key(&window.id()) {
-            trace!("  -> already in minimized_windows");
+        // Check if already in a workspace
+        if self.get_workspace_with_window(&window).is_some() {
+            trace!("  -> already tracked in workspace");
             return Ok(());
         }
 
         if !window.visible() {
-            trace!("  -> not visible, adding to minimized_windows");
-            self.minimized_windows.insert(window.id(), window.clone());
+            trace!("  -> not visible, stored in all_windows");
             return Ok(());
         }
 
@@ -227,11 +231,16 @@ impl WindowManager {
     }
 
     pub fn unhide_window(&mut self, id: WindowId) -> WMResult<()> {
-        if !self.minimized_windows.contains_key(&id) {
+        let window = match self.all_windows.get(&id) {
+            Some(w) => w.clone(),
+            None => return Ok(()),
+        };
+
+        // If already in a workspace, nothing to do
+        if self.get_workspace_with_window(&window).is_some() {
             return Ok(());
         }
 
-        let window = self.minimized_windows.remove(&id).unwrap();
         window.update_bounds();
         self.track_window(window)?;
         Ok(())
@@ -270,6 +279,33 @@ impl WindowManager {
                 old_workspace.remove_window(&window)?;
             }
         }
+
+        self.animated_flush()?;
+        self.try_save_layout();
+        Ok(())
+    }
+
+    pub fn insert_window_relative(
+        &mut self,
+        window_id: WindowId,
+        target: PlacementTarget,
+        workspace_id: WorkspaceId,
+    ) -> WMResult<()> {
+        let window = self.get_window(window_id)?;
+        // If target_workspace_id is specified and different from current workspace, move the window first
+        let current_workspace_id = self.get_workspace_with_window(&window).map(|w| w.id());
+        if current_workspace_id != Some(workspace_id) {
+            if let Some(old_ws_id) = current_workspace_id {
+                let old_workspace = self.workspaces.get_mut(&old_ws_id).unwrap();
+                old_workspace.remove_window(&window)?;
+            }
+        }
+
+        let workspace = self
+            .workspaces
+            .get_mut(&workspace_id)
+            .ok_or(WMError::WorkspaceNotFound(0))?;
+        workspace.insert_window_relative(&window, target)?;
 
         self.animated_flush()?;
         self.try_save_layout();
@@ -321,14 +357,24 @@ impl WindowManager {
         let window = self.get_window(id)?;
         let bounds = window.window_bounds();
         let old_workspace_id = self.get_workspace_with_window(&window).map(|w| w.id());
-        let new_workspace_id = self.get_workspace_at_bounds_mut(&bounds)?.id();
-        if old_workspace_id.is_some() && old_workspace_id.unwrap() != new_workspace_id {
-            let old_workspace = self.workspaces.get_mut(&old_workspace_id.unwrap()).unwrap();
-            old_workspace.remove_window(&window)?;
+        let new_workspace = self.get_workspace_at_bounds_mut(&bounds)?;
+        let new_workspace_id = new_workspace.id();
 
-            let new_workspace = self.workspaces.get_mut(&new_workspace_id).unwrap();
-            new_workspace.float_window(&window)?;
-            self.try_save_layout();
+        if let Some(old_ws_id) = old_workspace_id {
+            if old_ws_id != new_workspace_id {
+                let old_workspace = self
+                    .workspaces
+                    .get_mut(&old_ws_id)
+                    .ok_or_else(|| WMError::WorkspaceNotFound(0))?;
+                old_workspace.remove_window(&window)?;
+
+                let new_workspace = self
+                    .workspaces
+                    .get_mut(&new_workspace_id)
+                    .ok_or_else(|| WMError::WorkspaceNotFound(0))?;
+                new_workspace.float_window(&window)?;
+                self.try_save_layout();
+            }
         }
 
         Ok(())
@@ -352,7 +398,6 @@ impl WindowManager {
 
     pub fn remove_window(&mut self, id: WindowId) -> WMResult<()> {
         let window = self.get_window(id)?;
-        self.minimized_windows.insert(id, window.clone());
 
         let workspace = self.get_workspace_for_window_mut(&id)?;
         workspace.remove_window(&window)?;
@@ -383,13 +428,21 @@ impl WindowManager {
     }
 
     pub fn get_window(&self, id: WindowId) -> WMResult<WindowRef> {
-        for workspace in self.workspaces.values() {
-            if let Some(window) = workspace.windows().get(&id) {
-                return Ok(window.clone());
-            }
-        }
+        self.all_windows.get(&id).cloned().ok_or_else(|| {
+            error!("Window not found :*( :* : {id}");
+            WMError::WindowNotFound(id)
+        })
+    }
 
-        Err(WMError::WindowNotFound(id))
+    pub fn get_all_windows(&self) -> Vec<WindowRef> {
+        let mut all_windows: Vec<WindowRef> = self.all_windows.values().cloned().collect();
+
+        all_windows.sort_by_key(|w| {
+            let order_index = self.window_order.get_index_of(&w.id()).unwrap_or(0);
+            (w.floating(), order_index)
+        });
+
+        all_windows
     }
 
     pub fn get_tile_bounds(&self, id: WindowId, position: &Position) -> Option<Bounds> {
@@ -398,7 +451,41 @@ impl WindowManager {
         workspace.get_tile_bounds(&window, position)
     }
 
-    fn get_workspace_with_window(&self, window: &WindowRef) -> Option<&Workspace> {
+    pub fn get_partition_with_window(&self, window: &WindowRef) -> Option<&Partition> {
+        for partition in self.partitions.values() {
+            if partition
+                .current_workspace()
+                .and_then(|ws_id| {
+                    self.workspaces
+                        .get(&ws_id)
+                        .map(|ws| ws.has_window(&window.id()))
+                })
+                .unwrap_or(false)
+            {
+                return Some(partition);
+            }
+        }
+        None
+    }
+
+    fn get_partition_with_window_mut(&mut self, window: &WindowRef) -> Option<&mut Partition> {
+        for partition in self.partitions.values_mut() {
+            if partition
+                .current_workspace()
+                .and_then(|ws_id| {
+                    self.workspaces
+                        .get(&ws_id)
+                        .map(|ws| ws.has_window(&window.id()))
+                })
+                .unwrap_or(false)
+            {
+                return Some(partition);
+            }
+        }
+        None
+    }
+
+    pub fn get_workspace_with_window(&self, window: &WindowRef) -> Option<&Workspace> {
         for workspace in self.workspaces.values() {
             if workspace.has_window(&window.id()) {
                 return Some(workspace);
@@ -481,18 +568,7 @@ impl WindowManager {
 
     /// Finds a window at the given position. This will return the top-most window/the floating window first.
     pub fn find_window_at_position(&self, position: &Position) -> Option<WindowRef> {
-        let mut all_windows = Vec::new();
-
-        // Collect all windows from all workspaces
-        for workspace in self.workspaces.values() {
-            all_windows.extend(workspace.windows().values().cloned());
-        }
-
-        // Sort by floating status first (floating windows always have priority), then by window order
-        all_windows.sort_by_key(|w| {
-            let order_index = self.window_order.get_index_of(&w.id()).unwrap_or(0);
-            (w.floating(), order_index)
-        });
+        let all_windows = self.get_all_windows();
 
         // Find the last window (highest priority) that contains the position
         let found = all_windows
@@ -602,7 +678,7 @@ impl WindowManager {
         Ok(())
     }
 
-    fn move_to_top(&mut self, id: WindowId) {
+    pub fn move_to_top(&mut self, id: WindowId) {
         self.window_order.shift_remove(&id);
         self.window_order.insert(id);
     }
@@ -614,7 +690,7 @@ impl WindowManager {
         Ok(())
     }
 
-    fn try_save_layout(&self) {
+    pub fn try_save_layout(&self) {
         if let Err(e) = save_layout(self) {
             warn!("Failed to save layout: {e}");
         }
@@ -624,6 +700,90 @@ impl WindowManager {
         for workspace in self.workspaces.values_mut() {
             workspace.config_changed()?;
         }
+        Ok(())
+    }
+
+    pub fn load_layout_to_workspace(
+        &mut self,
+        workspace_id: WorkspaceId,
+        layout: &serde_yaml::Value,
+    ) -> WMResult<()> {
+        let workspace = self
+            .workspaces
+            .get_mut(&workspace_id)
+            .ok_or(WMError::WorkspaceNotFound(0))?;
+
+        let partition_bounds = self
+            .partitions
+            .values()
+            .find(|p| p.current_workspace() == Some(workspace_id))
+            .map(|p| p.bounds().clone())
+            .ok_or(WMError::LayoutError(LayoutError::Error(format!(
+                "No partition found for workspace {}",
+                workspace_id
+            ))))?;
+
+        let layout_window_ids = extract_window_ids(layout);
+        let layout_windows: Vec<WindowRef> = layout_window_ids
+            .iter()
+            .filter_map(|id| self.all_windows.get(id).cloned())
+            .collect();
+
+        for window in &layout_windows {
+            window.set_floating(false);
+        }
+
+        let new_layout = Box::new(ContainerTree::deserialize(
+            partition_bounds.clone(),
+            &layout_windows,
+            layout,
+        ));
+
+        let workspace_name = workspace.name().to_string();
+        let new_workspace = Workspace::new::<ContainerTree>(
+            partition_bounds,
+            workspace_name,
+            Some(new_layout),
+            None,
+        );
+
+        *self.workspaces.get_mut(&workspace_id).unwrap() = new_workspace;
+
+        self.animated_flush()?;
+        self.try_save_layout();
+
+        Ok(())
+    }
+
+    fn load_serialized_workspace(
+        &mut self,
+        serialized_workspace: &crate::serialization::SerializedWorkspace,
+        partition_id: PartitionId,
+    ) -> WMResult<()> {
+        if !self.workspaces.contains_key(&serialized_workspace.id) {
+            let partition = self.partitions.get(&partition_id).unwrap();
+            let workspace = Workspace::new::<ContainerTree>(
+                partition.bounds().clone(),
+                serialized_workspace.name.clone(),
+                None,
+                None,
+            );
+            self.workspaces.insert(serialized_workspace.id, workspace);
+            self.partitions
+                .get_mut(&partition_id)
+                .unwrap()
+                .assign_workspace(serialized_workspace.id);
+        }
+
+        self.load_layout_to_workspace(serialized_workspace.id, &serialized_workspace.layout)?;
+
+        let workspace = self.workspaces.get_mut(&serialized_workspace.id).unwrap();
+        for serialized_floating in &serialized_workspace.floating {
+            if let Some(window) = self.all_windows.get(&serialized_floating.id) {
+                let _ = workspace.float_window(window);
+            }
+        }
+
         Ok(())
     }
 }

@@ -35,7 +35,6 @@ pub struct SerializedWorkspace {
 #[derive(Serialize, Deserialize)]
 pub struct SerializedWindow {
     pub id: WindowId,
-    pub title: String,
     pub bounds: Bounds,
 }
 
@@ -63,7 +62,6 @@ fn serialize_wm(wm: &WindowManager) -> serde_yaml::Value {
                                 .filter(|(_, window)| window.floating())
                                 .map(|(id, window)| SerializedWindow {
                                     id: id.clone(),
-                                    title: window.title(),
                                     bounds: window.bounds().clone(),
                                 })
                                 .collect(),
@@ -131,6 +129,11 @@ pub fn extract_window_ids(layout: &serde_yaml::Value) -> Vec<WindowId> {
 
 fn extract_window_ids_recursive(value: &serde_yaml::Value, window_ids: &mut Vec<WindowId>) {
     match value {
+        serde_yaml::Value::Tagged(tagged) => {
+            // Handle tagged values like !Window and !Container
+            // Recurse into the inner value
+            extract_window_ids_recursive(&tagged.value, window_ids);
+        }
         serde_yaml::Value::Mapping(map) => {
             // Check if this is a window object with an ID
             if let Some(id_value) = map.get(&serde_yaml::Value::String("id".to_string())) {

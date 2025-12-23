@@ -331,12 +331,18 @@ impl OverlayWindowAnimator {
             }
         }
 
-        if self.move_animator.is_animating() {
+        let was_move_animating = self.move_animator.is_animating();
+        if was_move_animating {
             if let Some(bounds) = self.move_animator.update() {
                 if !self.native_move_animation {
                     self.set_bounds(bounds);
                 }
             }
+        }
+
+        if was_move_animating && !self.move_animator.is_animating() && !self.native_move_animation {
+            let target_bounds = self.move_animator.to.clone();
+            self.set_bounds(target_bounds);
         }
 
         let _ = self.render();

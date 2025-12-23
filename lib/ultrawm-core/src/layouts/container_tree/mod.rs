@@ -1,16 +1,20 @@
 pub use container_tree::*;
+pub use serialization::SerializedContainerTree;
 
-use crate::layouts::container_tree::container::{ContainerChildRef, ContainerWindowRef};
+use crate::{
+    layouts::container_tree::container::{ContainerChildRef, ContainerWindowRef},
+    WindowId,
+};
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::AtomicU64;
 
 mod container;
 mod container_tree;
-mod serialization;
+pub(crate) mod serialization;
 
-pub type ContainerId = usize;
+pub type ContainerId = u64;
 
-static CONTAINER_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+static CONTAINER_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 // Percentage of half the container size that the mouse must be within
 const MOUSE_SWAP_THRESHOLD: f32 = 1.0;
@@ -20,6 +24,7 @@ const MOUSE_SPLIT_PREVIEW_RATIO: f32 = 0.5;
 const MOUSE_ADD_TO_PARENT_PREVIEW_RATIO: f32 = 0.25;
 
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Direction {
     Horizontal,
     Vertical,
@@ -34,7 +39,8 @@ impl Direction {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Side {
     Left,
     Right,
@@ -103,6 +109,23 @@ enum TileAction {
     Swap(ContainerWindowRef),
     AddToParent(ContainerChildRef, Side),
     Split(ContainerWindowRef, Side),
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct ContainerTreePlacementTarget {
+    #[serde(flatten)]
+    pub target: ContainerTreePlacementTargetType,
+    #[serde(default)]
+    pub side: Option<Side>,
+    #[serde(default)]
+    pub ratio: Option<f32>,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum ContainerTreePlacementTargetType {
+    Window { id: WindowId },
+    Container { id: ContainerId },
 }
 
 #[cfg(test)]

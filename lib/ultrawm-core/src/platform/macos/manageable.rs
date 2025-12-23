@@ -11,7 +11,12 @@ pub fn app_is_manageable(app: &AXUIElementExt) -> ObserveResult {
 
 pub fn window_is_manageable(window: &AXUIElementExt) -> ObserveResult {
     get_window_id(&window.element).ok_or("Window has no id")?;
-    window.title().map_err(|_| "Window has no title")?;
+
+    // Check that we can get the title and it's not empty/unknown
+    let title = window.title().map_err(|_| "Window has no title")?;
+    if title.is_empty() {
+        Err("Window title is empty")?
+    }
 
     let role = window.role().map_err(|_| "Window has no role")?;
     if role == "AXPopover" {
@@ -26,6 +31,16 @@ pub fn window_is_manageable(window: &AXUIElementExt) -> ObserveResult {
     if subrole == "AXDialog" {
         Err("Window subrole is AXDialog")?
     }
+
+    // Verify that we can actually get position and size - this ensures the window
+    // element is valid and can be managed. Windows that can't provide these
+    // attributes are likely invalid or transient windows that shouldn't be managed.
+    window
+        .position()
+        .map_err(|_| "Window has no position or element is invalid")?;
+    window
+        .size()
+        .map_err(|_| "Window has no size or element is invalid")?;
 
     Ok(())
 }

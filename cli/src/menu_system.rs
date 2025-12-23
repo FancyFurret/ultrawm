@@ -40,7 +40,20 @@ pub fn init_unified_handler() {
         // Fallback: check if it's a command ID (for context menus using muda directly)
         if let Some(cmd_id) = id_str.strip_prefix("cmd:") {
             trace!("Context menu: triggering command '{}'", cmd_id);
-            ultrawm_core::trigger_command(cmd_id);
+            // Get context from stored context menu request
+            let context = {
+                use ultrawm_core::CommandContext;
+                if let Some(current_menu) = crate::context_menu::get_current_context_menu() {
+                    if let Some(window_id) = current_menu.target_window {
+                        Some(CommandContext::with_window(window_id))
+                    } else {
+                        Some(CommandContext::with_position(current_menu.position))
+                    }
+                } else {
+                    None
+                }
+            };
+            ultrawm_core::trigger_command_with_context(cmd_id, context);
         } else {
             trace!("No handler found for menu item: {}", id_str);
         }

@@ -29,7 +29,7 @@ pub struct ResizeHandle {
     /// Maximum coordinate along the drag axis that the handle is allowed to move to.
     pub max: i32,
     /// ID of the container that owns this handle
-    pub id: usize,
+    pub id: u64,
     /// Index of the child after this handle in the container's children list
     pub index: usize,
 }
@@ -41,7 +41,7 @@ impl ResizeHandle {
         orientation: HandleOrientation,
         min: i32,
         max: i32,
-        id: usize,
+        id: u64,
         index: usize,
     ) -> Self {
         Self {
