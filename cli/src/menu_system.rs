@@ -1,9 +1,9 @@
 use crate::menu_helpers::get_command_accelerator;
 use log::{trace, warn};
+use muda::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tray_icon::menu::{CheckMenuItem, MenuId as TrayMenuId, MenuItem as TrayMenuItem};
-use tray_icon::menu::{Menu as TrayMenu, MenuEvent as TrayMenuEvent, PredefinedMenuItem};
+use tray_icon::menu::MenuEvent as TrayMenuEvent;
 use ultrawm_core::Config;
 
 type CallbackFn = Box<dyn Fn() + Send + Sync>;
@@ -74,22 +74,29 @@ pub fn register_callback(id: String, callback: CallbackFn) {
     }
 }
 
-/// Builder for tray menus
-pub struct TrayMenuBuilder<'a> {
-    menu: &'a TrayMenu,
-    check_items: Arc<Mutex<HashMap<TrayMenuId, (CheckMenuItem, ConfigGetterFn)>>>,
+pub struct MenuBuilder {
+    menu: Menu,
+    has_window: bool,
+    // For tray menus: track check items for sync_with_config
+    check_items: Arc<Mutex<HashMap<String, (CheckMenuItem, ConfigGetterFn)>>>,
 }
 
-impl<'a> TrayMenuBuilder<'a> {
-    pub fn new(menu: &'a TrayMenu) -> Self {
+impl MenuBuilder {
+    pub fn new() -> Self {
         Self {
-            menu,
+            menu: Menu::new(),
+            has_window: false,
             check_items: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
+    pub fn with_window(mut self, has_window: bool) -> Self {
+        self.has_window = has_window;
+        self
+    }
+
     pub fn add_label(&mut self, text: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let item = TrayMenuItem::new(text, false, None);
+        let item = MenuItem::new(text, false, None);
         self.menu.append(&item)?;
         Ok(())
     }
@@ -104,20 +111,19 @@ impl<'a> TrayMenuBuilder<'a> {
         &mut self,
         cmd: &'static ultrawm_core::CommandDef,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        // Only add command if it doesn't require a window, or if we have a window
+        if cmd.requires_window && !self.has_window {
+            return Ok(());
+        }
+
         let accelerator = get_command_accelerator(cmd);
-        let item = TrayMenuItem::new(cmd.display_name, true, accelerator);
-        let id = item.id().clone();
-        let id_str = id.0.as_str().to_string();
-        self.menu.append(&item)?;
-
-        // Register callback that triggers the command
-        register_callback(
-            id_str,
-            Box::new(move || {
-                ultrawm_core::trigger_command(cmd.id);
-            }),
+        let item = MenuItem::with_id(
+            format!("cmd:{}", cmd.id),
+            cmd.display_name,
+            true,
+            accelerator,
         );
-
+        self.menu.append(&item)?;
         Ok(())
     }
 
@@ -125,7 +131,7 @@ impl<'a> TrayMenuBuilder<'a> {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        let item = TrayMenuItem::new(text, true, None);
+        let item = MenuItem::new(text, true, None);
         let id = item.id().clone();
         let id_str = id.0.as_str().to_string();
         self.menu.append(&item)?;
@@ -148,15 +154,15 @@ impl<'a> TrayMenuBuilder<'a> {
         let initial_value = config_getter(&Config::current());
         let item = CheckMenuItem::new(text, true, initial_value, None);
         let id = item.id().clone();
+        let id_str = id.0.as_str().to_string();
         self.menu.append(&item)?;
 
         // Store the check item and its config getter
         if let Ok(mut check_items_map) = self.check_items.lock() {
-            check_items_map.insert(id.clone(), (item, Box::new(config_getter.clone())));
+            check_items_map.insert(id_str.clone(), (item, Box::new(config_getter.clone())));
         }
 
         // Register toggle callback
-        let id_str = id.0.as_str().to_string();
         register_callback(
             id_str,
             Box::new(move || {
@@ -171,41 +177,13 @@ impl<'a> TrayMenuBuilder<'a> {
         Ok(())
     }
 
-    pub fn get_check_items(
-        &self,
-    ) -> Arc<Mutex<HashMap<TrayMenuId, (CheckMenuItem, ConfigGetterFn)>>> {
+    pub fn build(self) -> Menu {
+        self.menu
+    }
+
+    pub fn get_check_items(&self) -> Arc<Mutex<HashMap<String, (CheckMenuItem, ConfigGetterFn)>>> {
         self.check_items.clone()
     }
 }
 
-/// Builder for context menus (muda)
-pub struct ContextMenuBuilder {
-    menu: muda::Menu,
-}
-
-impl ContextMenuBuilder {
-    pub fn new() -> Self {
-        Self {
-            menu: muda::Menu::new(),
-        }
-    }
-
-    pub fn add_command(
-        &mut self,
-        cmd: &'static ultrawm_core::CommandDef,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let accelerator = get_command_accelerator(cmd);
-        let item = muda::MenuItem::with_id(
-            format!("cmd:{}", cmd.id),
-            cmd.display_name,
-            true,
-            accelerator,
-        );
-        self.menu.append(&item)?;
-        Ok(())
-    }
-
-    pub fn build(self) -> muda::Menu {
-        self.menu
-    }
-}
+pub type ContextMenuBuilder = MenuBuilder;

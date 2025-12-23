@@ -130,7 +130,9 @@ impl<'de, T: KeybindVariant> Deserialize<'de> for Keybind<T> {
 
         // Validate each combo using the variant's validate method
         for combo in &combos {
-            T::validate(combo)?;
+            if combo.keys().any() || combo.buttons().any() {
+                T::validate(combo)?;
+            }
         }
 
         Ok(Keybind {

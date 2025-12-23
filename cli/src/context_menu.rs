@@ -2,7 +2,8 @@ use crate::menu_system::ContextMenuBuilder;
 use log::{trace, warn};
 use ultrawm_core::{
     run_on_main_thread_blocking, ContextMenuRequest, Interceptor, Position,
-    AI_ORGANIZE_ALL_WINDOWS, AI_ORGANIZE_CURRENT_WINDOW,
+    AI_ORGANIZE_ALL_WINDOWS, AI_ORGANIZE_CURRENT_WINDOW, CLOSE_WINDOW, FLOAT_WINDOW,
+    MINIMIZE_WINDOW,
 };
 
 /// Initialize the context menu system
@@ -42,13 +43,21 @@ fn show_context_menu(
         *current = Some(request.clone());
     }
 
-    let mut menu_builder = ContextMenuBuilder::new();
+    let has_window = request.target_window.is_some();
+    let mut menu_builder = ContextMenuBuilder::new().with_window(has_window);
 
-    if request.target_window.is_some() {
-        menu_builder.add_command(&AI_ORGANIZE_CURRENT_WINDOW)?;
-    }
+    menu_builder.add_label(&format!("UltraWM {}", ultrawm_core::version()))?;
+    menu_builder.add_separator()?;
 
+    menu_builder.add_command(&AI_ORGANIZE_CURRENT_WINDOW)?;
     menu_builder.add_command(&AI_ORGANIZE_ALL_WINDOWS)?;
+
+    if has_window {
+        menu_builder.add_separator()?;
+        menu_builder.add_command(&FLOAT_WINDOW)?;
+        menu_builder.add_command(&CLOSE_WINDOW)?;
+        menu_builder.add_command(&MINIMIZE_WINDOW)?;
+    }
 
     let menu = menu_builder.build();
 

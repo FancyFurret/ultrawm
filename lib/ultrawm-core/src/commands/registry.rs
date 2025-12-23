@@ -86,17 +86,26 @@ pub fn build_commands(keybinds: &HashMap<String, KeyboardKeybind>) -> Vec<Comman
         .map(|registry| {
             registry
                 .iter()
-                .map(|def| {
+                .filter_map(|def| {
                     let keybind = keybinds
                         .get(def.id)
                         .cloned()
                         .unwrap_or_else(|| vec![def.default_keybind].into());
 
-                    Command {
+                    if keybind.combos().is_empty()
+                        || keybind
+                            .combos()
+                            .iter()
+                            .all(|combo| combo.keys().any() && combo.buttons().any())
+                    {
+                        return None;
+                    }
+
+                    Some(Command {
                         id: def.id.to_string(),
                         tracker: KeyboardKeybindTracker::new(keybind),
                         handler: def.handler,
-                    }
+                    })
                 })
                 .collect()
         })

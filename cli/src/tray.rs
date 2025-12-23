@@ -1,18 +1,17 @@
-use crate::menu_system::TrayMenuBuilder;
+use crate::menu_system::MenuBuilder;
 use log::warn;
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg::Options;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tray_icon::menu::{CheckMenuItem, Menu, MenuId};
-use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
+use tray_icon::{menu::CheckMenuItem, Icon, TrayIcon, TrayIconBuilder};
 use ultrawm_core::Config;
 
 type ConfigGetterFn = Box<dyn Fn(&Config) -> bool + Send + Sync>;
 
 pub struct UltraWMTray {
     _tray_icon: TrayIcon,
-    check_items: Arc<Mutex<HashMap<MenuId, (CheckMenuItem, ConfigGetterFn)>>>,
+    check_items: Arc<Mutex<HashMap<String, (CheckMenuItem, ConfigGetterFn)>>>,
 }
 
 impl UltraWMTray {
@@ -20,8 +19,7 @@ impl UltraWMTray {
         let icon_data = load_svg_icon()?;
         let icon = Icon::from_rgba(icon_data, 32, 32)?;
 
-        let tray_menu = Menu::new();
-        let mut menu_builder = TrayMenuBuilder::new(&tray_menu);
+        let mut menu_builder = MenuBuilder::new();
 
         // Version label
         menu_builder.add_label(&format!("UltraWM {}", ultrawm_core::version()))?;
@@ -104,9 +102,10 @@ impl UltraWMTray {
         })?;
 
         let check_items = menu_builder.get_check_items();
+        let menu = menu_builder.build();
 
         let tray_icon = TrayIconBuilder::new()
-            .with_menu(Box::new(tray_menu))
+            .with_menu(Box::new(menu))
             .with_tooltip("UltraWM")
             .with_icon(icon)
             .build()?;

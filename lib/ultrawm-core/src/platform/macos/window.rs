@@ -25,7 +25,7 @@ thread_local! {
             r#"
                 on focus_window(process_name)
                     tell application "System Events"
-                    set frontmost of process process_name to true
+                        set frontmost of process process_name to true
                     end tell
                 end focus_window"#,
         );
@@ -156,6 +156,27 @@ impl PlatformWindowImpl for MacOSPlatformWindow {
     fn set_always_on_top(&self, _always_on_top: bool) -> PlatformResult<()> {
         // TODO: This would require disabling SIP, injecting into Dock.app, and calling private APIs
         // See Yabai as reference
+        Ok(())
+    }
+
+    fn close(&self) -> PlatformResult<()> {
+        let close_button = self
+            .element
+            .get_close_button()
+            .map_err(|e| format!("Failed to get close button: {:?}", e))?;
+
+        const PRESS_ACTION: &str = "AXPress";
+        close_button
+            .perform_action(PRESS_ACTION)
+            .map_err(|e| format!("Failed to close window: {:?}", e))?;
+
+        Ok(())
+    }
+
+    fn minimize(&self) -> PlatformResult<()> {
+        self.element
+            .set_minimized(true)
+            .map_err(|e| format!("Failed to minimize window: {:?}", e))?;
         Ok(())
     }
 }

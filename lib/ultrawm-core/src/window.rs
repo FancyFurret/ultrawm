@@ -157,6 +157,14 @@ impl Window {
         self.platform_window.borrow().focus()
     }
 
+    pub fn close(&self) -> PlatformResult<()> {
+        self.platform_window.borrow().close()
+    }
+
+    pub fn minimize(&self) -> PlatformResult<()> {
+        self.platform_window.borrow().minimize()
+    }
+
     fn set_platform_bounds(&self, bounds: Bounds) -> PlatformResult<()> {
         self.platform_window.borrow().set_bounds(&bounds)
     }

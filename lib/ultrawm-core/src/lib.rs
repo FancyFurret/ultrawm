@@ -39,7 +39,7 @@ use crate::platform::input_state::InputState;
 use crate::wm::WMError;
 pub use commands::{
     register_commands, CommandContext, CommandDef, CommandId, AI_ORGANIZE_ALL_WINDOWS,
-    AI_ORGANIZE_CURRENT_WINDOW,
+    AI_ORGANIZE_CURRENT_WINDOW, CLOSE_WINDOW, FLOAT_WINDOW, MINIMIZE_WINDOW,
 };
 pub use config::Config;
 pub use event_loop_main::run_on_main_thread_blocking;

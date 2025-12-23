@@ -4,8 +4,8 @@ use crate::platform::macos::ffi::accessibility_attribute;
 use application_services::accessibility_ui::AXUIElement;
 use application_services::accessibility_value::AXValue;
 use application_services::{
-    kAXErrorFailure, kAXValueTypeCGPoint, kAXValueTypeCGSize, pid_t, AXError, AXUIElementRef,
-    AXValueRef, AXValueType,
+    kAXErrorFailure, kAXErrorSuccess, kAXValueTypeCGPoint, kAXValueTypeCGSize, pid_t, AXError,
+    AXUIElementRef, AXValueRef, AXValueType,
 };
 use core_foundation::array::CFArrayRef;
 use core_foundation::base::{FromVoid, ItemRef, TCFTypeRef, ToVoid};
@@ -265,6 +265,45 @@ impl AXUIElementExt {
 
     pub fn set_size(&self, size: CGSize) -> AXResult<()> {
         self.set_attribute_value(accessibility_attribute::size(), AXValueExt::from_size(size))
+    }
+
+    pub fn set_minimized(&self, minimized: bool) -> AXResult<()> {
+        let value = if minimized {
+            CFBoolean::true_value()
+        } else {
+            CFBoolean::false_value()
+        };
+        self.element
+            .set_attribute_value(
+                accessibility_attribute::minimized().as_concrete_TypeRef(),
+                value.as_CFTypeRef(),
+            )
+            .map_err(|e| e)
+    }
+
+    pub fn get_close_button(&self) -> AXResult<AXUIElementExt> {
+        self.copy_attribute_value::<AXUIElementExt>(CFString::from_static_string("AXCloseButton"))
+    }
+
+    pub fn perform_action(&self, action: &'static str) -> AXResult<()> {
+        let action_str = CFString::from_static_string(action);
+        unsafe {
+            extern "C" {
+                fn AXUIElementPerformAction(
+                    element: AXUIElementRef,
+                    action: core_foundation::string::CFStringRef,
+                ) -> application_services::AXError;
+            }
+            let error = AXUIElementPerformAction(
+                self.element.as_concrete_TypeRef(),
+                action_str.as_concrete_TypeRef(),
+            );
+            if error == kAXErrorSuccess {
+                Ok(())
+            } else {
+                Err(error)
+            }
+        }
     }
 }
 
