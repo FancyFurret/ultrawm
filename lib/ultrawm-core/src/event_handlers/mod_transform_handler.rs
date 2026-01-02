@@ -274,6 +274,7 @@ impl ModTransformHandler {
                 | ModTransformType::ResizeSymmetric(_)
         ) {
             wm.flush()?;
+            wm.try_save_layout();
         }
 
         Ok(())

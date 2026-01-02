@@ -132,6 +132,7 @@ impl ResizeHandleHandler {
         if let Some(mode) = Self::get_mode() {
             wm.resize_handle_moved(&handle, &pos, &mode)?;
             wm.flush()?;
+            wm.try_save_layout();
         }
 
         Ok(())
