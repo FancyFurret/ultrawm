@@ -720,8 +720,10 @@ impl WindowManager {
     }
 
     pub fn move_to_top(&mut self, id: WindowId) {
-        self.window_order.shift_remove(&id);
-        self.window_order.insert(id);
+        if self.all_windows.contains_key(&id) {
+            self.window_order.shift_remove(&id);
+            self.window_order.insert(id);
+        }
     }
 
     pub fn cleanup(&mut self) -> PlatformResult<()> {
