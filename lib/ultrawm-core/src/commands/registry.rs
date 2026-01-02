@@ -96,7 +96,7 @@ pub fn build_commands(keybinds: &HashMap<String, KeyboardKeybind>) -> Vec<Comman
                         || keybind
                             .combos()
                             .iter()
-                            .all(|combo| combo.keys().any() && combo.buttons().any())
+                            .all(|combo| !combo.keys().any())
                     {
                         return None;
                     }
