@@ -135,7 +135,7 @@ impl EventLoopMain {
         let mut panic_error: Option<String> = None;
 
         loop {
-            let exit = event_loop.pump_app_events(Some(Duration::from_millis(100)), &mut app);
+            let exit = event_loop.pump_app_events(Some(Duration::from_millis(1000)), &mut app);
             if matches!(exit, PumpStatus::Exit(_)) {
                 break;
             }
