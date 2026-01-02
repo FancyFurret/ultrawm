@@ -257,7 +257,7 @@ impl WindowManager {
 
         let old_workspace_id = self.get_workspace_with_window(&window).map(|w| w.id());
         let new_workspace_id = self.get_workspace_at_position(position)?.id();
-
+        
         let result = self
             .workspaces
             .get_mut(&new_workspace_id)
@@ -740,7 +740,8 @@ impl WindowManager {
         ));
 
         let workspace_name = workspace.name().to_string();
-        let new_workspace = Workspace::new::<ContainerTree>(
+        let new_workspace = Workspace::new_with_id::<ContainerTree>(
+            workspace_id,
             partition_bounds,
             workspace_name,
             Some(new_layout),
@@ -762,7 +763,8 @@ impl WindowManager {
     ) -> WMResult<()> {
         if !self.workspaces.contains_key(&serialized_workspace.id) {
             let partition = self.partitions.get(&partition_id).unwrap();
-            let workspace = Workspace::new::<ContainerTree>(
+            let workspace = Workspace::new_with_id::<ContainerTree>(
+                serialized_workspace.id,
                 partition.bounds().clone(),
                 serialized_workspace.name.clone(),
                 None,

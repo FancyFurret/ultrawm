@@ -28,6 +28,16 @@ impl Workspace {
         floating: Option<HashMap<WindowId, WindowRef>>,
     ) -> Self {
         let id = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        Self::new_with_id::<TLayout>(id, bounds, name, layout, floating)
+    }
+
+    pub fn new_with_id<TLayout: WindowLayout + 'static>(
+        id: WorkspaceId,
+        bounds: Bounds,
+        name: String,
+        layout: Option<Box<TLayout>>,
+        floating: Option<HashMap<WindowId, WindowRef>>,
+    ) -> Self {
         let layout = layout.unwrap_or_else(|| Box::new(TLayout::new(bounds)));
 
         let windows = layout

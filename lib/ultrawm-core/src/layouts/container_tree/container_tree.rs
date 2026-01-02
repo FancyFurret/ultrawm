@@ -116,15 +116,20 @@ impl ContainerTree {
 
         // Add the current container info
         let connector = if is_last { "└─ " } else { "├─ " };
+        let bounds = container.bounds();
         result.push_str(&format!(
-            "{}{}Container [{}] {} children\n",
+            "{}{}Container [{}] {} children bounds=({}x{} at {},{})\n",
             prefix,
             connector,
             match container.direction() {
                 Direction::Horizontal => "H",
                 Direction::Vertical => "V",
             },
-            container.children().len()
+            container.children().len(),
+            bounds.size.width,
+            bounds.size.height,
+            bounds.position.x,
+            bounds.position.y
         ));
 
         // Prepare prefix for children
@@ -145,12 +150,17 @@ impl ContainerTree {
                 }
                 ContainerChildRef::Window(window) => {
                     let connector = if is_last_child { "└─ " } else { "├─ " };
+                    let bounds = window.bounds();
                     result.push_str(&format!(
-                        "{}{}Window [{}] \"{}\"\n",
+                        "{}{}Window [{}] \"{}\" bounds=({}x{} at {},{})\n",
                         child_prefix,
                         connector,
                         window.id(),
-                        window.platform_window().title()
+                        window.platform_window().title(),
+                        bounds.size.width,
+                        bounds.size.height,
+                        bounds.position.x,
+                        bounds.position.y
                     ));
                 }
             }

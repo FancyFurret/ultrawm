@@ -44,7 +44,6 @@ impl ModTransformHandler {
             pos,
             drag_type
         );
-        wm.move_to_top(id);
 
         let window = wm.get_window(id)?;
         let floating = window.floating();
@@ -52,6 +51,7 @@ impl ModTransformHandler {
 
         // Focus the window asynchronously for floating windows only
         if floating {
+            wm.move_to_top(id);
             let platform_window = window.platform_window().clone();
             tokio::spawn(async move {
                 if let Err(e) = platform_window.focus() {

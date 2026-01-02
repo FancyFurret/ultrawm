@@ -110,7 +110,8 @@ pub fn deserialize_workspace(
         }
     }
 
-    let workspace = Workspace::new::<ContainerTree>(
+    let workspace = Workspace::new_with_id::<ContainerTree>(
+        serialized.id,
         partition.bounds().clone(),
         serialized.name.clone(),
         Some(layout),
