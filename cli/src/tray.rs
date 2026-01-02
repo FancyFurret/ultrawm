@@ -5,7 +5,7 @@ use resvg::usvg::Options;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tray_icon::{menu::CheckMenuItem, Icon, TrayIcon, TrayIconBuilder};
-use ultrawm_core::Config;
+use ultrawm_core::{Config, paths};
 
 type ConfigGetterFn = Box<dyn Fn(&Config) -> bool + Send + Sync>;
 
@@ -88,10 +88,20 @@ impl UltraWMTray {
             let path = Config::current()
                 .config_path
                 .clone()
-                .or_else(|| Config::default_config_path());
+                .or_else(|| paths::default_config_path());
 
             if let Some(path) = path {
                 open::that(path).unwrap_or_else(|e| warn!("Failed to open config file: {:?}", e));
+            }
+        })?;
+
+        menu_builder.add_separator()?;
+
+        menu_builder.add_item("Open Log", || {
+            if let Some(log_path) = paths::log_file_path() {
+                open::that(&log_path).unwrap_or_else(|e| warn!("Failed to open log file: {:?}", e));
+            } else {
+                warn!("Log file path not available");
             }
         })?;
 

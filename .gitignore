@@ -205,3 +205,4 @@ $RECYCLE.BIN/
 .cargo/cargo.toml
 current_layout.yaml
 TODO.md
+*.app

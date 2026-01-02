@@ -1,15 +1,39 @@
 use colored::*;
 use log::{Level, LevelFilter, Log, Metadata, Record};
-use std::sync::atomic::{AtomicBool, Ordering};
+use ultrawm_core::paths;
+use std::fs::{File, OpenOptions};
+use std::io::Write;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 
 pub struct UltraWMLogger {
     verbose: AtomicBool,
+    log_file: Arc<Mutex<Option<File>>>,
 }
 
 impl UltraWMLogger {
     pub fn new(verbose: bool) -> Self {
+        let log_path = paths::log_file_path();
+        let log_file = if let Some(path) = &log_path {
+            match OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(path)
+            {
+                Ok(file) => Some(file),
+                Err(e) => {
+                    eprintln!("Warning: Failed to open log file at {:?}: {}", path, e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         Self {
             verbose: AtomicBool::new(verbose),
+            log_file: Arc::new(Mutex::new(log_file)),
         }
     }
 
@@ -57,6 +81,35 @@ impl UltraWMLogger {
             }
         }
     }
+
+    fn format_log_plain(&self, record: &Record) -> String {
+        let level_str = match record.level() {
+            Level::Error => "[E]",
+            Level::Warn => "[W]",
+            Level::Info => "[I]",
+            Level::Debug => "[D]",
+            Level::Trace => "[T]",
+        };
+
+        let target = if !record.target().is_empty() {
+            let short_target = record
+                .target()
+                .split("::")
+                .last()
+                .unwrap_or(record.target());
+            format!("[{}]", short_target)
+        } else {
+            String::new()
+        };
+
+        format!(
+            "{} {}{} {}",
+            level_str,
+            target,
+            if !target.is_empty() { " " } else { "" },
+            record.args()
+        )
+    }
 }
 
 impl Log for UltraWMLogger {
@@ -70,7 +123,17 @@ impl Log for UltraWMLogger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            println!("{}", self.format_log(record));
+            let formatted = self.format_log(record);
+            println!("{}", formatted);
+            
+            // Write to log file
+            let plain_message = self.format_log_plain(record);
+            if let Ok(mut file_opt) = self.log_file.lock() {
+                if let Some(file) = file_opt.as_mut() {
+                    let _ = writeln!(file, "{}", plain_message);
+                    let _ = file.flush();
+                }
+            }
         }
     }
 

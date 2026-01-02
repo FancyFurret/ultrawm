@@ -1,6 +1,7 @@
 use crate::layouts::ContainerTree;
 use crate::layouts::WindowLayout;
 use crate::partition::{Partition, PartitionId};
+use crate::paths;
 use crate::platform::{Bounds, WindowId};
 use crate::window::WindowRef;
 use crate::wm::WindowManager;
@@ -9,7 +10,6 @@ use crate::Config;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize)]
 pub struct SerializedWindowManager {
@@ -157,11 +157,6 @@ fn extract_window_ids_recursive(value: &serde_yaml::Value, window_ids: &mut Vec<
     }
 }
 
-/// Get the path where layout should be saved
-pub fn layout_file_path() -> Option<PathBuf> {
-    dirs::data_local_dir().map(|dir| dir.join("UltraWM").join("layout.yaml"))
-}
-
 /// Save the current window manager layout to file
 pub fn save_layout(wm: &WindowManager) -> Result<(), Box<dyn std::error::Error>> {
     if !Config::persistence() {
@@ -171,7 +166,7 @@ pub fn save_layout(wm: &WindowManager) -> Result<(), Box<dyn std::error::Error>>
     let layout_data = serialize_wm(wm);
     let layout_yaml = serde_yaml::to_string(&layout_data)?;
 
-    if let Some(path) = layout_file_path() {
+    if let Some(path) = paths::layout_file_path() {
         // Create directory if it doesn't exist
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
@@ -191,7 +186,7 @@ pub fn load_layout() -> Result<Option<SerializedWindowManager>, Box<dyn std::err
         return Ok(None);
     }
 
-    if let Some(path) = layout_file_path() {
+    if let Some(path) = paths::layout_file_path() {
         if path.exists() {
             let contents = fs::read_to_string(&path)?;
             let layout: SerializedWindowManager = serde_yaml::from_str(&contents)?;
@@ -202,7 +197,7 @@ pub fn load_layout() -> Result<Option<SerializedWindowManager>, Box<dyn std::err
 }
 
 pub fn reset_layout() -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(path) = layout_file_path() {
+    if let Some(path) = paths::layout_file_path() {
         if path.exists() {
             fs::remove_file(&path)?;
         }
@@ -423,7 +418,7 @@ mod tests {
 
     #[test]
     fn test_layout_file_path() {
-        let path = layout_file_path();
+        let path = paths::layout_file_path();
 
         // Should return a path (assuming dirs crate works in test environment)
         if let Some(path) = path {

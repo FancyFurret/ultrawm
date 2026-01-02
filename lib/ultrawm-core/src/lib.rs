@@ -9,7 +9,7 @@ use crate::platform::{
 use crate::workspace::WorkspaceId;
 use log::error;
 use std::sync::mpsc;
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use std::{process, thread};
 
@@ -24,6 +24,7 @@ pub mod event_loop_wm;
 mod layouts;
 mod overlay_window;
 mod partition;
+pub mod paths;
 pub mod platform;
 mod resize_handle;
 mod serialization;
@@ -48,6 +49,9 @@ pub use platform::{ContextMenuRequest, Platform, Position, WindowId};
 
 static GLOBAL_EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
 
+// Panic handling: store panic message to be retrieved by main thread
+static PANIC_MESSAGE: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
+
 // Context menu callback registration
 type ContextMenuCallback = Box<dyn Fn(ContextMenuRequest) + Send + Sync>;
 static CONTEXT_MENU_CALLBACK: OnceLock<ContextMenuCallback> = OnceLock::new();
@@ -69,6 +73,51 @@ pub(crate) fn trigger_context_menu(request: ContextMenuRequest) {
 
 pub fn version() -> &'static str {
     option_env!("VERSION").unwrap_or("v0.0.0-dev")
+}
+
+/// Set up panic hook to catch panics from background threads
+pub fn setup_panic_handler() {
+    let panic_msg = Arc::new(Mutex::new(None::<String>));
+    PANIC_MESSAGE.set(panic_msg.clone()).ok();
+
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        // Call the default hook first to get proper backtrace/logging
+        default_hook(panic_info);
+
+        // Format the panic message
+        let message = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+            format!("Panic: {}", s)
+        } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+            format!("Panic: {}", s)
+        } else {
+            "Panic: unknown error".to_string()
+        };
+
+        // Try to send message to main thread if it's initialized
+        if let Some(sender) = crate::event_loop_main::MAIN_THREAD_TASK_SENDER.get() {
+            let _ = sender.send(crate::event_loop_main::MainThreadMessage::PanicError {
+                message: message.clone(),
+            });
+        }
+
+        // Also store it in case main thread isn't ready yet
+        if let Some(panic_msg_storage) = PANIC_MESSAGE.get() {
+            if let Ok(mut msg) = panic_msg_storage.lock() {
+                *msg = Some(message);
+            }
+        }
+    }));
+}
+
+/// Check if a panic occurred and retrieve the message
+pub fn check_panic() -> Option<String> {
+    if let Some(panic_msg) = PANIC_MESSAGE.get() {
+        if let Ok(mut msg) = panic_msg.lock() {
+            return msg.take();
+        }
+    }
+    None
 }
 
 pub fn reset_layout() -> UltraWMResult<()> {

@@ -1,4 +1,4 @@
-use crate::UltraWMResult;
+use crate::{UltraWMFatalError, UltraWMResult};
 use std::cell::RefCell;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Duration;
@@ -17,9 +17,12 @@ pub enum MainThreadMessage {
         task: Box<dyn FnOnce(&ActiveEventLoop) + Send>,
     },
     Shutdown,
+    PanicError {
+        message: String,
+    },
 }
 
-static MAIN_THREAD_TASK_SENDER: std::sync::OnceLock<Sender<MainThreadMessage>> =
+pub(crate) static MAIN_THREAD_TASK_SENDER: std::sync::OnceLock<Sender<MainThreadMessage>> =
     std::sync::OnceLock::new();
 
 static EVENT_LOOP_PROXY: std::sync::OnceLock<EventLoopProxy<MainThreadMessage>> =
@@ -101,6 +104,12 @@ where
         .expect("get_event_loop_blocking task was cancelled")
 }
 
+enum TaskResult {
+    Continue,
+    Shutdown,
+    Panic(String),
+}
+
 pub struct EventLoopMain {}
 
 impl EventLoopMain {
@@ -123,6 +132,7 @@ impl EventLoopMain {
 
         event_loop.set_control_flow(ControlFlow::Wait);
         let mut app = App::default();
+        let mut panic_error: Option<String> = None;
 
         loop {
             let exit = event_loop.pump_app_events(Some(Duration::from_millis(100)), &mut app);
@@ -131,16 +141,26 @@ impl EventLoopMain {
             }
 
             // Check for main thread tasks after waking up
-            if Self::process_main_thread_tasks() {
-                break;
+            match Self::process_main_thread_tasks() {
+                TaskResult::Continue => {}
+                TaskResult::Shutdown => break,
+                TaskResult::Panic(msg) => {
+                    crate::shutdown();
+                    panic_error = Some(msg);
+                    break;
+                }
             }
+        }
+
+        // If we exited due to a panic, return an error
+        if let Some(msg) = panic_error {
+            return Err(UltraWMFatalError::Error(msg));
         }
 
         Ok(())
     }
 
-    fn process_main_thread_tasks() -> bool {
-        let mut shutdown = false;
+    fn process_main_thread_tasks() -> TaskResult {
         MAIN_THREAD_TASK_RECEIVER.with(|cell| {
             if let Some(task_rx) = cell.borrow_mut().as_mut() {
                 while let Ok(message) = task_rx.try_recv() {
@@ -149,16 +169,17 @@ impl EventLoopMain {
                             task();
                         }
                         MainThreadMessage::Shutdown => {
-                            shutdown = true;
-                            return;
+                            return TaskResult::Shutdown;
+                        }
+                        MainThreadMessage::PanicError { message } => {
+                            return TaskResult::Panic(message);
                         }
                         _ => (),
                     }
                 }
             }
-        });
-
-        shutdown
+            TaskResult::Continue
+        })
     }
 
     pub fn shutdown() {

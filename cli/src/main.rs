@@ -1,3 +1,5 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 use log::{error, info, trace, warn};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::env;
@@ -7,6 +9,7 @@ use ultrawm_core::{config::Config, register_commands, UltraWMResult};
 mod accelerator;
 mod cli;
 mod context_menu;
+mod error_dialog;
 mod logger;
 mod menu_helpers;
 mod menu_system;
@@ -15,12 +18,28 @@ mod tray;
 use cli::parse_args;
 use tray::UltraWMTray;
 
-fn main() -> UltraWMResult<()> {
+fn main() {
+    // Initialize logger early (before error handling)
     let args = parse_args();
+    if let Err(e) = logger::init_logger(args.verbose) {
+        eprintln!("Failed to initialize logger: {}", e);
+        return;
+    }
 
-    // Initialize logger
-    logger::init_logger(args.verbose).expect("Failed to initialize logger");
+    // Run main logic and handle fatal errors with dialog
+    match run_main(args) {
+        Ok(()) => {}
+        Err(e) => {
+            log::error!("Fatal error: {:?}", e);
+            if ultrawm_core::check_panic().is_none() {
+                error_dialog::show_error(&e);
+            }
+            std::process::exit(1);
+        }
+    }
+}
 
+fn run_main(args: cli::Args) -> UltraWMResult<()> {
     info!("Starting UltraWM");
     trace!("Command: {}", env::args().collect::<Vec<_>>().join(" "));
 
@@ -108,6 +127,9 @@ fn main() -> UltraWMResult<()> {
     // Initialize context menu handler
     context_menu::init_context_menu();
     trace!("Context menu handler initialized");
+
+    // Set up panic handler to catch panics from background threads
+    ultrawm_core::setup_panic_handler();
 
     // Set up Ctrl+C handler
     ctrlc::set_handler(move || {

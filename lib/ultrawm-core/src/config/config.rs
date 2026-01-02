@@ -1,4 +1,4 @@
-use crate::commands;
+use crate::{commands, paths};
 use crate::config::config_serializer::serialize_config;
 use crate::config::{KeyboardKeybind, ModMouseKeybind, MouseKeybind};
 use log::{trace, warn};
@@ -177,15 +177,11 @@ static CURRENT_CONFIG: Lazy<Arc<RwLock<Config>>> =
     Lazy::new(|| Arc::new(RwLock::new(Config::default())));
 
 impl Config {
-    pub fn default_config_path() -> Option<PathBuf> {
-        dirs::config_dir().map(|dir| dir.join("UltraWM").join("config.yaml"))
-    }
-
     pub fn load(config_path: Option<&str>, save: bool) -> Result<Self, Box<dyn std::error::Error>> {
         let path = match config_path {
             Some(p) => PathBuf::from(p),
             None => {
-                Self::default_config_path().ok_or("Could not determine default config directory")?
+                paths::default_config_path().ok_or("Could not determine default config directory")?
             }
         };
 
