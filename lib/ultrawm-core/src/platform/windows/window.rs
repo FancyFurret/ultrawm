@@ -9,7 +9,7 @@ use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_
 use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 use windows::Win32::UI::WindowsAndMessaging::{
     BringWindowToTop, DeferWindowPos, GetForegroundWindow, GetWindowRect, GetWindowTextW,
-    GetWindowThreadProcessId, IsIconic, PostMessageW, SetForegroundWindow, SetWindowPos,
+    GetWindowThreadProcessId, IsIconic, IsWindow, PostMessageW, SetForegroundWindow, SetWindowPos,
     ShowWindow, HDWP, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
     SWP_NOZORDER, SW_MINIMIZE, SW_RESTORE, WM_CLOSE,
 };
@@ -327,5 +327,9 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
                 .map_err(|e| format!("Failed to minimize window: {}", e))?;
         }
         Ok(())
+    }
+
+    fn valid(&self) -> bool {
+        unsafe { IsWindow(self.hwnd).as_bool() }
     }
 }

@@ -10,7 +10,7 @@ use crate::workspace::{Workspace, WorkspaceId};
 use crate::workspace_animator::{WorkspaceAnimationConfig, WorkspaceAnimationThread};
 use crate::PlatformError;
 use indexmap::IndexSet;
-use log::{error, trace, warn};
+use log::{error, info, trace, warn};
 use std::collections::HashMap;
 use std::rc::Rc;
 use thiserror::Error;
@@ -314,6 +314,8 @@ impl WindowManager {
 
     /// Animated flush that sends dirty windows to the animation thread
     pub fn animated_flush(&mut self) -> PlatformResult<()> {
+        self.validate_workspaces();
+        
         for workspace in self.workspaces.values_mut() {
             for window in workspace.windows().values() {
                 window.flush_always_on_top()?;
@@ -404,6 +406,49 @@ impl WindowManager {
         self.animated_flush()?;
         self.try_save_layout();
         Ok(())
+    }
+
+    /// Validates all windows across all workspaces and removes invalid ones.
+    /// Returns the number of invalid windows that were removed.
+    pub fn validate_workspaces(&mut self) -> usize {
+        let mut invalid_windows = Vec::new();
+
+        for window in self.all_windows.values() {
+            if !window.valid() && !invalid_windows.contains(&window.id()) {
+                invalid_windows.push(window.id());
+            }
+        }
+
+        // Remove invalid windows
+        let removed_count = invalid_windows.len();
+        for id in &invalid_windows {
+            trace!("Removing invalid window: id={} title={:?}", id, {
+                if let Some(w) = self.all_windows.get(id) {
+                    w.title()
+                } else {
+                    "<unknown>".to_string()
+                }
+            });
+            
+            // Try to remove from workspace (may fail if not in workspace, that's ok)
+            if let Ok(window) = self.get_window(*id) {
+                if let Ok(workspace) = self.get_workspace_for_window_mut(id) {
+                    let _ = workspace.remove_window(&window);
+                }
+            }
+            
+            // Remove from all_windows
+            self.all_windows.remove(id);
+            self.window_order.shift_remove(id);
+        }
+
+        if removed_count > 0 {
+            // Flush and save layout after removing invalid windows
+            let _ = self.animated_flush();
+            self.try_save_layout();
+        }
+
+        removed_count
     }
 
     pub fn resize_window(&mut self, id: WindowId, bounds: &Bounds) -> WMResult<()> {
@@ -672,6 +717,7 @@ impl WindowManager {
             return Ok(());
         }
         self.needs_flush = false;
+        self.validate_workspaces();
         for workspace in self.workspaces.values_mut() {
             workspace.flush_windows()?;
         }

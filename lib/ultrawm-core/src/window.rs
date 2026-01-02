@@ -165,6 +165,10 @@ impl Window {
         self.platform_window.borrow().minimize()
     }
 
+    pub fn valid(&self) -> bool {
+        self.platform_window.borrow().valid()
+    }
+
     fn set_platform_bounds(&self, bounds: Bounds) -> PlatformResult<()> {
         self.platform_window.borrow().set_bounds(&bounds)
     }

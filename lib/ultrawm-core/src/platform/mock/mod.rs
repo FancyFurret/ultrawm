@@ -139,4 +139,14 @@ impl PlatformWindowImpl for MockPlatformWindow {
     fn set_always_on_top(&self, _always_on_top: bool) -> PlatformResult<()> {
         Ok(())
     }
+    fn close(&self) -> PlatformResult<()> {
+        Ok(())
+    }
+    fn minimize(&self) -> PlatformResult<()> {
+        Ok(())
+    }
+    fn valid(&self) -> bool {
+        // Mock windows are always valid
+        true
+    }
 }

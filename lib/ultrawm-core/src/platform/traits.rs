@@ -96,4 +96,8 @@ where
     fn set_always_on_top(&self, always_on_top: bool) -> PlatformResult<()>;
     fn close(&self) -> PlatformResult<()>;
     fn minimize(&self) -> PlatformResult<()>;
+
+    /// Checks if the window is still valid and can be queried/manipulated.
+    /// Returns false if the window has been closed, invalidated, or is otherwise inaccessible.
+    fn valid(&self) -> bool;
 }

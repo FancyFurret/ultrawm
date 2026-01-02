@@ -85,7 +85,7 @@ impl PlatformWindowImpl for MacOSPlatformWindow {
         let position = self
             .element
             .position()
-            .expect("Could not get window position");
+            .unwrap_or_else(|_| CGPoint::new(0.0, 0.0));
         let y_offset = MacOSPlatform::get_cgevent_y_offset();
         Position {
             x: position.x as i32,
@@ -94,7 +94,7 @@ impl PlatformWindowImpl for MacOSPlatformWindow {
     }
 
     fn size(&self) -> Size {
-        let size = self.element.size().expect("Could not get window size");
+        let size = self.element.size().unwrap_or_else(|_| CGSize::new(0.0, 0.0));
         Size {
             width: size.width as u32,
             height: size.height as u32,
@@ -178,6 +178,10 @@ impl PlatformWindowImpl for MacOSPlatformWindow {
             .set_minimized(true)
             .map_err(|e| format!("Failed to minimize window: {:?}", e))?;
         Ok(())
+    }
+
+    fn valid(&self) -> bool {
+        self.element.position().is_ok() && self.element.size().is_ok()
     }
 }
 
