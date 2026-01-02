@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::event_handlers::mod_transform_tracker::{
     ModTransformDragEvent, ModTransformTracker, ModTransformType,
 };
@@ -49,8 +50,8 @@ impl ModTransformHandler {
         let floating = window.floating();
         let tiled = !floating;
 
-        // Focus the window asynchronously for floating windows only
-        if floating {
+        // Focus the window asynchronously if enabled in config (for floating windows only)
+        if floating && Config::focus_on_drag() {
             let platform_window = window.platform_window().clone();
             tokio::spawn(async move {
                 if let Err(e) = platform_window.focus() {

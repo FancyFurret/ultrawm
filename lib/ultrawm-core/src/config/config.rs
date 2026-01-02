@@ -44,6 +44,8 @@ pub struct Config {
     pub float_new_windows: bool,
     /// Automatically focus windows when your mouse hovers over them
     pub focus_on_hover: bool,
+    /// Automatically focus windows when you start dragging them with a modifier key
+    pub focus_on_drag: bool,
     /// The number of frames per second for the tile preview animation
     pub tile_preview_fps: u32,
     /// How long tile preview animations take in milliseconds
@@ -265,6 +267,10 @@ impl Config {
         Self::current().focus_on_hover
     }
 
+    pub fn focus_on_drag() -> bool {
+        Self::current().focus_on_drag
+    }
+
     pub fn tile_preview_fps() -> u32 {
         Self::current().tile_preview_fps
     }
@@ -345,6 +351,7 @@ impl Default for Config {
             partition_gap: 40,
             float_new_windows: true,
             focus_on_hover: false,
+            focus_on_drag: false,
             tile_preview_fps: 30,
             tile_preview_animation_ms: 150,
             tile_preview_fade_animate: true,

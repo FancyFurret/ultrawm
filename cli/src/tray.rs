@@ -63,6 +63,12 @@ impl UltraWMTray {
             |c, v| c.focus_on_hover = v,
         )?;
 
+        menu_builder.add_config_check_item(
+            "Focus on Drag",
+            |c| c.focus_on_drag,
+            |c, v| c.focus_on_drag = v,
+        )?;
+
         menu_builder.add_separator()?;
 
         menu_builder.add_item("Reload Config", || {
