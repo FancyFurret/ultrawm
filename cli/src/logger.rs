@@ -1,10 +1,12 @@
 use colored::*;
 use log::{Level, LevelFilter, Log, Metadata, Record};
-use ultrawm_core::paths;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
+use ultrawm_core::paths;
 
 pub struct UltraWMLogger {
     verbose: AtomicBool,
@@ -125,7 +127,7 @@ impl Log for UltraWMLogger {
         if self.enabled(record.metadata()) {
             let formatted = self.format_log(record);
             println!("{}", formatted);
-            
+
             // Write to log file
             let plain_message = self.format_log_plain(record);
             if let Ok(mut file_opt) = self.log_file.lock() {

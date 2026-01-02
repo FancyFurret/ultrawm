@@ -10,5 +10,10 @@ pub fn show_error(error: &UltraWMFatalError) {
         UltraWMFatalError::WMError(e) => format!("{}", e),
     };
 
-    let _ = DialogBuilder::message().set_level(MessageLevel::Error).set_title(title).set_text(&message).alert().show();
+    let _ = DialogBuilder::message()
+        .set_level(MessageLevel::Error)
+        .set_title(title)
+        .set_text(&message)
+        .alert()
+        .show();
 }

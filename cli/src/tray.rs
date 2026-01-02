@@ -5,7 +5,7 @@ use resvg::usvg::Options;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tray_icon::{menu::CheckMenuItem, Icon, TrayIcon, TrayIconBuilder};
-use ultrawm_core::{Config, paths};
+use ultrawm_core::{paths, Config};
 
 type ConfigGetterFn = Box<dyn Fn(&Config) -> bool + Send + Sync>;
 

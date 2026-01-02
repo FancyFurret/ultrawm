@@ -1,5 +1,4 @@
 pub use container_tree::*;
-pub use serialization::SerializedContainerTree;
 
 use crate::{
     layouts::container_tree::container::{ContainerChildRef, ContainerWindowRef},

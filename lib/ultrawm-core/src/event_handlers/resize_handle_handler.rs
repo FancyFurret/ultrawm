@@ -128,7 +128,7 @@ impl ResizeHandleHandler {
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
         self.overlay.hide();
-        
+
         if let Some(mode) = Self::get_mode() {
             wm.resize_handle_moved(&handle, &pos, &mode)?;
             wm.flush()?;

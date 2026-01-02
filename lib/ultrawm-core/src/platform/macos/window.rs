@@ -94,7 +94,10 @@ impl PlatformWindowImpl for MacOSPlatformWindow {
     }
 
     fn size(&self) -> Size {
-        let size = self.element.size().unwrap_or_else(|_| CGSize::new(0.0, 0.0));
+        let size = self
+            .element
+            .size()
+            .unwrap_or_else(|_| CGSize::new(0.0, 0.0));
         Size {
             width: size.width as u32,
             height: size.height as u32,

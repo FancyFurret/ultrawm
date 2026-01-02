@@ -304,6 +304,66 @@ impl Container {
         b.set_parent(a_parent.self_ref());
     }
 
+    /// Collapses this container if it has only one child and is not the root.
+    pub fn collapse(&self) {
+        if self.children().len() != 1 || self.parent().is_none() {
+            return;
+        }
+
+        let parent = self.parent().unwrap();
+        let self_ref = self.self_ref().upgrade().unwrap();
+        let child = self.children_mut().pop().unwrap();
+        self.ratios.borrow_mut().pop();
+        let self_index = parent
+            .index_of_child(&ContainerChildRef::Container(self_ref.clone()))
+            .unwrap();
+
+        match child {
+            // If it's a container, add all of its children to the parent
+            ContainerChildRef::Container(c) => {
+                for child in c.children().iter().rev() {
+                    let grandchild = child.clone();
+                    grandchild.set_parent(parent.self_ref());
+                    parent.children_mut().insert(self_index, grandchild);
+                    parent.insert_ratio_at_index(self_index);
+                }
+                parent.remove_child(&ContainerChildRef::Container(self_ref));
+            }
+
+            // If it's a window, just add it to the parent
+            ContainerChildRef::Window(w) => {
+                parent.replace_child(
+                    &ContainerChildRef::Container(self_ref),
+                    ContainerChildRef::Window(w.clone()),
+                );
+                parent.collapse();
+            }
+        };
+    }
+
+    /// Recursively collapses all containers in the tree that have only one child.
+    /// This should be called after operations like deserialization to normalize the tree.
+    pub fn collapse_tree(&self) {
+        let child_containers: Vec<ContainerRef> = self
+            .children()
+            .iter()
+            .filter_map(|child| {
+                if let ContainerChildRef::Container(container) = child {
+                    Some(container.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        
+        for container in child_containers {
+            container.collapse_tree();
+        }
+        
+        // Then collapse ourselves
+        self.collapse();
+    }
+
     pub fn remove_child(&self, child: &ContainerChildRef) {
         // Remove the child and its corresponding ratio weight
         if let Some(index) = self.index_of_child(child) {
@@ -314,37 +374,8 @@ impl Container {
             }
         }
 
-        // If there is only one child left, remove ourselves
-        if self.children().len() == 1 && self.parent().is_some() {
-            let parent = self.parent().unwrap();
-            let self_ref = self.self_ref().upgrade().unwrap();
-            let child = self.children_mut().pop().unwrap();
-            self.ratios.borrow_mut().pop();
-            let self_index = parent
-                .index_of_child(&ContainerChildRef::Container(self_ref.clone()))
-                .unwrap();
-
-            match child {
-                // If it's a container, add all of its children to the parent
-                ContainerChildRef::Container(c) => {
-                    for child in c.children().iter().rev() {
-                        let grandchild = child.clone();
-                        grandchild.set_parent(parent.self_ref());
-                        parent.children_mut().insert(self_index, grandchild);
-                        parent.insert_ratio_at_index(self_index);
-                    }
-                    parent.remove_child(&ContainerChildRef::Container(self_ref));
-                }
-
-                // If it's a window, just add it to the parent
-                ContainerChildRef::Window(w) => {
-                    parent.replace_child(
-                        &ContainerChildRef::Container(self_ref),
-                        ContainerChildRef::Window(w.clone()),
-                    );
-                }
-            };
-        }
+        // After removing a child, check if we should collapse
+        self.collapse();
     }
 
     pub fn equalize_ratios(&self) {

@@ -4,7 +4,7 @@ use crate::platform::{
 };
 use std::mem;
 use std::sync::atomic::Ordering;
-use windows::Win32::Foundation::{HWND, RECT};
+use windows::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
 use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -313,8 +313,7 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
 
     fn close(&self) -> PlatformResult<()> {
         unsafe {
-            PostMessageW(self.hwnd, WM_CLOSE, None, None)
-                .ok()
+            PostMessageW(Some(self.hwnd), WM_CLOSE, WPARAM(0), LPARAM(0))
                 .map_err(|e| format!("Failed to close window: {}", e))?;
         }
         Ok(())
@@ -330,6 +329,6 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
     }
 
     fn valid(&self) -> bool {
-        unsafe { IsWindow(self.hwnd).as_bool() }
+        unsafe { IsWindow(Some(self.hwnd)).as_bool() }
     }
 }

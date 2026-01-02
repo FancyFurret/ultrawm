@@ -101,6 +101,8 @@ impl ContainerTree {
             windows_map.len()
         );
 
+        // Collapse redundant containers (e.g., containers with only one child)
+        root.collapse_tree();
         root.recalculate();
 
         Some(Self {

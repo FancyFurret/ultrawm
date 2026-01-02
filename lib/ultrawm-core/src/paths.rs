@@ -40,4 +40,3 @@ pub fn ensure_config_dir() -> Option<PathBuf> {
         Some(dir)
     })
 }
-

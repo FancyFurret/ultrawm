@@ -55,7 +55,10 @@ impl NativeTransformTracker {
                 let window = match wm.get_window(*id) {
                     Ok(w) => w,
                     Err(e) => {
-                        warn!("WindowTransformStarted: id={} -> ignored: window not found: {:?}", id, e);
+                        warn!(
+                            "WindowTransformStarted: id={} -> ignored: window not found: {:?}",
+                            id, e
+                        );
                         let tracked: Vec<_> = wm
                             .workspaces()
                             .values()

@@ -66,7 +66,7 @@ pub(crate) fn deserialize_container(
     windows_map: &mut HashMap<WindowId, ContainerWindowRef>,
     parent: Option<ContainerRef>,
 ) -> Option<ContainerRef> {
-    if serialized.children.is_empty() {
+    if serialized.children.is_empty() && parent.is_some() {
         return None;
     }
 
@@ -88,21 +88,9 @@ pub(crate) fn deserialize_container(
                     windows_map,
                     Some(container.clone()),
                 ) {
-                    // Check how many children the returned container has
-                    let child_count = child.children().len();
-
-                    if child_count == 0 {
+                    // Check if the child container is empty (shouldn't happen, but handle it)
+                    if child.children().is_empty() {
                         indices_to_remove.push(index);
-                    } else if child_count == 1 && parent_ref.is_some() {
-                        let single_child = child.children()[0].clone();
-                        match single_child {
-                            ContainerChildRef::Container(grandchild_container) => {
-                                container.add_container(grandchild_container);
-                            }
-                            ContainerChildRef::Window(grandchild_window) => {
-                                container.add_window(grandchild_window);
-                            }
-                        }
                     } else {
                         container.add_container(child);
                     }
@@ -134,7 +122,7 @@ pub(crate) fn deserialize_container(
     container.set_ratios(ratios);
 
     // If no children were successfully added, return None
-    if container.children().is_empty() {
+    if container.children().is_empty() && parent_ref.is_some() {
         return None;
     }
 

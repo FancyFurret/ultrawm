@@ -1,6 +1,6 @@
-use crate::{commands, paths};
 use crate::config::config_serializer::serialize_config;
 use crate::config::{KeyboardKeybind, ModMouseKeybind, MouseKeybind};
+use crate::{commands, paths};
 use log::{trace, warn};
 use once_cell::sync::Lazy;
 use schemars::JsonSchema;
@@ -180,9 +180,8 @@ impl Config {
     pub fn load(config_path: Option<&str>, save: bool) -> Result<Self, Box<dyn std::error::Error>> {
         let path = match config_path {
             Some(p) => PathBuf::from(p),
-            None => {
-                paths::default_config_path().ok_or("Could not determine default config directory")?
-            }
+            None => paths::default_config_path()
+                .ok_or("Could not determine default config directory")?,
         };
 
         if !path.exists() {

@@ -93,10 +93,7 @@ pub fn build_commands(keybinds: &HashMap<String, KeyboardKeybind>) -> Vec<Comman
                         .unwrap_or_else(|| vec![def.default_keybind].into());
 
                     if keybind.combos().is_empty()
-                        || keybind
-                            .combos()
-                            .iter()
-                            .all(|combo| !combo.keys().any())
+                        || keybind.combos().iter().all(|combo| !combo.keys().any())
                     {
                         return None;
                     }

@@ -10,7 +10,7 @@ use crate::workspace::{Workspace, WorkspaceId};
 use crate::workspace_animator::{WorkspaceAnimationConfig, WorkspaceAnimationThread};
 use crate::PlatformError;
 use indexmap::IndexSet;
-use log::{error, info, trace, warn};
+use log::{error, trace, warn};
 use std::collections::HashMap;
 use std::rc::Rc;
 use thiserror::Error;
@@ -110,7 +110,7 @@ impl WindowManager {
         };
 
         // Try to load saved layout
-        let has_saved_layout = if let Ok(Some(saved_layout)) = load_layout() {
+        if let Ok(Some(saved_layout)) = load_layout() {
             for serialized_partition in saved_layout.partitions {
                 // Find partition by name
                 let partition_id = match wm
@@ -140,25 +140,20 @@ impl WindowManager {
                     }
                 }
             }
-            true
-        } else {
-            false
-        };
+        }
 
-        // Create default workspaces only if we don't have a saved layout
-        if !has_saved_layout {
-            for partition in wm.partitions.values_mut() {
-                if partition.current_workspace().is_none() {
-                    let workspace = Workspace::new::<ContainerTree>(
-                        partition.bounds().clone(),
-                        "Default".to_string(),
-                        None,
-                        None,
-                    );
-                    let workspace_id = workspace.id();
-                    wm.workspaces.insert(workspace_id, workspace);
-                    partition.assign_workspace(workspace_id);
-                }
+        // Ensure all partitions have a workspace assigned
+        for partition in wm.partitions.values_mut() {
+            if partition.current_workspace().is_none() {
+                let workspace = Workspace::new::<ContainerTree>(
+                    partition.bounds().clone(),
+                    "Default".to_string(),
+                    None,
+                    None,
+                );
+                let workspace_id = workspace.id();
+                wm.workspaces.insert(workspace_id, workspace);
+                partition.assign_workspace(workspace_id);
             }
         }
 
@@ -257,7 +252,7 @@ impl WindowManager {
 
         let old_workspace_id = self.get_workspace_with_window(&window).map(|w| w.id());
         let new_workspace_id = self.get_workspace_at_position(position)?.id();
-        
+
         let result = self
             .workspaces
             .get_mut(&new_workspace_id)
@@ -315,7 +310,7 @@ impl WindowManager {
     /// Animated flush that sends dirty windows to the animation thread
     pub fn animated_flush(&mut self) -> PlatformResult<()> {
         self.validate_workspaces();
-        
+
         for workspace in self.workspaces.values_mut() {
             for window in workspace.windows().values() {
                 window.flush_always_on_top()?;
@@ -429,14 +424,14 @@ impl WindowManager {
                     "<unknown>".to_string()
                 }
             });
-            
+
             // Try to remove from workspace (may fail if not in workspace, that's ok)
             if let Ok(window) = self.get_window(*id) {
                 if let Ok(workspace) = self.get_workspace_for_window_mut(id) {
                     let _ = workspace.remove_window(&window);
                 }
             }
-            
+
             // Remove from all_windows
             self.all_windows.remove(id);
             self.window_order.shift_remove(id);
