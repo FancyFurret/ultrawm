@@ -12,7 +12,7 @@ cd "${WORKSPACE_ROOT}"
 # Get the version from Cargo.toml
 VERSION=$(grep '^version' cli/Cargo.toml | cut -d '"' -f 2)
 APP_NAME="UltraWM"
-APP_BUNDLE="${APP_NAME}.app"
+APP_BUNDLE="target/release/${APP_NAME}.app"
 CONTENTS_DIR="${APP_BUNDLE}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
 RESOURCES_DIR="${CONTENTS_DIR}/Resources"
