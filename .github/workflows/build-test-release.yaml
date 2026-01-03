@@ -72,6 +72,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+      - name: Restore executable permissions
+        run: |
+          cd artifacts
+          # Restore executable bit for macOS app bundle binary
+          find . -name "UltraWM" -path "*/UltraWM.app/Contents/MacOS/*" -exec chmod +x {} \;
       - name: Prepare artifacts for release
         run: |
           mkdir -p release
