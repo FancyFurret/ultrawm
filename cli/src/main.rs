@@ -19,8 +19,16 @@ use cli::parse_args;
 use tray::UltraWMTray;
 
 fn main() {
-    // Initialize logger early (before error handling)
+    // Parse args first to check for console flag
     let args = parse_args();
+
+    // On Windows, allocate console if requested
+    #[cfg(target_os = "windows")]
+    if args.console {
+        allocate_console();
+    }
+
+    // Initialize logger early (before error handling)
     if let Err(e) = logger::init_logger(args.verbose) {
         eprintln!("Failed to initialize logger: {}", e);
         return;
@@ -176,4 +184,29 @@ fn setup_config_watcher(config_path: PathBuf) -> UltraWMResult<RecommendedWatche
         .map_err(|e| format!("Failed to watch config file: {:?}", e))?;
 
     Ok(watcher)
+}
+
+#[cfg(target_os = "windows")]
+fn allocate_console() {
+    use windows::Win32::System::Console::*;
+    unsafe {
+        // First try to attach to the parent console (if running from terminal)
+        let attach_result = AttachConsole(u32::MAX);
+
+        if attach_result.is_ok() {
+            // Successfully attached to parent console
+            // Redirect stdout, stderr, and stdin to the console
+            let _ = std::io::stdout();
+            let _ = std::io::stderr();
+            let _ = std::io::stdin();
+        } else {
+            // No parent console, allocate a new one
+            if AllocConsole().is_ok() {
+                // Redirect stdout, stderr, and stdin to the new console
+                let _ = std::io::stdout();
+                let _ = std::io::stderr();
+                let _ = std::io::stdin();
+            }
+        }
+    }
 }

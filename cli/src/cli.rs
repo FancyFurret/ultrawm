@@ -42,6 +42,9 @@ pub struct Args {
         help = "Enable verbose logging (includes trace and info levels)"
     )]
     pub verbose: bool,
+
+    #[arg(long = "console", help = "Run in a console window (Windows only)")]
+    pub console: bool,
 }
 
 impl Default for Args {
@@ -53,6 +56,7 @@ impl Default for Args {
             no_persistence: false,
             reset_layout: false,
             verbose: false,
+            console: false,
         }
     }
 }
