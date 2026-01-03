@@ -39,12 +39,9 @@ pub type PlatformResult<T> = Result<T, PlatformError>;
 
 #[derive(Debug)]
 pub enum WMEvent {
-    /// A new window has been opened. *If needed*, can also be sent when a window is shown after
-    /// being hidden.
+    /// A new window has been opened. Also sent when a window is shown after being minimized.
     WindowOpened(PlatformWindow),
     WindowClosed(WindowId),
-    WindowShown(WindowId),
-    WindowHidden(WindowId),
     WindowFocused(WindowId),
     /// The window has begun to be moved or resized. Preferably only sent once per window
     /// transformation, but may be sent multiple times. Extra events will be ignored.

@@ -225,19 +225,6 @@ impl WindowManager {
         Ok(())
     }
 
-    pub fn unhide_window(&mut self, id: WindowId) -> WMResult<()> {
-        let window = self.get_window(id)?;
-
-        // If already in a workspace, nothing to do
-        if self.get_workspace_with_window(&window).is_some() {
-            return Ok(());
-        }
-
-        window.update_bounds();
-        self.track_window(window)?;
-        Ok(())
-    }
-
     pub fn tile_window(&mut self, id: WindowId, position: &Position) -> WMResult<()> {
         let window = self.get_window(id)?;
         let was_floating = window.floating();
@@ -387,6 +374,17 @@ impl WindowManager {
         self.animated_flush()?;
         self.move_to_top(window.id());
         self.try_save_layout();
+        Ok(())
+    }
+
+    pub fn hide_window(&mut self, id: WindowId) -> WMResult<()> {
+        let window = self.get_window(id)?;
+
+        if let Ok(workspace) = self.get_workspace_for_window_mut(&id) {
+            workspace.remove_window(&window)?;
+            self.animated_flush()?;
+            self.try_save_layout();
+        }
         Ok(())
     }
 

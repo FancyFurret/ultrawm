@@ -133,8 +133,8 @@ unsafe extern "system" fn win_event_hook_proc(
 
     let event = match event {
         EVENT_SYSTEM_MOVESIZESTART => WMEvent::WindowTransformStarted(window.id()),
-        EVENT_SYSTEM_MINIMIZESTART => WMEvent::WindowHidden(window.id()),
-        EVENT_SYSTEM_MINIMIZEEND => WMEvent::WindowShown(window.id()),
+        EVENT_SYSTEM_MINIMIZESTART => WMEvent::WindowClosed(window.id()),
+        EVENT_SYSTEM_MINIMIZEEND => WMEvent::WindowOpened(window.clone()),
         EVENT_OBJECT_SHOW => WMEvent::WindowOpened(window.clone()),
         EVENT_OBJECT_FOCUS => WMEvent::WindowFocused(window.id()),
         EVENT_OBJECT_DESTROY => WMEvent::WindowClosed(window.id()),

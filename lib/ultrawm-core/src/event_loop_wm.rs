@@ -167,12 +167,7 @@ impl EventLoopWM {
                         warn!("Could not track window: {e}");
                     });
             }
-            WMEvent::WindowShown(id) => {
-                self.wm.unhide_window(*id).unwrap_or_else(|e| {
-                    warn!("Could not unhide window: {e}");
-                });
-            }
-            WMEvent::WindowClosed(id) | WMEvent::WindowHidden(id) => {
+            WMEvent::WindowClosed(id) => {
                 self.wm.remove_window(*id).unwrap_or_else(|_| {});
             }
             WMEvent::WindowFocused(id) => {

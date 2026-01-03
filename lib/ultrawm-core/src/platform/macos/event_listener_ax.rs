@@ -144,7 +144,7 @@ impl EventListenerAX {
                 }
 
                 let window = MacOSPlatformWindow::new(window)?;
-                self.dispatcher.send(WMEvent::WindowShown(window.id()));
+                self.dispatcher.send(WMEvent::WindowOpened(window));
             }
             return Ok(());
         } else if notification == notification::application_hidden() {
@@ -154,7 +154,7 @@ impl EventListenerAX {
                 }
 
                 let window = MacOSPlatformWindow::new(window)?;
-                self.dispatcher.send(WMEvent::WindowHidden(window.id()));
+                self.dispatcher.send(WMEvent::WindowClosed(window.id()));
             }
             return Ok(());
         }
@@ -179,9 +179,9 @@ impl EventListenerAX {
 
             WMEvent::WindowOpened(window)
         } else if notification == notification::window_miniaturized() {
-            WMEvent::WindowHidden(window.id())
+            WMEvent::WindowClosed(window.id())
         } else if notification == notification::window_deminiaturized() {
-            WMEvent::WindowShown(window.id())
+            WMEvent::WindowOpened(window)
         } else if notification == notification::window_moved() {
             WMEvent::WindowTransformStarted(window.id()) // TODO: Too many times
         } else if notification == notification::window_resized() {
