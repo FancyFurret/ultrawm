@@ -46,8 +46,6 @@ fn main() {
 
         if let Err(e) = convert_png_to_icns(png_path, &icns_path, out_dir) {
             eprintln!("cargo:warning=Failed to convert PNG to ICNS: {}", e);
-        } else {
-            println!("cargo:warning=Converted PNG to ICNS format");
         }
     }
 }

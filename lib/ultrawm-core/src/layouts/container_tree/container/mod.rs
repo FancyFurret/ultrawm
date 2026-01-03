@@ -355,11 +355,11 @@ impl Container {
                 }
             })
             .collect();
-        
+
         for container in child_containers {
             container.collapse_tree();
         }
-        
+
         // Then collapse ourselves
         self.collapse();
     }
