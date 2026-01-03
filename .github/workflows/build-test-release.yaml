@@ -42,13 +42,26 @@ jobs:
         run: cargo build --release --verbose
       - name: Run tests
         run: cargo test --release --verbose --all
-      - name: Upload artifact
-        if: success()
+      - name: Build macOS app bundle
+        if: matrix.os == 'macos-latest'
+        run: |
+          chmod +x cli/build_macos_app.sh
+          ./cli/build_macos_app.sh
+      - name: Upload binary artifact (Windows)
+        if: matrix.os == 'windows-latest' && success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.archive }}
           path: |
             target/release/${{ matrix.binary }}
+          if-no-files-found: error
+      - name: Upload app bundle artifact (macOS)
+        if: matrix.os == 'macos-latest' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: |
+            UltraWM.app
           if-no-files-found: error
 
   release:
@@ -71,8 +84,9 @@ jobs:
           mkdir -p release
           cd artifacts
           for dir in */; do
+            dirname=$(basename "$dir")
             cd "$dir"
-            zip -r "../../release/$(basename "$dir")-${{ env.VERSION }}.zip" .
+            zip -r "../../release/${dirname}-${{ env.VERSION }}.zip" .
             cd ..
           done
       - name: Generate release notes
