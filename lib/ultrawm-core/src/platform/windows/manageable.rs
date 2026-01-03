@@ -15,6 +15,11 @@ pub fn window_is_manageable(window: &WindowsPlatformWindow) -> ObserveResult {
         return Err("Window is not visible")?;
     }
 
+    let title = window.title();
+    if title.is_empty() {
+        return Err("Window title is empty")?;
+    }
+
     unsafe {
         if !IsWindowVisible(hwnd).as_bool() {
             Err("Window is not visible")?

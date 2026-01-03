@@ -226,10 +226,7 @@ impl WindowManager {
     }
 
     pub fn unhide_window(&mut self, id: WindowId) -> WMResult<()> {
-        let window = match self.all_windows.get(&id) {
-            Some(w) => w.clone(),
-            None => return Ok(()),
-        };
+        let window = self.get_window(id)?;
 
         // If already in a workspace, nothing to do
         if self.get_workspace_with_window(&window).is_some() {
@@ -395,6 +392,7 @@ impl WindowManager {
 
     pub fn remove_window(&mut self, id: WindowId) -> WMResult<()> {
         let window = self.get_window(id)?;
+        self.all_windows.remove(&id);
 
         let workspace = self.get_workspace_for_window_mut(&id)?;
         workspace.remove_window(&window)?;
@@ -468,10 +466,10 @@ impl WindowManager {
     }
 
     pub fn get_window(&self, id: WindowId) -> WMResult<WindowRef> {
-        self.all_windows.get(&id).cloned().ok_or_else(|| {
-            error!("Window not found :*( :* : {id}");
-            WMError::WindowNotFound(id)
-        })
+        self.all_windows
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| WMError::WindowNotFound(id))
     }
 
     pub fn get_all_windows(&self) -> Vec<WindowRef> {
@@ -610,10 +608,11 @@ impl WindowManager {
     pub fn find_window_at_position(&self, position: &Position) -> Option<WindowRef> {
         let all_windows = self.get_all_windows();
 
-        // Find the last window (highest priority) that contains the position
+        // Find the last window (highest priority) that contains the position and is visible
         let found = all_windows
             .into_iter()
             .rev()
+            .filter(|w| w.visible())
             .find(|w| w.bounds().contains(position))?;
 
         if found.tiled() {

@@ -4,6 +4,7 @@ use crate::platform::{
     Bounds, CursorType, Display, DisplayId, MouseButton, PlatformImpl, PlatformResult,
     PlatformWindow, Position,
 };
+use log::warn;
 use std::sync::atomic::{AtomicI32, AtomicIsize, Ordering};
 use windows::core::BOOL;
 use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
@@ -127,7 +128,8 @@ impl PlatformImpl for WindowsPlatform {
     }
 
     fn start_window_bounds_batch(window_count: u32) -> PlatformResult<()> {
-        let hdswp = unsafe { BeginDeferWindowPos(window_count as i32) }.unwrap();
+        let hdswp = unsafe { BeginDeferWindowPos(window_count as i32) }
+            .map_err(|e| format!("Failed to begin window batch: {}", e))?;
         WINDOW_BATCH.store(hdswp.0 as isize, Ordering::Relaxed);
         Ok(())
     }
@@ -137,8 +139,13 @@ impl PlatformImpl for WindowsPlatform {
             return Ok(()); // No batch in progress
         }
 
-        unsafe { EndDeferWindowPos(HDWP(hdswp_val as *mut _)) }.unwrap();
+        let result = unsafe { EndDeferWindowPos(HDWP(hdswp_val as *mut _)) };
         WINDOW_BATCH.store(0, Ordering::Relaxed);
+
+        if let Err(e) = result {
+            warn!("Failed to end window batch: {}", e);
+        }
+
         Ok(())
     }
 

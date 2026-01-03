@@ -222,7 +222,7 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
                     adjusted_height,
                     flags,
                 )
-                .unwrap();
+                .map_err(|e| format!("Failed to set window bounds: {}", e))?;
             } else {
                 SetWindowPos(
                     self.hwnd,
@@ -233,7 +233,7 @@ impl PlatformWindowImpl for WindowsPlatformWindow {
                     adjusted_height,
                     flags,
                 )
-                .unwrap();
+                .map_err(|e| format!("Failed to set window bounds: {}", e))?;
             }
         }
 
