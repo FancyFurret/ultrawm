@@ -2,13 +2,11 @@ use skia_safe::Image;
 use std::time::Duration;
 use winit::window::Window;
 
+use crate::overlay::OverlayWindowConfig;
 use crate::platform::PlatformWindow;
-use crate::{
-    overlay_window::OverlayWindowConfig,
-    platform::{
-        Bounds, CursorType, Display, EventDispatcher, MouseButton, PlatformResult, Position,
-        ProcessId, Size, WindowId,
-    },
+use crate::platform::{
+    Bounds, CursorType, Display, EventDispatcher, MouseButton, PlatformResult, Position,
+    ProcessId, Size, WindowId,
 };
 
 pub unsafe trait PlatformEventsImpl

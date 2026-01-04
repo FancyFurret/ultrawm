@@ -1,4 +1,4 @@
-use crate::overlay_window::OverlayWindowConfig;
+use crate::overlay::OverlayWindowConfig;
 use crate::platform::PlatformOverlayImpl;
 use crate::platform::{
     Bounds, Display, EventDispatcher, PlatformEventsImpl, PlatformImpl, PlatformResult,

@@ -22,7 +22,7 @@ mod event_handlers;
 mod event_loop_main;
 pub mod event_loop_wm;
 mod layouts;
-mod overlay_window;
+pub mod overlay;
 mod partition;
 pub mod paths;
 pub mod platform;

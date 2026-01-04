@@ -1,4 +1,4 @@
-use crate::overlay_window::OverlayWindowConfig;
+use crate::overlay::OverlayWindowConfig;
 use crate::platform::windows::ffi::enable_composition_blur;
 use crate::platform::{Bounds, PlatformOverlayImpl, PlatformResult, WindowId};
 use log::error;

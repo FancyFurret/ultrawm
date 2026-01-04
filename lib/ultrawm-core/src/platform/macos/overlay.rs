@@ -1,5 +1,5 @@
 use crate::event_loop_main::run_on_main_thread_blocking;
-use crate::overlay_window::OverlayWindowConfig;
+use crate::overlay::OverlayWindowConfig;
 use crate::platform::{Bounds, PlatformOverlayImpl, PlatformResult, WindowId};
 use block2::StackBlock;
 use core_foundation::date::CFTimeInterval;

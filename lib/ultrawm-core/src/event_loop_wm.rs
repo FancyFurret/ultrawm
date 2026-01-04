@@ -6,6 +6,7 @@ use crate::event_handlers::mod_transform_handler::ModTransformHandler;
 use crate::event_handlers::native_transform_handler::NativeTransformHandler;
 use crate::event_handlers::resize_handle_handler::ResizeHandleHandler;
 use crate::event_handlers::EventHandler;
+use crate::overlay;
 use crate::platform::PlatformWindowImpl;
 use crate::window::Window;
 use crate::wm::WMError;
@@ -73,6 +74,8 @@ impl EventLoopWM {
                 trace!("  {} - {:?}", w.id(), w.title());
             }
         }
+
+        overlay::init();
 
         let mut event_loop = Self::new().await?;
 

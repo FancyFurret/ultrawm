@@ -2,18 +2,16 @@ use crate::config::Config;
 use crate::event_handlers::resize_handle_tracker::{ResizeHandleEvent, ResizeHandleTracker};
 use crate::event_handlers::EventHandler;
 use crate::event_loop_wm::{WMOperationError, WMOperationResult};
-use crate::overlay_window::{
-    OverlayWindow, OverlayWindowBackgroundStyle, OverlayWindowBorderStyle, OverlayWindowConfig,
-};
+use crate::overlay;
+use crate::overlay::overlays::ResizeHandleOverlay;
 use crate::platform::input_state::InputState;
 use crate::platform::traits::PlatformImpl;
 use crate::platform::{CursorType, Platform, Position, WMEvent};
 use crate::resize_handle::{ResizeHandle, ResizeMode};
 use crate::wm::WindowManager;
-use skia_safe::Color;
 
 pub struct ResizeHandleHandler {
-    overlay: OverlayWindow,
+    overlay: overlay::Overlay,
     tracker: ResizeHandleTracker,
     hover_resize_handle: Option<ResizeHandle>,
     handles_enabled: bool,
@@ -24,26 +22,10 @@ impl ResizeHandleHandler {
     pub async fn new() -> Self {
         let config = Config::current();
 
-        let overlay = OverlayWindow::new(OverlayWindowConfig {
-            fade_animation_ms: if config.tile_preview_fade_animate {
-                config.tile_preview_animation_ms
-            } else {
-                0
-            },
-            move_animation_ms: 0,
-            animation_fps: config.tile_preview_fps,
-            border_radius: 20.0,
-            blur: true,
-            background: Some(OverlayWindowBackgroundStyle {
-                color: Color::from_rgb(35, 35, 35),
-                opacity: 0.75,
-            }),
-            border: Some(OverlayWindowBorderStyle {
-                width: 10,
-                color: Color::from_rgb(30, 30, 30),
-            }),
-        })
-        .await;
+        let overlay = overlay::manager()
+            .add(Box::new(ResizeHandleOverlay::new()))
+            .await
+            .expect("Failed to create resize handle overlay");
 
         Self {
             overlay,

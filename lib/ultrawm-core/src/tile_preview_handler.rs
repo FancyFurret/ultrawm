@@ -1,41 +1,23 @@
-use crate::config::Config;
 use crate::event_loop_wm::{WMOperationError, WMOperationResult};
-use crate::overlay_window::{OverlayWindow, OverlayWindowBackgroundStyle, OverlayWindowConfig};
+use crate::overlay;
+use crate::overlay::overlays::TilePreviewOverlay;
 use crate::platform::{Bounds, Position, WindowId};
 use crate::wm::WindowManager;
-use skia_safe::Color;
 
 /// Handles tile preview overlay and tile position validation logic for drag/tile operations.
 pub struct TilePreviewHandler {
-    overlay: OverlayWindow,
+    overlay: overlay::Overlay,
     last_preview_bounds: Option<Bounds>,
     valid_tile_position: bool,
 }
 
 impl TilePreviewHandler {
     pub async fn new() -> Self {
-        let config = Config::current();
-        let overlay = OverlayWindow::new(OverlayWindowConfig {
-            fade_animation_ms: if config.tile_preview_fade_animate {
-                config.tile_preview_animation_ms
-            } else {
-                0
-            },
-            move_animation_ms: if config.tile_preview_move_animate {
-                config.tile_preview_animation_ms
-            } else {
-                0
-            },
-            animation_fps: config.tile_preview_fps,
-            border_radius: 20.0,
-            blur: true,
-            background: Some(OverlayWindowBackgroundStyle {
-                color: Color::from_rgb(35, 35, 35),
-                opacity: 0.5,
-            }),
-            border: None,
-        })
-        .await;
+        let overlay = overlay::manager()
+            .add(Box::new(TilePreviewOverlay::new()))
+            .await
+            .expect("Failed to create tile preview overlay");
+
         Self {
             overlay,
             last_preview_bounds: None,
@@ -80,7 +62,7 @@ impl TilePreviewHandler {
     }
 
     pub fn is_shown(&self) -> bool {
-        self.overlay.shown()
+        self.last_preview_bounds.is_some()
     }
 
     pub fn valid_tile_position(&self) -> bool {

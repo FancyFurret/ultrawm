@@ -46,8 +46,8 @@ pub struct Config {
     pub focus_on_hover: bool,
     /// Automatically focus windows when you start dragging them with a modifier key
     pub focus_on_drag: bool,
-    /// The number of frames per second for the tile preview animation
-    pub tile_preview_fps: u32,
+    /// The number of frames per second for overlay animations (tile preview, resize handles, etc.)
+    pub overlay_animation_fps: u32,
     /// How long tile preview animations take in milliseconds
     pub tile_preview_animation_ms: u32,
     /// Enable fade in/out effects for tile previews
@@ -271,8 +271,8 @@ impl Config {
         Self::current().focus_on_drag
     }
 
-    pub fn tile_preview_fps() -> u32 {
-        Self::current().tile_preview_fps
+    pub fn overlay_animation_fps() -> u32 {
+        Self::current().overlay_animation_fps
     }
 
     pub fn tile_preview_animation_ms() -> u32 {
@@ -352,7 +352,7 @@ impl Default for Config {
             float_new_windows: true,
             focus_on_hover: false,
             focus_on_drag: false,
-            tile_preview_fps: 30,
+            overlay_animation_fps: 60,
             tile_preview_animation_ms: 150,
             tile_preview_fade_animate: true,
             tile_preview_move_animate: true,
