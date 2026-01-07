@@ -7,13 +7,19 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicU64;
 
+pub use super::{Direction, Side};
+
 mod container;
 mod container_tree;
 pub(crate) mod serialization;
 
 pub type ContainerId = u64;
 
-static CONTAINER_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+static TREE_NODE_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+pub fn next_tree_node_id() -> u64 {
+    TREE_NODE_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
 
 // Percentage of half the container size that the mouse must be within
 const MOUSE_SWAP_THRESHOLD: f32 = 1.0;
@@ -21,40 +27,6 @@ const MOUSE_SPLIT_THRESHOLD: f32 = 0.6;
 const MOUSE_ADD_TO_PARENT_THRESHOLD: f32 = 0.2;
 const MOUSE_SPLIT_PREVIEW_RATIO: f32 = 0.5;
 const MOUSE_ADD_TO_PARENT_PREVIEW_RATIO: f32 = 0.25;
-
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Direction {
-    Horizontal,
-    Vertical,
-}
-
-impl Direction {
-    fn opposite(&self) -> Self {
-        match self {
-            Direction::Horizontal => Direction::Vertical,
-            Direction::Vertical => Direction::Horizontal,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Side {
-    Left,
-    Right,
-    Top,
-    Bottom,
-}
-
-impl Side {
-    fn direction(&self) -> Direction {
-        match self {
-            Side::Left | Side::Right => Direction::Horizontal,
-            Side::Top | Side::Bottom => Direction::Vertical,
-        }
-    }
-}
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ResizeDirection {

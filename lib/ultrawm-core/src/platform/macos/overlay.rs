@@ -1,4 +1,4 @@
-use crate::event_loop_main::run_on_main_thread_blocking;
+use crate::event_loop_main::run_on_main_thread;
 use crate::overlay::OverlayWindowConfig;
 use crate::platform::{Bounds, PlatformOverlayImpl, PlatformResult, WindowId};
 use block2::StackBlock;
@@ -60,7 +60,7 @@ impl PlatformOverlayImpl for MacOSPlatformOverlay {
     }
 
     fn set_window_bounds(window_id: WindowId, bounds: Bounds) -> PlatformResult<()> {
-        run_on_main_thread_blocking(move || {
+        run_on_main_thread(move || {
             let ns_window = get_ns_window_from_id(window_id).unwrap();
             let cg_rect: CGRect = bounds.into();
             let new_frame = NSRect::new(
@@ -85,7 +85,7 @@ impl PlatformOverlayImpl for MacOSPlatformOverlay {
         bounds: Bounds,
     ) -> PlatformResult<bool> {
         let duration_seconds = duration.as_secs_f64();
-        run_on_main_thread_blocking(move || {
+        run_on_main_thread(move || {
             let ns_window = get_ns_window_from_id(window_id).unwrap();
             CATransaction::begin();
             CATransaction::setAnimationDuration(duration_seconds as CFTimeInterval);
@@ -103,7 +103,7 @@ impl PlatformOverlayImpl for MacOSPlatformOverlay {
         opacity: f32,
     ) -> PlatformResult<bool> {
         let duration_seconds = duration.as_secs_f64();
-        run_on_main_thread_blocking(move || unsafe {
+        run_on_main_thread(move || unsafe {
             let ns_window = get_ns_window_from_id(window_id.clone()).unwrap();
             let completion_block = StackBlock::new(move || {
                 let ns_window = get_ns_window_from_id(window_id).unwrap();

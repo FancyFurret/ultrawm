@@ -5,8 +5,8 @@ use winit::window::Window;
 use crate::overlay::OverlayWindowConfig;
 use crate::platform::PlatformWindow;
 use crate::platform::{
-    Bounds, CursorType, Display, EventDispatcher, MouseButton, PlatformResult, Position,
-    ProcessId, Size, WindowId,
+    Bounds, CursorType, Display, EventDispatcher, MouseButton, PlatformResult, Position, ProcessId,
+    Size, WindowId,
 };
 
 pub unsafe trait PlatformEventsImpl

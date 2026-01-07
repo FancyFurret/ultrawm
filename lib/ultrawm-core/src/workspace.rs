@@ -16,6 +16,7 @@ pub struct Workspace {
     name: String,
     layout: Box<dyn WindowLayout>,
     windows: HashMap<WindowId, WindowRef>,
+    cached_handles: Vec<ResizeHandle>,
 }
 
 static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -52,11 +53,14 @@ impl Workspace {
             }
         }
 
+        let cached_handles = layout.resize_handles();
+
         Self {
             id,
             name,
             layout,
             windows,
+            cached_handles,
         }
     }
 
@@ -70,6 +74,11 @@ impl Workspace {
 
     pub fn layout(&self) -> &Box<dyn WindowLayout> {
         &self.layout
+    }
+
+    pub fn set_bounds(&mut self, bounds: Bounds) {
+        self.layout.set_bounds(bounds);
+        self.refresh_resize_handles();
     }
 
     pub fn windows(&self) -> &HashMap<WindowId, WindowRef> {
@@ -93,6 +102,7 @@ impl Workspace {
         if old.is_some() {
             if self.layout.windows().iter().any(|w| w.id() == window.id()) {
                 self.layout.remove_window(window)?;
+                self.refresh_resize_handles();
             }
         }
         Ok(())
@@ -106,6 +116,7 @@ impl Workspace {
         self.windows.remove(&old_window.id());
         self.windows.insert(new_window.id(), new_window.clone());
         self.layout.replace_window(old_window, new_window)?;
+        self.refresh_resize_handles();
         Ok(())
     }
 
@@ -117,6 +128,7 @@ impl Workspace {
         let action = self.layout.insert_window(window, position)?;
         window.set_floating(false);
         self.windows.insert(window.id(), window.clone());
+        self.refresh_resize_handles();
         Ok(action)
     }
 
@@ -128,6 +140,7 @@ impl Workspace {
         let action = self.layout.insert_relative(window, target)?;
         window.set_floating(false);
         self.windows.insert(window.id(), window.clone());
+        self.refresh_resize_handles();
         Ok(action)
     }
 
@@ -138,15 +151,18 @@ impl Workspace {
 
         window.set_floating(true);
         self.windows.insert(window.id(), window.clone());
+        self.refresh_resize_handles();
         Ok(())
     }
 
     pub fn resize_window(&mut self, window: &WindowRef, bounds: &Bounds) -> LayoutResult<()> {
         if let Some(managed_window) = self.windows.get_mut(&window.id()) {
             if managed_window.floating() {
+                self.refresh_resize_handles();
                 window.set_bounds(bounds.clone());
                 Ok(())
             } else {
+                self.refresh_resize_handles();
                 self.layout.resize_window(window, bounds)
             }
         } else {
@@ -168,8 +184,12 @@ impl Workspace {
         self.layout.serialize()
     }
 
-    pub fn resize_handles(&self) -> Vec<ResizeHandle> {
-        self.layout.resize_handles()
+    pub fn resize_handles(&self) -> &[ResizeHandle] {
+        &self.cached_handles
+    }
+
+    pub fn refresh_resize_handles(&mut self) {
+        self.cached_handles = self.layout.resize_handles();
     }
 
     pub fn resize_handle_moved(
@@ -178,11 +198,14 @@ impl Workspace {
         position: &Position,
         mode: &ResizeMode,
     ) -> bool {
-        self.layout.resize_handle_moved(handle, position, mode)
+        let result = self.layout.resize_handle_moved(handle, position, mode);
+        self.refresh_resize_handles();
+        result
     }
 
     pub fn config_changed(&mut self) -> PlatformResult<()> {
         self.layout.config_changed();
+        self.refresh_resize_handles();
         self.flush_windows()
     }
 

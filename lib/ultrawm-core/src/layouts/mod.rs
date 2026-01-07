@@ -3,10 +3,53 @@ use crate::resize_handle::{ResizeHandle, ResizeMode};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
 pub use container_tree::*;
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
 
 pub mod container_tree;
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Direction {
+    Horizontal,
+    Vertical,
+}
+
+impl Direction {
+    pub fn opposite(&self) -> Self {
+        match self {
+            Direction::Horizontal => Direction::Vertical,
+            Direction::Vertical => Direction::Horizontal,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Side {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+impl Side {
+    pub fn direction(&self) -> Direction {
+        match self {
+            Side::Left | Side::Right => Direction::Horizontal,
+            Side::Top | Side::Bottom => Direction::Vertical,
+        }
+    }
+
+    pub fn is_before(&self) -> bool {
+        matches!(self, Side::Left | Side::Top)
+    }
+
+    pub fn is_after(&self) -> bool {
+        matches!(self, Side::Right | Side::Bottom)
+    }
+}
 
 pub type PlacementTarget = serde_yaml::Value;
 
@@ -90,4 +133,6 @@ pub trait WindowLayout: Debug {
     fn debug_layout(&self) -> String;
 
     fn config_changed(&mut self) {}
+
+    fn set_bounds(&mut self, bounds: Bounds);
 }

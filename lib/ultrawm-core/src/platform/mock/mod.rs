@@ -19,6 +19,13 @@ unsafe impl PlatformEventsImpl for MockPlatformEvents {
 }
 
 pub struct MockPlatform;
+
+impl MockPlatform {
+    pub fn get_max_screen_top() -> i32 {
+        1080
+    }
+}
+
 impl PlatformImpl for MockPlatform {
     fn list_visible_windows() -> PlatformResult<Vec<PlatformWindow>> {
         Ok(vec![])

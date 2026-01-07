@@ -1,11 +1,16 @@
 use crate::config::Config;
 use crate::event_handlers::mod_mouse_keybind_tracker::{KeybindEvent, ModMouseKeybindTracker};
 use crate::event_handlers::EventHandler;
+use crate::event_loop_main::run_on_main_thread;
 use crate::event_loop_wm::WMOperationResult;
-use crate::platform::{ContextMenuRequest, Position, WMEvent, WindowId};
+use crate::menu::{show_menu_at_position, MenuBuilder};
+use crate::platform::{ContextMenuRequest, Position, WMEvent};
 use crate::wm::WindowManager;
-use crate::GLOBAL_EVENT_DISPATCHER;
-use log::trace;
+use crate::{
+    CommandContext, AI_ORGANIZE_ALL_WINDOWS, AI_ORGANIZE_CURRENT_WINDOW, CLOSE_WINDOW,
+    FLOAT_WINDOW, MINIMIZE_WINDOW,
+};
+use log::{trace, warn};
 
 pub struct ContextMenuHandler {
     tracker: ModMouseKeybindTracker,
@@ -18,21 +23,6 @@ impl ContextMenuHandler {
             tracker: ModMouseKeybindTracker::new(
                 config.mod_transform_bindings.context_menu.clone(),
             ),
-        }
-    }
-
-    fn show_context_menu(&self, position: Position, target_window: Option<WindowId>) {
-        trace!(
-            "Showing context menu at {:?}, target_window: {:?}",
-            position,
-            target_window
-        );
-
-        if let Some(dispatcher) = GLOBAL_EVENT_DISPATCHER.get() {
-            dispatcher.send(WMEvent::ShowContextMenu(ContextMenuRequest {
-                position,
-                target_window,
-            }));
         }
     }
 }
@@ -49,7 +39,20 @@ impl EventHandler for ContextMenuHandler {
                         pos,
                         target_window
                     );
-                    self.show_context_menu(pos, target_window);
+
+                    run_on_main_thread(move || {
+                        show_context_menu(
+                            ContextMenuRequest {
+                                position: pos.clone(),
+                                target_window,
+                            },
+                            pos.clone(),
+                        )
+                        .unwrap_or_else(|e| {
+                            warn!("Failed to show context menu: {:?}", e);
+                        });
+                    });
+
                     return Ok(true);
                 }
                 _ => {}
@@ -65,4 +68,35 @@ impl EventHandler for ContextMenuHandler {
 
         Ok(false)
     }
+}
+
+fn show_context_menu(
+    request: ContextMenuRequest,
+    position: Position,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let context = if let Some(window_id) = request.target_window {
+        Some(CommandContext::with_window(window_id))
+    } else {
+        Some(CommandContext::with_position(request.position.clone()))
+    };
+
+    let mut menu_builder = MenuBuilder::new().with_context(context);
+
+    menu_builder.add_label(&format!("UltraWM {}", crate::version()))?;
+    menu_builder.add_separator()?;
+
+    menu_builder.add_command(&AI_ORGANIZE_CURRENT_WINDOW)?;
+    menu_builder.add_command(&AI_ORGANIZE_ALL_WINDOWS)?;
+
+    if request.target_window.is_some() {
+        menu_builder.add_separator()?;
+        menu_builder.add_command(&FLOAT_WINDOW)?;
+        menu_builder.add_command(&CLOSE_WINDOW)?;
+        menu_builder.add_command(&MINIMIZE_WINDOW)?;
+    }
+
+    let menu = menu_builder.build();
+    show_menu_at_position(&menu, &position);
+
+    Ok(())
 }

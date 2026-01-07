@@ -28,10 +28,10 @@ pub struct ResizeHandle {
     pub min: i32,
     /// Maximum coordinate along the drag axis that the handle is allowed to move to.
     pub max: i32,
-    /// ID of the container that owns this handle
-    pub id: u64,
-    /// Index of the child after this handle in the container's children list
-    pub index: usize,
+    /// ID of the element before (left/top of) this handle
+    pub before_id: u64,
+    /// ID of the element after (right/bottom of) this handle
+    pub after_id: u64,
 }
 
 impl ResizeHandle {
@@ -41,8 +41,8 @@ impl ResizeHandle {
         orientation: HandleOrientation,
         min: i32,
         max: i32,
-        id: u64,
-        index: usize,
+        before_id: u64,
+        after_id: u64,
     ) -> Self {
         Self {
             center,
@@ -50,8 +50,8 @@ impl ResizeHandle {
             orientation,
             min,
             max,
-            id,
-            index,
+            before_id,
+            after_id,
         }
     }
 
@@ -60,7 +60,7 @@ impl ResizeHandle {
         coord.clamp(self.min, self.max)
     }
 
-    // bounds calculation helper for overlay preview
+    /// Returns the bounds for a visual preview of this handle.
     pub fn preview_bounds(&self, thickness: u32) -> Bounds {
         match self.orientation {
             HandleOrientation::Vertical => Bounds::new(
@@ -75,6 +75,22 @@ impl ResizeHandle {
                 self.length,
                 thickness,
             ),
+        }
+    }
+
+    /// Check if a position is within the handle's hit area.
+    pub fn contains(&self, position: &Position, thickness: i32) -> bool {
+        match self.orientation {
+            HandleOrientation::Vertical => {
+                let dx = (position.x - self.center.x).abs();
+                let dy = (position.y - self.center.y).abs();
+                dx <= thickness / 2 && dy <= self.length as i32 / 2
+            }
+            HandleOrientation::Horizontal => {
+                let dx = (position.x - self.center.x).abs();
+                let dy = (position.y - self.center.y).abs();
+                dy <= thickness / 2 && dx <= self.length as i32 / 2
+            }
         }
     }
 }

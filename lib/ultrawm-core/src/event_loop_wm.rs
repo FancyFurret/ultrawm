@@ -119,11 +119,6 @@ impl EventLoopWM {
         self.handle_window_event(&event);
         self.dispatch_to_handlers(&event);
 
-        if let WMEvent::ShowContextMenu(request) = &event {
-            crate::trigger_context_menu(request.clone());
-            return LoopControl::Continue;
-        }
-
         if let WMEvent::LoadLayoutToWorkspace(workspace_id, layout) = event {
             self.wm
                 .load_layout_to_workspace(workspace_id, &layout)

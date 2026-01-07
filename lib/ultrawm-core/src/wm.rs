@@ -652,11 +652,11 @@ impl WindowManager {
     }
 
     /// Returns a list of drag handles for the workspace that covers the given position.
-    pub fn resize_handles(&self, position: &Position) -> Vec<ResizeHandle> {
+    pub fn resize_handles(&self, position: &Position) -> &[ResizeHandle] {
         if let Ok(workspace) = self.get_workspace_at_position(position) {
             workspace.resize_handles()
         } else {
-            Vec::new()
+            &[]
         }
     }
 
@@ -674,7 +674,7 @@ impl WindowManager {
     fn resize_handle_at_position_internal(&self, position: &Position) -> Option<ResizeHandle> {
         let thickness = Config::resize_handle_width() as i32;
         self.resize_handles(position)
-            .into_iter()
+            .iter()
             .find(|h| match h.orientation {
                 crate::resize_handle::HandleOrientation::Vertical => {
                     let dx = (position.x - h.center.x).abs();
@@ -687,6 +687,7 @@ impl WindowManager {
                     dy <= thickness / 2 && dx <= h.length as i32 / 2
                 }
             })
+            .cloned()
     }
 
     pub fn resize_handle_moved(

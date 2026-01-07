@@ -13,6 +13,13 @@ pub enum ContainerChildRef {
 }
 
 impl ContainerChildRef {
+    pub fn id(&self) -> u64 {
+        match self {
+            ContainerChildRef::Container(container) => container.id(),
+            ContainerChildRef::Window(window) => window.id(),
+        }
+    }
+
     pub fn bounds(&self) -> Bounds {
         match self {
             ContainerChildRef::Container(container) => container.bounds(),

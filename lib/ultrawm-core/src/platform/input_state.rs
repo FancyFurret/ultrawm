@@ -47,13 +47,16 @@ impl ButtonState {
 pub struct InputState;
 
 impl InputState {
-    pub fn initialize() {
-        let _ = MOUSE_BUTTON_STATES.lock().map(|mut states| {
-            states.clear();
-        });
-        let _ = KEY_STATES.lock().map(|mut states| {
-            states.clear();
-        });
+    pub fn initialize() -> Result<(), String> {
+        MOUSE_BUTTON_STATES
+            .lock()
+            .map_err(|e| format!("Failed to lock mouse button states: {}", e))?
+            .clear();
+        KEY_STATES
+            .lock()
+            .map_err(|e| format!("Failed to lock key states: {}", e))?
+            .clear();
+        Ok(())
     }
 
     pub fn handle_event(event: &WMEvent) {

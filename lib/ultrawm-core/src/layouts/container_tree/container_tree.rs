@@ -361,56 +361,30 @@ impl ContainerTree {
         preview_bounds
     }
 
-    /// Finds a container by its ID
+    /// Finds a child (container or window) by its tree node ID.
+    pub fn find_child(&self, id: u64) -> Option<ContainerChildRef> {
+        self.find_child_recursive(&self.root, id)
+    }
+
+    fn find_child_recursive(&self, container: &ContainerRef, id: u64) -> Option<ContainerChildRef> {
+        for child in container.children().iter() {
+            if child.id() == id {
+                return Some(child.clone());
+            }
+            if let ContainerChildRef::Container(c) = child {
+                if let Some(found) = self.find_child_recursive(c, id) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
+
+    /// Finds a container by its ID.
     pub fn find_container(&self, id: ContainerId) -> Option<ContainerRef> {
-        let mut result = None;
-        self.find_container_recursive(&self.root, id, &mut result);
-        result
-    }
-
-    fn find_container_recursive(
-        &self,
-        container: &ContainerRef,
-        id: ContainerId,
-        out: &mut Option<ContainerRef>,
-    ) {
-        if container.id() == id {
-            *out = Some(container.clone());
-            return;
-        }
-
-        // Recurse into children containers
-        for child in container.children().iter() {
-            if let ContainerChildRef::Container(c) = child {
-                self.find_container_recursive(c, id, out);
-            }
-        }
-    }
-
-    /// Finds the container that owns the given drag handle.
-    /// Returns the container and the index of the child that the handle is after.
-    fn find_container_for_handle(&self, id: ContainerId) -> Option<ContainerRef> {
-        let mut result = None;
-        self.find_container_for_handle_recursive(&self.root, id, &mut result);
-        result
-    }
-
-    fn find_container_for_handle_recursive(
-        &self,
-        container: &ContainerRef,
-        id: ContainerId,
-        out: &mut Option<ContainerRef>,
-    ) {
-        if container.id() == id {
-            *out = Some(container.clone());
-            return;
-        }
-
-        // Recurse into children containers
-        for child in container.children().iter() {
-            if let ContainerChildRef::Container(c) = child {
-                self.find_container_for_handle_recursive(c, id, out);
-            }
+        match self.find_child(id)? {
+            ContainerChildRef::Container(c) => Some(c),
+            ContainerChildRef::Window(_) => None,
         }
     }
 
@@ -423,6 +397,7 @@ impl ContainerTree {
                 Direction::Horizontal => {
                     // Vertical handles between horizontally arranged children
                     for idx in 0..children.len() - 1 {
+                        let left_child = &children[idx];
                         let right_child = &children[idx + 1];
                         let boundary_x = right_child.bounds().position.x; // leading edge of right child
                         let center = Position {
@@ -435,8 +410,8 @@ impl ContainerTree {
                             HandleOrientation::Vertical,
                             container.bounds().position.x,
                             container.bounds().position.x + container.bounds().size.width as i32,
-                            container.id(),
-                            idx + 1,
+                            left_child.id(),
+                            right_child.id(),
                         );
                         out.push(handle);
                     }
@@ -444,6 +419,7 @@ impl ContainerTree {
                 Direction::Vertical => {
                     // Horizontal handles between vertically stacked children
                     for idx in 0..children.len() - 1 {
+                        let top_child = &children[idx];
                         let bottom_child = &children[idx + 1];
                         let boundary_y = bottom_child.bounds().position.y; // top edge of bottom child
                         let center = Position {
@@ -456,8 +432,8 @@ impl ContainerTree {
                             HandleOrientation::Horizontal,
                             container.bounds().position.y,
                             container.bounds().position.y + container.bounds().size.height as i32,
-                            container.id(),
-                            idx + 1,
+                            top_child.id(),
+                            bottom_child.id(),
                         );
                         out.push(handle);
                     }
@@ -842,10 +818,28 @@ Placement options:
         position: &Position,
         mode: &ResizeMode,
     ) -> bool {
-        // Find the container that owns this handle
-        let container = match self.find_container_for_handle(handle.id as ContainerId) {
-            Some(result) => result,
-            None => return false,
+        // Find before_child and its parent
+        let Some(before_child) = self.find_child(handle.before_id) else {
+            return false;
+        };
+        let Some(parent) = before_child.parent() else {
+            return false;
+        };
+
+        // Find after_child and its index in the parent
+        let (after_child, after_index) = {
+            let children = parent.children();
+            let mut result = None;
+            for (idx, child) in children.iter().enumerate() {
+                if child.id() == handle.after_id {
+                    result = Some((child.clone(), idx));
+                    break;
+                }
+            }
+            match result {
+                Some(r) => r,
+                None => return false,
+            }
         };
 
         // Determine the new position based on the handle orientation
@@ -855,41 +849,37 @@ Placement options:
         };
 
         let success = match mode {
-            ResizeMode::Evenly => container.resize_between(handle.index, new_position),
+            ResizeMode::Evenly => parent.resize_between(after_index, new_position),
             ResizeMode::Before => {
-                let child = container.children().get(handle.index - 1).unwrap().clone();
                 let side = match handle.orientation {
                     HandleOrientation::Vertical => Side::Right,
                     HandleOrientation::Horizontal => Side::Bottom,
                 };
-                container.resize_edge(&child, new_position, side, false);
+                parent.resize_edge(&before_child, new_position, side, false);
                 true
             }
             ResizeMode::After => {
-                let child = container.children().get(handle.index).unwrap().clone();
                 let side = match handle.orientation {
                     HandleOrientation::Vertical => Side::Left,
                     HandleOrientation::Horizontal => Side::Top,
                 };
-                container.resize_edge(&child, new_position, side, false);
+                parent.resize_edge(&after_child, new_position, side, false);
                 true
             }
             ResizeMode::BeforeSymmetric => {
-                let child = container.children().get(handle.index - 1).unwrap().clone();
                 let side = match handle.orientation {
                     HandleOrientation::Vertical => Side::Right,
                     HandleOrientation::Horizontal => Side::Bottom,
                 };
-                container.resize_edge(&child, new_position, side, true);
+                parent.resize_edge(&before_child, new_position, side, true);
                 true
             }
             ResizeMode::AfterSymmetric => {
-                let child = container.children().get(handle.index).unwrap().clone();
                 let side = match handle.orientation {
                     HandleOrientation::Vertical => Side::Left,
                     HandleOrientation::Horizontal => Side::Top,
                 };
-                container.resize_edge(&child, new_position, side, true);
+                parent.resize_edge(&after_child, new_position, side, true);
                 true
             }
         };
@@ -923,6 +913,13 @@ Placement options:
     fn config_changed(&mut self) {
         let bounds = Self::get_root_bounds(&self.bounds);
         self.root.set_bounds(bounds);
+        self.root.recalculate();
+    }
+
+    fn set_bounds(&mut self, bounds: Bounds) {
+        self.bounds = bounds;
+        let root_bounds = Self::get_root_bounds(&self.bounds);
+        self.root.set_bounds(root_bounds);
         self.root.recalculate();
     }
 }

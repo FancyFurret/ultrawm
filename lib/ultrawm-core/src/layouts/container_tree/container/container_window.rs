@@ -1,6 +1,7 @@
 use crate::layouts::container_tree::container::{
     Container, ContainerRef, ContainerWindowRef, ParentContainerRef,
 };
+use crate::layouts::container_tree::next_tree_node_id;
 use crate::platform::{Bounds, PlatformResult, PlatformWindow, Position, Size, WindowId};
 use crate::window::WindowRef;
 use std::cell::RefCell;
@@ -8,6 +9,7 @@ use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct ContainerWindow {
+    id: u64,
     parent: RefCell<ParentContainerRef>,
     window: WindowRef,
 }
@@ -36,14 +38,20 @@ fn get_temp_container_ref() -> ParentContainerRef {
 
 impl ContainerWindow {
     pub fn new(window: WindowRef) -> ContainerWindowRef {
-        let window = Self {
+        let container_window = Self {
+            id: next_tree_node_id(),
             parent: RefCell::new(get_temp_container_ref()),
             window,
         };
-        Rc::new(window)
+        Rc::new(container_window)
     }
 
-    pub fn id(&self) -> WindowId {
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    /// Returns the platform window ID.
+    pub fn window_id(&self) -> WindowId {
         self.window.id()
     }
 

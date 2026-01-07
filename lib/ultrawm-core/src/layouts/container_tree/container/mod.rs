@@ -2,12 +2,11 @@ pub use container_ref::*;
 pub use container_window::*;
 
 use super::Side;
-use crate::layouts::container_tree::{ContainerId, CONTAINER_ID_COUNTER};
-use crate::layouts::Direction;
+use crate::layouts::container_tree::ContainerId;
+use crate::layouts::{next_tree_node_id, Direction};
 use crate::platform::Bounds;
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::{Rc, Weak};
-use std::sync::atomic::Ordering;
 
 pub mod container_ref;
 mod container_window;
@@ -62,7 +61,7 @@ impl Container {
         direction: Direction,
         parent: Option<ParentContainerRef>,
     ) -> ContainerRef {
-        let id = CONTAINER_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let id = next_tree_node_id();
         let self_rc = Rc::new(Self {
             id,
             bounds: RefCell::new(bounds),
