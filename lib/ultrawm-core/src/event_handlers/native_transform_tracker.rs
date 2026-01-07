@@ -5,7 +5,7 @@ use crate::platform::{
 };
 use crate::window::WindowRef;
 use crate::wm::WindowManager;
-use log::{trace, warn};
+use log::{debug, warn};
 
 #[derive(Debug)]
 pub enum WindowDragEvent {
@@ -64,7 +64,7 @@ impl NativeTransformTracker {
                             .values()
                             .flat_map(|ws| ws.windows().keys())
                             .collect();
-                        trace!("  -> tracked windows: {:?}", tracked);
+                        debug!("  -> tracked windows: {:?}", tracked);
                         return None;
                     }
                 };

@@ -19,7 +19,7 @@ use crate::{
     wm::WindowManager,
     UltraWMResult,
 };
-use log::{error, info, trace, warn};
+use log::{debug, error, info, warn};
 use std::rc::Rc;
 use std::time::Duration;
 use thiserror::Error;
@@ -67,13 +67,13 @@ impl EventLoopWM {
     }
 
     pub async fn run(mut bridge: EventBridge) -> UltraWMResult<()> {
-        trace!("Handling events...");
+        debug!("Handling events...");
 
         // Log open windows at startup for debugging
         if let Ok(windows) = Platform::list_visible_windows() {
-            trace!("Open windows ({}):", windows.len());
+            debug!("Open windows ({}):", windows.len());
             for w in &windows {
-                trace!("  {} - {:?}", w.id(), w.title());
+                debug!("  {} - {:?}", w.id(), w.title());
             }
         }
 
@@ -113,7 +113,7 @@ impl EventLoopWM {
             // Skip config reloads during startup
             if !self.is_startup {
                 self.reload_config().await;
-            } 
+            }
         } else {
             self.is_startup = false;
         }
@@ -217,14 +217,15 @@ impl EventLoopWM {
     }
 
     async fn create_handlers() -> Vec<Box<dyn EventHandler>> {
-        vec![
+        let handlers: Vec<Box<dyn EventHandler>> = vec![
             Box::new(ContextMenuHandler::new()),
             Box::new(NativeTransformHandler::new().await),
             Box::new(ResizeHandleHandler::new().await),
             Box::new(ModTransformHandler::new().await),
             Box::new(FocusOnHoverHandler::new()),
             Box::new(CommandHandler::new().await),
-        ]
+        ];
+        handlers
     }
 }
 

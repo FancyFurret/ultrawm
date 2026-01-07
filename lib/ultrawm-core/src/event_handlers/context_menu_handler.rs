@@ -10,7 +10,7 @@ use crate::{
     CommandContext, AI_ORGANIZE_ALL_WINDOWS, AI_ORGANIZE_CURRENT_WINDOW, CLOSE_WINDOW,
     FLOAT_WINDOW, MINIMIZE_WINDOW,
 };
-use log::{trace, warn};
+use log::{debug, warn};
 
 pub struct ContextMenuHandler {
     tracker: ModMouseKeybindTracker,
@@ -34,10 +34,9 @@ impl EventHandler for ContextMenuHandler {
                 KeybindEvent::Activate(pos) => {
                     // Click without drag - show context menu
                     let target_window = wm.find_window_at_position(&pos).map(|w| w.id());
-                    trace!(
+                    debug!(
                         "Context menu activated at {:?}, window: {:?}",
-                        pos,
-                        target_window
+                        pos, target_window
                     );
 
                     run_on_main_thread(move || {

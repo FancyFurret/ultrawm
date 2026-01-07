@@ -1,20 +1,24 @@
 use colored::*;
 use log::{Level, LevelFilter, Log, Metadata, Record};
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex,
 };
 use ultrawm_core::paths;
 
 pub struct UltraWMLogger {
+    quiet: AtomicBool,
     verbose: AtomicBool,
     log_file: Arc<Mutex<Option<File>>>,
+    target_colors: Arc<Mutex<HashMap<String, usize>>>,
+    next_color_index: AtomicUsize,
 }
 
 impl UltraWMLogger {
-    pub fn new(verbose: bool) -> Self {
+    pub fn new(quiet: bool, verbose: bool) -> Self {
         let log_path = paths::log_file_path();
         let log_file = if let Some(path) = &log_path {
             match OpenOptions::new()
@@ -34,9 +38,39 @@ impl UltraWMLogger {
         };
 
         Self {
+            quiet: AtomicBool::new(quiet),
             verbose: AtomicBool::new(verbose),
             log_file: Arc::new(Mutex::new(log_file)),
+            target_colors: Arc::new(Mutex::new(HashMap::new())),
+            next_color_index: AtomicUsize::new(0),
         }
+    }
+
+    fn color_for_target(&self, target: &str) -> String {
+        // Palette of colors that work well when dimmed
+        let colors: &[fn(&str) -> ColoredString] = &[
+            |s| s.green(),
+            |s| s.yellow(),
+            |s| s.blue(),
+            |s| s.magenta(),
+            |s| s.cyan(),
+            |s| s.purple(),
+        ];
+
+        // Allocate a color index for this target if we haven't seen it before
+        let color_index = {
+            let mut target_colors = self.target_colors.lock().unwrap();
+            target_colors
+                .entry(target.to_string())
+                .or_insert_with(|| {
+                    let index = self.next_color_index.fetch_add(1, Ordering::SeqCst);
+                    index % colors.len()
+                })
+                .clone()
+        };
+
+        let color_fn = colors[color_index];
+        color_fn(target).to_string()
     }
 
     fn format_log(&self, record: &Record) -> String {
@@ -45,7 +79,7 @@ impl UltraWMLogger {
             Level::Warn => ("[W]", "yellow"),
             Level::Info => ("[I]", "green"),
             Level::Debug => ("[D]", "blue"),
-            Level::Trace => ("[T]", "cyan"),
+            Level::Trace => ("[T]", "white"),
         };
 
         let target = if !record.target().is_empty() {
@@ -54,7 +88,8 @@ impl UltraWMLogger {
                 .split("::")
                 .last()
                 .unwrap_or(record.target());
-            format!("[{}]", short_target.dimmed())
+            let colored_target = self.color_for_target(short_target).dimmed();
+            format!("[{}]", colored_target)
         } else {
             String::new()
         };
@@ -116,10 +151,18 @@ impl UltraWMLogger {
 
 impl Log for UltraWMLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        if self.verbose.load(Ordering::SeqCst) {
+        let quiet = self.quiet.load(Ordering::SeqCst);
+        let verbose = self.verbose.load(Ordering::SeqCst);
+
+        if quiet {
+            // Quiet mode: only Info, Warn, Error
+            metadata.level() <= Level::Info
+        } else if verbose {
+            // Verbose mode: everything including Trace
             metadata.level() <= Level::Trace
         } else {
-            metadata.level() <= Level::Info
+            // Default mode: up to Debug (no Trace)
+            metadata.level() <= Level::Debug
         }
     }
 
@@ -142,8 +185,8 @@ impl Log for UltraWMLogger {
     fn flush(&self) {}
 }
 
-pub fn init_logger(verbose: bool) -> Result<(), log::SetLoggerError> {
-    let logger = UltraWMLogger::new(verbose);
+pub fn init_logger(quiet: bool, verbose: bool) -> Result<(), log::SetLoggerError> {
+    let logger = UltraWMLogger::new(quiet, verbose);
     log::set_boxed_logger(Box::new(logger))?;
     log::set_max_level(LevelFilter::Trace);
     Ok(())

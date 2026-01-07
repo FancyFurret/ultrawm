@@ -1,7 +1,7 @@
 use crate::config::config_serializer::serialize_config;
 use crate::config::{KeyboardKeybind, ModMouseKeybind, MouseKeybind};
 use crate::{commands, paths};
-use log::{trace, warn};
+use log::{info, warn};
 use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -188,7 +188,7 @@ impl Config {
 
         if !path.exists() {
             Self::create_default_config_file(&path)?;
-            trace!("Created default config file at: {}", path.display());
+            info!("Created default config file at: {}", path.display());
         }
 
         let contents = fs::read_to_string(&path)

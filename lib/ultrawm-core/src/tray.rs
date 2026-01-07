@@ -1,6 +1,6 @@
 use crate::menu::system::{ConfigGetterFnArc, MenuBuilder};
 use crate::{paths, Config};
-use log::warn;
+use log::{info, warn};
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg::Options;
 use std::collections::HashMap;
@@ -131,7 +131,7 @@ impl UltraWMTray {
 
         tray.sync_with_config(&Config::current());
 
-        log::info!("Tray icon initialized");
+        info!("Tray icon initialized");
 
         Ok(tray)
     }

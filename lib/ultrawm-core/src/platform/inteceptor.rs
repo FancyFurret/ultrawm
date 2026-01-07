@@ -1,6 +1,6 @@
 use crate::platform::traits::PlatformImpl;
 use crate::platform::{MouseButton, Platform, PlatformResult, WMEvent};
-use log::error;
+use log::{debug, error};
 use std::collections::{HashMap, HashSet};
 use std::sync::{LazyLock, Mutex};
 
@@ -206,7 +206,7 @@ impl Interceptor {
     pub fn pause() {
         if let Ok(mut is_paused) = IS_PAUSED.lock() {
             *is_paused = true;
-            log::trace!("Interceptor paused");
+            debug!("Interceptor paused");
         }
     }
 
@@ -214,7 +214,7 @@ impl Interceptor {
     pub fn resume() {
         if let Ok(mut is_paused) = IS_PAUSED.lock() {
             *is_paused = false;
-            log::trace!("Interceptor resumed");
+            debug!("Interceptor resumed");
         }
     }
 }

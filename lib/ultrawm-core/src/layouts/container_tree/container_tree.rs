@@ -19,7 +19,7 @@ use crate::platform::{Bounds, PlatformWindowImpl, Position, WindowId};
 use crate::resize_handle::{HandleOrientation, ResizeHandle, ResizeMode};
 use crate::tile_result::InsertResult;
 use crate::window::WindowRef;
-use log::{info, warn};
+use log::{debug, warn};
 use std::cmp;
 use std::collections::HashMap;
 
@@ -72,7 +72,7 @@ impl ContainerTree {
             .map(|w| (w.id(), w.clone()))
             .collect();
 
-        info!(
+        debug!(
             "Deserializing layout with {} available windows: {:?}",
             available_windows.len(),
             available_windows.keys().collect::<Vec<_>>()
@@ -96,7 +96,7 @@ impl ContainerTree {
             }
         };
 
-        info!(
+        debug!(
             "Successfully reconstructed layout with {} windows placed",
             windows_map.len()
         );

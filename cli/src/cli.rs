@@ -37,10 +37,10 @@ pub struct Args {
     )]
     pub reset_layout: bool,
 
-    #[arg(
-        long = "verbose",
-        help = "Enable verbose logging (includes trace and info levels)"
-    )]
+    #[arg(long = "quiet", help = "Enable quiet logging mode (info)")]
+    pub quiet: bool,
+
+    #[arg(long = "verbose", help = "Enable verbose logging mode (trace)")]
     pub verbose: bool,
 
     #[arg(long = "console", help = "Run in a console window (Windows only)")]
@@ -55,6 +55,7 @@ impl Default for Args {
             use_defaults: false,
             no_persistence: false,
             reset_layout: false,
+            quiet: false,
             verbose: false,
             console: false,
         }

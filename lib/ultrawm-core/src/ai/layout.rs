@@ -6,7 +6,7 @@ use crate::partition::PartitionId;
 use crate::platform::WindowId;
 use crate::wm::{WMError, WindowManager};
 use crate::workspace::WorkspaceId;
-use log::{error, info};
+use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use std::collections::HashMap;
@@ -283,8 +283,8 @@ Windows:
         user_preferences
     };
 
-    info!("System prompt:\n{}", system_prompt);
-    info!("User prompt: {}", user_prompt);
+    debug!("System prompt:\n{}", system_prompt);
+    debug!("User prompt: {}", user_prompt);
 
     let messages = vec![
         ChatMessage {
@@ -299,7 +299,7 @@ Windows:
 
     let response = client.chat(messages).await?;
     let response = strip_markdown_code_block(&response);
-    info!("AI response:\n{}", response);
+    debug!("AI response:\n{}", response);
 
     // Parse the response as YAML
     let layout_response: AiLayoutResponse = serde_yaml::from_str(&response).map_err(|e| {
@@ -374,7 +374,7 @@ Rules:
 
     let response = client.chat(messages).await?;
     let response = strip_markdown_code_block(&response);
-    info!("AI single window response:\n{}", response);
+    debug!("AI single window response:\n{}", response);
 
     let placement_response: AiSingleWindowResponse =
         serde_yaml::from_str(&response).map_err(|e| {

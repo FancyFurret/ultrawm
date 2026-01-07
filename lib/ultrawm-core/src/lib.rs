@@ -11,7 +11,6 @@ use crate::workspace::WorkspaceId;
 use log::error;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
 use std::{process, thread};
 
 pub mod ai;

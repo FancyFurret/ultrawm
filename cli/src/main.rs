@@ -1,6 +1,6 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
-use log::{error, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::env;
 use std::path::PathBuf;
@@ -23,7 +23,7 @@ fn main() {
     }
 
     // Initialize logger early (before error handling)
-    if let Err(e) = logger::init_logger(args.verbose) {
+    if let Err(e) = logger::init_logger(args.quiet, args.verbose) {
         eprintln!("Failed to initialize logger: {}", e);
         return;
     }
@@ -32,7 +32,7 @@ fn main() {
     match run_main(args) {
         Ok(()) => {}
         Err(e) => {
-            log::error!("Fatal error: {:?}", e);
+            error!("Fatal error: {:?}", e);
             if ultrawm_core::check_panic().is_none() {
                 error_dialog::show_error(&e);
             }
@@ -43,14 +43,14 @@ fn main() {
 
 fn run_main(args: cli::Args) -> UltraWMResult<()> {
     info!("Starting UltraWM");
-    trace!("Command: {}", env::args().collect::<Vec<_>>().join(" "));
+    debug!("Command: {}", env::args().collect::<Vec<_>>().join(" "));
 
     // Register commands before config loading so defaults can be filled
     register_commands();
 
     // Handle config loading
     let mut config = if args.use_defaults {
-        trace!("Using default configuration");
+        debug!("Using default configuration");
         Default::default()
     } else {
         let config_path = args.config_path.as_ref().map(|p| p.to_str().unwrap());

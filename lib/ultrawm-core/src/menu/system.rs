@@ -1,6 +1,6 @@
 use crate::menu::accelerator::keybind_to_accelerator;
 use crate::{CommandDef, Config};
-use log::{trace, warn};
+use log::{debug, warn};
 use muda::accelerator::Accelerator;
 use muda::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use std::collections::HashMap;
@@ -67,7 +67,7 @@ impl MenuSystem {
             }
         }
 
-        trace!("No callback found for menu item: {}", id);
+        debug!("No callback found for menu item: {}", id);
     }
 }
 

@@ -9,7 +9,7 @@ use crate::platform::traits::{PlatformImpl, PlatformWindowImpl};
 use crate::platform::{Bounds, CursorType, Platform, Position, WMEvent, WindowId};
 use crate::tile_preview_handler::TilePreviewHandler;
 use crate::wm::WindowManager;
-use log::{trace, warn};
+use log::{debug, warn};
 
 pub struct ModTransformHandler {
     preview: TilePreviewHandler,
@@ -39,11 +39,9 @@ impl ModTransformHandler {
         drag_type: ModTransformType,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
-        trace!(
+        debug!(
             "Mod drag start: id={} pos={:?} type={:?}",
-            id,
-            pos,
-            drag_type
+            id, pos, drag_type
         );
 
         let window = wm.get_window(id)?;
@@ -261,7 +259,7 @@ impl ModTransformHandler {
         drag_type: ModTransformType,
         wm: &mut WindowManager,
     ) -> WMOperationResult<()> {
-        trace!("Mod drop: id={} pos={:?} type={:?}", id, pos, drag_type);
+        debug!("Mod drop: id={} pos={:?} type={:?}", id, pos, drag_type);
         if drag_type == ModTransformType::Tile {
             self.preview.tile_on_drop(id, &pos, wm)?;
         }

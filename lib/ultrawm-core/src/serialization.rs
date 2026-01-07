@@ -7,7 +7,7 @@ use crate::window::WindowRef;
 use crate::wm::WindowManager;
 use crate::workspace::{Workspace, WorkspaceId};
 use crate::Config;
-use log::trace;
+use log::debug;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -173,7 +173,7 @@ pub fn save_layout(wm: &WindowManager) -> Result<(), Box<dyn std::error::Error>>
             fs::create_dir_all(parent)?;
         }
 
-        trace!("Saving layout...");
+        debug!("Saving layout...");
         fs::write(&path, layout_yaml)?;
     } else {
         return Err("Could not determine layout file path".into());

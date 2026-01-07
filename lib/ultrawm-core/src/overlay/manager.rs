@@ -5,7 +5,7 @@ use crate::overlay::handle::Overlay;
 use crate::overlay::OverlayId;
 use crate::overlay::{OverlayWindowCommand, OverlayWindowConfig};
 use crate::platform::{Bounds, PlatformOverlay, PlatformOverlayImpl, PlatformResult, WindowId};
-use log::{error, trace};
+use log::{debug, error};
 use skia_safe::{surfaces, Color, Surface};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -82,10 +82,9 @@ impl OverlayManager {
 
                         match Self::create_overlay_state(overlay_id, content).await {
                             Ok(state) => {
-                                trace!(
+                                debug!(
                                     "Created overlay {} (handle: {:?})",
-                                    overlay_id,
-                                    state.handle
+                                    overlay_id, state.handle
                                 );
                                 overlays.insert(overlay_id, state);
                                 let _ = reply.send(overlay_id);
@@ -109,7 +108,7 @@ impl OverlayManager {
                     }
                     OverlayManagerCommand::RemoveOverlay { id } => {
                         if overlays.remove(&id).is_some() {
-                            trace!("Removed overlay {}", id);
+                            debug!("Removed overlay {}", id);
                         }
                     }
                     OverlayManagerCommand::Shutdown => {

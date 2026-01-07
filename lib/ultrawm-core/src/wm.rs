@@ -10,7 +10,7 @@ use crate::workspace::{Workspace, WorkspaceId};
 use crate::workspace_animator::{WorkspaceAnimationConfig, WorkspaceAnimationThread};
 use crate::PlatformError;
 use indexmap::IndexSet;
-use log::{error, trace, warn};
+use log::{debug, error, trace, warn};
 use std::collections::HashMap;
 use std::rc::Rc;
 use thiserror::Error;
@@ -52,13 +52,11 @@ pub struct WindowManager {
 impl WindowManager {
     pub fn new() -> PlatformResult<Self> {
         let displays = Platform::list_all_displays()?;
-        trace!("Displays ({}):", displays.len());
+        debug!("Displays ({}):", displays.len());
         for d in &displays {
-            trace!(
+            debug!(
                 "  {:?} bounds={:?} work_area={:?}",
-                d.name,
-                d.bounds,
-                d.work_area
+                d.name, d.bounds, d.work_area
             );
         }
 
@@ -162,15 +160,15 @@ impl WindowManager {
             workspace.flush_windows()?;
         }
 
-        trace!("Partitions ({}):", wm.partitions.len());
+        debug!("Partitions ({}):", wm.partitions.len());
         for p in wm.partitions.values() {
-            trace!("  {:?} bounds={:?}", p.name(), p.bounds());
+            debug!("  {:?} bounds={:?}", p.name(), p.bounds());
         }
 
-        trace!("Tracking {} windows at startup...", windows.len());
+        debug!("Tracking {} windows at startup...", windows.len());
         for window in windows {
             if wm.get_workspace_with_window(&window).is_none() {
-                trace!("  Tracking window: id={}", window.id());
+                debug!("  Tracking window: id={}", window.id());
                 wm.track_window(window.clone()).unwrap_or_else(|e| {
                     error!("Failed to track window: {e}");
                 })
@@ -413,7 +411,7 @@ impl WindowManager {
         // Remove invalid windows
         let removed_count = invalid_windows.len();
         for id in &invalid_windows {
-            trace!("Removing invalid window: id={} title={:?}", id, {
+            debug!("Removing invalid window: id={} title={:?}", id, {
                 if let Some(w) = self.all_windows.get(id) {
                     w.title()
                 } else {
