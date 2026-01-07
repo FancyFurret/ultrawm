@@ -39,6 +39,8 @@ jobs:
         with:
           key: ${{ matrix.target }}
       - name: Build
+        env:
+          VERSION: ${{ env.VERSION }}
         run: cargo build --release --verbose
       - name: Run tests
         run: cargo test --release --verbose --all
