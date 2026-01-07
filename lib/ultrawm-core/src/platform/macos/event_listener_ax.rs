@@ -183,7 +183,7 @@ impl EventListenerAX {
         } else if notification == notification::window_deminiaturized() {
             WMEvent::WindowOpened(window)
         } else if notification == notification::window_moved() {
-            WMEvent::WindowTransformStarted(window.id()) // TODO: Too many times
+            WMEvent::WindowTransformStarted(window.id())
         } else if notification == notification::window_resized() {
             WMEvent::WindowTransformStarted(window.id())
         } else if notification == notification::element_destroyed() {

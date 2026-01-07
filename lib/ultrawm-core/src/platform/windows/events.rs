@@ -200,9 +200,9 @@ unsafe extern "system" fn mouse_hook_proc(
     };
 
     // Check if we should ignore this event due to simulated click
-    if button.is_some() {
+    if let Some(button) = button {
         if Interceptor::pop_ignore_click(
-            button.clone().unwrap(),
+            button,
             matches!(event, WMEvent::MouseUp(_, _)),
         ) {
             return CallNextHookEx(None, n_code, w_param, l_param);

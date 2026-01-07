@@ -83,10 +83,10 @@ impl<T> MainThreadLock<T> {
 
     /// Only use this if you only access the arc from the main thread!
     pub fn get_arc(&self) -> Arc<RefCell<Option<T>>> {
-        // TODO
-        // if self.thread_id != std::thread::current().id() {
-        //     panic!("get_arc must be called from the main thread");
-        // }
+        #[cfg(debug_assertions)]
+        if self.thread_id != std::thread::current().id() {
+            panic!("get_arc must be called from the main thread");
+        }
 
         self.inner.clone()
     }

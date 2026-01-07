@@ -166,7 +166,7 @@ impl EventLoopWM {
                     });
             }
             WMEvent::WindowClosed(id) => {
-                self.wm.remove_window(*id).unwrap_or_else(|_| {});
+                let _ = self.wm.remove_window(*id);
             }
             WMEvent::WindowFocused(id) => {
                 self.wm.move_to_top(*id);

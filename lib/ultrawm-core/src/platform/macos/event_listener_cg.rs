@@ -158,12 +158,14 @@ impl EventListenerCG {
             _ => return false,
         };
 
-        if matches!(e, WMEvent::MouseDown(_, _) | WMEvent::MouseUp(_, _)) {
-            if Interceptor::pop_ignore_click(
-                button.clone().unwrap(),
-                matches!(e, WMEvent::MouseUp(_, _)),
-            ) {
-                return false;
+        if let Some(button) = button.clone() {
+            if matches!(e, WMEvent::MouseDown(_, _) | WMEvent::MouseUp(_, _)) {
+                if Interceptor::pop_ignore_click(
+                    button,
+                    matches!(e, WMEvent::MouseUp(_, _)),
+                ) {
+                    return false;
+                }
             }
         }
 
