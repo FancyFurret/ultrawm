@@ -6,6 +6,7 @@ use crate::event_loop_wm::EventLoopWM;
 use crate::platform::{
     EventBridge, EventDispatcher, PlatformError, PlatformEvents, PlatformEventsImpl, WMEvent,
 };
+use crate::tray::UltraWMTray;
 use crate::workspace::WorkspaceId;
 use log::error;
 use std::sync::mpsc;
@@ -18,10 +19,11 @@ mod animation;
 mod coalescing_channel;
 mod commands;
 pub mod config;
-mod event_handlers;
+pub(crate) mod event_handlers;
 mod event_loop_main;
 pub mod event_loop_wm;
 mod layouts;
+pub mod menu;
 pub mod overlay;
 mod partition;
 pub mod paths;
@@ -31,11 +33,13 @@ mod serialization;
 mod thread_lock;
 pub mod tile_preview_handler;
 mod tile_result;
+pub mod tray;
 mod window;
 mod wm;
 mod workspace;
 mod workspace_animator;
 
+use crate::menu::MenuSystem;
 use crate::platform::input_state::InputState;
 use crate::wm::WMError;
 pub use commands::{
@@ -51,25 +55,6 @@ static GLOBAL_EVENT_DISPATCHER: OnceLock<EventDispatcher> = OnceLock::new();
 
 // Panic handling: store panic message to be retrieved by main thread
 static PANIC_MESSAGE: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
-
-// Context menu callback registration
-type ContextMenuCallback = Box<dyn Fn(ContextMenuRequest) + Send + Sync>;
-static CONTEXT_MENU_CALLBACK: OnceLock<ContextMenuCallback> = OnceLock::new();
-
-/// Register a callback to be called when a context menu should be shown
-pub fn set_context_menu_handler<F>(handler: F)
-where
-    F: Fn(ContextMenuRequest) + Send + Sync + 'static,
-{
-    let _ = CONTEXT_MENU_CALLBACK.set(Box::new(handler));
-}
-
-/// Called internally to trigger the context menu callback
-pub(crate) fn trigger_context_menu(request: ContextMenuRequest) {
-    if let Some(callback) = CONTEXT_MENU_CALLBACK.get() {
-        callback(request);
-    }
-}
 
 pub fn version() -> &'static str {
     option_env!("VERSION").unwrap_or("v0.0.0-dev")
@@ -198,7 +183,10 @@ pub fn start() -> UltraWMResult<()> {
     }
 
     Interceptor::initialize()?;
-    InputState::initialize();
+    InputState::initialize().map_err(|e| UltraWMFatalError::Error(e))?;
+    MenuSystem::initialize().map_err(|e| UltraWMFatalError::Error(e))?;
+
+    let _tray = UltraWMTray::initialize().map_err(|e| UltraWMFatalError::Error(e.to_string()))?;
 
     // Create a channel to signal when main thread is ready
     let (main_ready_tx, main_ready_rx) = mpsc::channel();

@@ -1,10 +1,12 @@
-use crate::{UltraWMFatalError, UltraWMResult};
+use crate::platform::WMEvent;
+use crate::{UltraWMFatalError, UltraWMResult, GLOBAL_EVENT_DISPATCHER};
 use std::cell::RefCell;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Duration;
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::event::{ElementState, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
+use winit::keyboard::PhysicalKey;
 use winit::platform::pump_events::{EventLoopExtPumpEvents, PumpStatus};
 use winit::window::{Window, WindowId};
 
@@ -32,23 +34,38 @@ thread_local! {
     static MAIN_THREAD_TASK_RECEIVER: RefCell<Option<Receiver<MainThreadMessage>>> = RefCell::new(None);
 }
 
-pub async fn run_on_main_thread<F, R>(f: F) -> R
+fn get_task_sender() -> &'static Sender<MainThreadMessage> {
+    MAIN_THREAD_TASK_SENDER
+        .get()
+        .expect("Event loop has not been started yet")
+}
+
+fn send_task(task: Box<dyn FnOnce() + Send>) {
+    get_task_sender()
+        .send(MainThreadMessage::RunOnMainThread { task })
+        .expect("Failed to send task to main thread");
+}
+
+pub fn run_on_main_thread<F, R>(f: F)
+where
+    F: FnOnce() -> R + Send + 'static,
+{
+    send_task(Box::new(move || {
+        f();
+    }));
+}
+
+pub async fn run_on_main_thread_async<F, R>(f: F) -> R
 where
     F: FnOnce() -> R + Send + 'static,
     R: Send + 'static,
 {
-    let s = MAIN_THREAD_TASK_SENDER
-        .get()
-        .expect("Event loop has not been started yet");
     let (result_tx, result_rx) = tokio::sync::oneshot::channel::<R>();
 
-    let task = Box::new(move || {
+    send_task(Box::new(move || {
         let result = f();
         let _ = result_tx.send(result);
-    });
-
-    s.send(MainThreadMessage::RunOnMainThread { task })
-        .expect("Failed to send task to main thread");
+    }));
 
     result_rx
         .await
@@ -60,19 +77,12 @@ where
     F: FnOnce() -> R + Send + 'static,
     R: Send + 'static,
 {
-    let s = MAIN_THREAD_TASK_SENDER
-        .get()
-        .expect("Event loop has not been started yet");
-
     let (result_tx, result_rx) = std::sync::mpsc::channel::<R>();
 
-    let task = Box::new(move || {
+    send_task(Box::new(move || {
         let result = f();
         let _ = result_tx.send(result);
-    });
-
-    s.send(MainThreadMessage::RunOnMainThread { task })
-        .expect("Failed to send task to main thread");
+    }));
 
     result_rx
         .recv()
@@ -212,11 +222,36 @@ impl ApplicationHandler<MainThreadMessage> for App {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        // Handle keyboard events from overlay windows
+        if let Some(wm_event) = convert_winit_keyboard_event(&event) {
+            if let Some(dispatcher) = GLOBAL_EVENT_DISPATCHER.get() {
+                dispatcher.send(wm_event);
+            }
+        }
+
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
             _ => (),
         }
+    }
+}
+
+fn convert_winit_keyboard_event(event: &WindowEvent) -> Option<WMEvent> {
+    match event {
+        WindowEvent::KeyboardInput {
+            event: key_event, ..
+        } => {
+            if let PhysicalKey::Code(key_code) = key_event.physical_key {
+                match key_event.state {
+                    ElementState::Pressed => Some(WMEvent::KeyDown(key_code)),
+                    ElementState::Released => Some(WMEvent::KeyUp(key_code)),
+                }
+            } else {
+                None
+            }
+        }
+        _ => None,
     }
 }

@@ -1,34 +1,32 @@
-use crate::menu_system::MenuBuilder;
+use crate::menu::system::{ConfigGetterFnArc, MenuBuilder};
+use crate::{paths, Config};
 use log::warn;
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg::Options;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tray_icon::{menu::CheckMenuItem, Icon, TrayIcon, TrayIconBuilder};
-use ultrawm_core::{paths, Config};
-
-type ConfigGetterFn = Box<dyn Fn(&Config) -> bool + Send + Sync>;
 
 pub struct UltraWMTray {
     _tray_icon: TrayIcon,
-    check_items: Arc<Mutex<HashMap<String, (CheckMenuItem, ConfigGetterFn)>>>,
+    check_items: Arc<Mutex<HashMap<String, (CheckMenuItem, ConfigGetterFnArc)>>>,
 }
 
 impl UltraWMTray {
-    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn initialize() -> Result<Self, Box<dyn std::error::Error>> {
         let icon_data = load_svg_icon()?;
         let icon = Icon::from_rgba(icon_data, 32, 32)?;
 
         let mut menu_builder = MenuBuilder::new();
 
         // Version label
-        menu_builder.add_label(&format!("UltraWM {}", ultrawm_core::version()))?;
+        menu_builder.add_label(&format!("UltraWM {}", crate::version()))?;
         menu_builder.add_separator()?;
 
         // Commands section
         menu_builder.add_label("Commands")?;
-        menu_builder.add_command(&ultrawm_core::AI_ORGANIZE_ALL_WINDOWS)?;
-        menu_builder.add_command(&ultrawm_core::AI_ORGANIZE_CURRENT_WINDOW)?;
+        menu_builder.add_command(&crate::AI_ORGANIZE_ALL_WINDOWS)?;
+        menu_builder.add_command(&crate::AI_ORGANIZE_CURRENT_WINDOW)?;
 
         menu_builder.add_separator()?;
         menu_builder.add_label("Options")?;
@@ -77,7 +75,7 @@ impl UltraWMTray {
             if let Some(path) = path {
                 let config = Config::load(path.to_str(), false);
                 if let Ok(config) = config {
-                    ultrawm_core::load_config(config)
+                    crate::load_config(config)
                         .unwrap_or_else(|e| warn!("Failed to load config: {:?}", e));
                 } else {
                     warn!("Failed to load config");
@@ -85,7 +83,7 @@ impl UltraWMTray {
             } else {
                 warn!("No config file found, loading default config...");
                 let config = Config::default().clone();
-                ultrawm_core::load_config(config)
+                crate::load_config(config)
                     .unwrap_or_else(|e| warn!("Failed to load config: {:?}", e));
             }
         })?;
@@ -114,7 +112,7 @@ impl UltraWMTray {
         menu_builder.add_separator()?;
 
         menu_builder.add_item("Quit", || {
-            ultrawm_core::shutdown();
+            crate::shutdown();
         })?;
 
         let check_items = menu_builder.get_check_items();
@@ -132,6 +130,8 @@ impl UltraWMTray {
         };
 
         tray.sync_with_config(&Config::current());
+
+        log::info!("Tray icon initialized");
 
         Ok(tray)
     }

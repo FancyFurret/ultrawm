@@ -6,17 +6,11 @@ use std::env;
 use std::path::PathBuf;
 use ultrawm_core::{config::Config, register_commands, UltraWMResult};
 
-mod accelerator;
 mod cli;
-mod context_menu;
 mod error_dialog;
 mod logger;
-mod menu_helpers;
-mod menu_system;
-mod tray;
 
 use cli::parse_args;
-use tray::UltraWMTray;
 
 fn main() {
     // Parse args first to check for console flag
@@ -114,27 +108,6 @@ fn run_main(args: cli::Args) -> UltraWMResult<()> {
     } else {
         None
     };
-
-    // Initialize unified menu event handler (must be first)
-    menu_system::init_unified_handler();
-    trace!("Unified menu event handler initialized");
-
-    // Initialize tray icon
-    let _tray = match UltraWMTray::new() {
-        Ok(tray) => {
-            trace!("Tray icon initialized successfully");
-            Some(tray)
-        }
-        Err(e) => {
-            warn!("Failed to initialize tray icon: {}", e);
-            warn!("Continuing without tray icon...");
-            None
-        }
-    };
-
-    // Initialize context menu handler
-    context_menu::init_context_menu();
-    trace!("Context menu handler initialized");
 
     // Set up panic handler to catch panics from background threads
     ultrawm_core::setup_panic_handler();
