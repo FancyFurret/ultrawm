@@ -42,6 +42,7 @@ pub struct EventLoopWM {
     handlers: Vec<Box<dyn EventHandler>>,
     current_handler: Option<usize>,
     flush_interval: Interval,
+    is_startup: bool,
 }
 
 impl EventLoopWM {
@@ -54,6 +55,7 @@ impl EventLoopWM {
             handlers,
             current_handler: None,
             flush_interval: Self::create_flush_interval(),
+            is_startup: true,
         })
     }
 
@@ -108,7 +110,12 @@ impl EventLoopWM {
         }
 
         if matches!(event, WMEvent::ConfigChanged) {
-            self.reload_config().await;
+            // Skip config reloads during startup
+            if !self.is_startup {
+                self.reload_config().await;
+            } 
+        } else {
+            self.is_startup = false;
         }
 
         InputState::handle_event(&event);

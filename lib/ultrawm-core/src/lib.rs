@@ -199,8 +199,6 @@ pub fn start() -> UltraWMResult<()> {
             process::exit(1);
         }
 
-        thread::sleep(Duration::from_millis(1000));
-
         let tk = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
