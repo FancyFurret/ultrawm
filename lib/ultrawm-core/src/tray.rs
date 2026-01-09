@@ -111,6 +111,10 @@ impl UltraWMTray {
 
         menu_builder.add_separator()?;
 
+        menu_builder.add_item("Restart", || {
+            crate::restart();
+        })?;
+
         menu_builder.add_item("Quit", || {
             crate::shutdown();
         })?;

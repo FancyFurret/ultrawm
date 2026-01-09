@@ -128,6 +128,27 @@ pub fn shutdown() {
     }
 }
 
+pub fn restart() {
+    use log::info;
+    use std::process::Command;
+
+    info!("Restarting UltraWM...");
+
+    // Get the current executable path
+    if let Ok(exe_path) = std::env::current_exe() {
+        // Spawn a new instance of the application
+        let _ = Command::new(&exe_path)
+            .args(std::env::args().skip(1))
+            .spawn()
+            .map_err(|e| error!("Failed to restart: {:?}", e));
+    } else {
+        error!("Failed to get current executable path for restart");
+    }
+
+    // Shutdown the current instance
+    shutdown();
+}
+
 pub fn trigger_command(command_name: &str) {
     trigger_command_with_context(command_name, None);
 }
